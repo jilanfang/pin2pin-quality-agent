@@ -443,7 +443,6 @@ function AssistantStageCard({
   loading,
   onToggleStageRail,
   onSelectStage,
-  onConfirmStage,
   onPrimaryRecommendation,
   onSecondaryRecommendation,
 }: {
@@ -465,7 +464,6 @@ function AssistantStageCard({
   loading: boolean;
   onToggleStageRail: () => void;
   onSelectStage: (stage: string) => void;
-  onConfirmStage: (stage: string) => void;
   onPrimaryRecommendation: () => void;
   onSecondaryRecommendation: () => void;
 }) {
@@ -673,15 +671,7 @@ function AssistantStageCard({
           {selectedStage.impactSummary ? <div className="mini-note">{selectedStage.impactSummary}</div> : null}
           {selectedStage.stage === currentCase?.currentStage ? (
             <div className="stage-footnote">
-              <button
-                className="ghost-button ghost-button-tight"
-                type="button"
-                onClick={() => onConfirmStage(selectedStage.stage)}
-                disabled={loading}
-              >
-                确认当前阶段
-              </button>
-              <span>不再用解锁 / 复审按钮驱动，变化会直接在会话里解释。</span>
+              <span>当前阶段会继续由对话推进，不再要求你在这里手动确认。</span>
             </div>
           ) : null}
         </div>
@@ -1065,6 +1055,7 @@ export function Workspace() {
       const payload = (await readJson(
         await fetch(`/api/cases/${currentCaseId}/report-preview?artifact=${artifact ?? "analysis_summary"}`)
       )) as ReportPreview;
+      setIsFeedbackOpen(false);
       setPreview(payload);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "预览生成失败");
@@ -1334,7 +1325,6 @@ export function Workspace() {
                   loading={loading}
                   onToggleStageRail={() => setIsStageRailExpanded((value) => !value)}
                   onSelectStage={setFocusedStage}
-                  onConfirmStage={(stage) => void stageAction(stage, "confirm")}
                   onPrimaryRecommendation={() => {
                     if (resultRecommendation?.kind === "eight_d") {
                       void closeCaseWithFinalReport();
@@ -1399,7 +1389,13 @@ export function Workspace() {
           type="button"
           onClick={() => {
             setFeedbackStatus(null);
-            setIsFeedbackOpen((value) => !value);
+            setIsFeedbackOpen((value) => {
+              const next = !value;
+              if (next) {
+                setPreview(null);
+              }
+              return next;
+            });
           }}
         >
           反馈

@@ -404,8 +404,33 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
+    expect(screen.queryByRole("button", { name: "确认当前阶段" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "解锁" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "复审" })).not.toBeInTheDocument();
+  });
+
+  it("keeps feedback and result preview mutually exclusive", async () => {
+    const preview = buildPreview();
+    workspaceWithSingleCase(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/cases/case-1/report-preview?artifact=analysis_summary") {
+        return new Response(JSON.stringify(preview), { status: 200 });
+      }
+      if (url === "/api/feedback") {
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+
+    fireEvent.click(screen.getByRole("button", { name: "整理分析结论" }));
+    expect(await screen.findByTestId("preview-drawer")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "反馈" }));
+
+    expect(screen.queryByTestId("preview-drawer")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("试用反馈")).toBeInTheDocument();
   });
 
   it("uses AI guidance to explain impacted stages instead of asking for manual revalidation", async () => {
