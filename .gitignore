@@ -5,6 +5,9 @@ node_modules/
 
 # local environment
 .env.local
+.env
+*.env
+!.env.example
 
 # build outputs
 .next/
@@ -13,6 +16,13 @@ output/
 
 # local tooling
 .venv-pdf/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
 # backup artifacts
 *.bak-*
+
+# local databases
+*.db
