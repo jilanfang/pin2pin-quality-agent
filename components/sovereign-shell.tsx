@@ -3,7 +3,7 @@
 import React from "react";
 
 type SovereignShellProps = {
-  activeSection?: "Workspace" | "Anomalies" | "Insights" | "Library" | "History";
+  activeSection?: "Workspace";
   children: React.ReactNode;
 };
 
@@ -12,18 +12,11 @@ const navItems: Array<{
   href: string;
 }> = [
   { label: "Workspace", href: "/" },
-  { label: "Anomalies", href: "#" },
-  { label: "Insights", href: "#" },
-  { label: "Library", href: "#" },
-  { label: "History", href: "#" },
 ];
 
 const railItems = [
   { label: "会话", sublabel: "ACTIVE", action: null, active: true },
   { label: "案件", sublabel: "CASES", action: "fireline:toggle-case-drawer", active: false },
-  { label: "图谱", sublabel: "GRAPHS", action: null, active: false },
-  { label: "资料", sublabel: "LIBRARY", action: null, active: false },
-  { label: "帮助", sublabel: "HELP", action: null, active: false },
 ] as const;
 
 function dispatchShellEvent(name: string) {
@@ -60,16 +53,7 @@ export function SovereignShell({
         </nav>
 
         <div className="sovereign-utilities">
-          <label className="shell-search">
-            <span aria-hidden="true">⌕</span>
-            <input aria-label="搜索" placeholder="Search logs..." type="text" />
-          </label>
-          <button className="utility-button" type="button" aria-label="设置">
-            设
-          </button>
-          <button className="utility-button" type="button" aria-label="账户">
-            我
-          </button>
+          <span className="shell-status-chip">CASE + CHAT ONLY</span>
         </div>
       </header>
 
@@ -82,17 +66,26 @@ export function SovereignShell({
 
           <nav className="rail-nav" aria-label="工具导航">
             {railItems.map((item) => (
-              <button
-                key={item.label}
-                className={`shell-rail-button${item.active ? " active" : ""}`}
-                type="button"
-                onClick={item.action ? () => dispatchShellEvent(item.action) : undefined}
-              >
-                <span className="shell-rail-icon" aria-hidden="true">
-                  {item.label.slice(0, 1)}
-                </span>
-                <span>{item.sublabel}</span>
-              </button>
+              item.action ? (
+                <button
+                  key={item.label}
+                  className={`shell-rail-button${item.active ? " active" : ""}`}
+                  type="button"
+                  onClick={() => dispatchShellEvent(item.action)}
+                >
+                  <span className="shell-rail-icon" aria-hidden="true">
+                    {item.label.slice(0, 1)}
+                  </span>
+                  <span>{item.sublabel}</span>
+                </button>
+              ) : (
+                <div key={item.label} className={`shell-rail-label${item.active ? " active" : ""}`}>
+                  <span className="shell-rail-icon" aria-hidden="true">
+                    {item.label.slice(0, 1)}
+                  </span>
+                  <span>{item.sublabel}</span>
+                </div>
+              )
             ))}
 
             <button
@@ -208,37 +201,17 @@ export function SovereignShell({
           gap: 8px;
         }
 
-        .shell-search {
-          display: flex;
+        .shell-status-chip {
+          display: inline-flex;
           align-items: center;
-          gap: 8px;
-          min-width: 164px;
-          padding: 5px 10px;
-          border-radius: 7px;
+          padding: 5px 9px;
+          border-radius: 999px;
+          border: 1px solid rgba(219, 194, 176, 0.24);
           background: rgba(255, 255, 255, 0.72);
-          border: 1px solid rgba(219, 194, 176, 0.22);
-          color: var(--muted);
-        }
-
-        .shell-search input {
-          width: 100%;
-          border: 0;
-          outline: none;
-          background: transparent;
-          color: var(--text);
-          font-size: 11px;
-        }
-
-        .utility-button {
-          width: 26px;
-          height: 26px;
-          border: 0;
-          border-radius: 7px;
-          background: rgba(255, 255, 255, 0.68);
           color: var(--muted);
           font-size: 10px;
           font-weight: 700;
-          cursor: pointer;
+          letter-spacing: 0.08em;
         }
 
         .sovereign-body {
@@ -304,6 +277,7 @@ export function SovereignShell({
         }
 
         .shell-rail-button,
+        .shell-rail-label,
         .report-rail-trigger {
           display: grid;
           justify-items: center;
@@ -314,12 +288,27 @@ export function SovereignShell({
           padding: 7px 2px;
           background: transparent;
           color: var(--muted);
+        }
+
+        .shell-rail-button,
+        .report-rail-trigger {
           cursor: pointer;
         }
 
         .shell-rail-button.active {
           background: rgba(255, 255, 255, 0.82);
           color: var(--brand);
+        }
+
+        .shell-rail-label {
+          cursor: default;
+          opacity: 0.72;
+        }
+
+        .shell-rail-label.active {
+          background: rgba(255, 255, 255, 0.82);
+          color: var(--brand);
+          opacity: 1;
         }
 
         .shell-rail-button span:last-child {
@@ -425,11 +414,6 @@ export function SovereignShell({
           .sovereign-nav {
             flex-wrap: wrap;
             gap: 12px;
-          }
-
-          .shell-search {
-            min-width: 0;
-            flex: 1;
           }
 
           .sovereign-stage {

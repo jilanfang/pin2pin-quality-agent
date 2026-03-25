@@ -17,5 +17,9 @@ describe("RootLayout", () => {
     expect(markup).toContain('aria-label="工具侧栏"');
     expect(markup).toContain('aria-label="报告侧栏"');
     expect(markup).toContain("layout-child");
+    expect(markup).not.toContain("Anomalies");
+    expect(markup).not.toContain("Insights");
+    expect(markup).not.toContain("History");
+    expect(markup).not.toContain("Search logs...");
   });
 });
