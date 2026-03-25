@@ -1,40 +1,37 @@
 # Findings & Decisions
 
-## Requirements
-- 当前 `/` 页面要迁入共享壳层，形成顶部导航 + 左 rail + 中央会话舞台 + 右侧报告抽屉
-- 视觉和布局尽量贴近参考图，但内容和文案按 Pin2pin / Fireline 语境改写
-- 不改后端 API，保持现有案件、证据、阶段、报告能力可用
-- 本轮只做“全局壳层 + 当前 `/` 工作台”
+## Current Product Findings
 
-## Scope Notes
-- 暂不把 `Anomalies / Insights / Library / History` 做成完整业务页
-- 参考输入来自 `code.html`、`DESIGN.md`、`screen.png`
-- 现有 `/api/cases*`、`/api/feedback`、`/api/telemetry` 继续复用
+- 当前最接近完成的是“单 case 对话推进分析”
+- 当前最薄的是：
+  - case 管理
+  - 登录后长期使用
+- `分析结论 / 行动方案 / 8D` 已经能生成，但还不是产品内真正的一等结果对象
+- 当前可以说“核心分析主旅程已跑通”，不能说“产品化闭环已跑通”
 
-## Research Findings
-- 当前仓库真实产品页只有 `/Users/jilanfang/ai-quality/app/page.tsx`
-- 参考稿最核心的是壳层构图：
-  - 顶部细导航
-  - 左 rail
-  - 中央会话舞台
-  - 右侧报告 panel
-  - 底部 command dock
-- 参考稿设计语言更偏 `Sovereign Console / Industrial Manuscript`
-- `browser-smoke.sh` 需要跟随 UI 演进持续更新 selector，且不能假设总是空态
+## Journey Findings
+
+- 首次进入与开始一单：已基本成立，但还缺异常类型导向的起手引导
+- 单 case 对话推进分析：当前最强，约 `75%-80%`
+- 结果沉淀与交付：已成立，但结果对象仍偏即时预览，约 `65%-75%`
+- case 管理：只有列表 / 创建 / 切换，缺重命名 / 归档 / 删除 / 搜索，约 `40%-50%`
+- 对外试用级产品化：无登录、无用户隔离、无长期使用闭环，约 `30%-40%`
 
 ## Technical Decisions
 | Decision | Rationale |
 |----------|-----------|
-| 本轮先做“全局壳层 + 当前 `/` 工作台” | 当前仓库真实产品页只有 `/`，先把骨架抽稳最值钱 |
-| 视觉执行选 `A`：尽量贴近参考图，内容和文案按 Pin2pin 语境改写 | 用户明确选择 `a` |
-| 推荐方案是“壳层优先，工作台跟进” | 方便后续其它栏目复用同一框架 |
-| 不改后端 API | 当前任务只做前端框架与视觉迁移 |
+| 先修主界面误导问题，再继续扩能力 | 假入口和误导动作会直接伤害真实用户信任 |
+| 主界面继续坚持 `case + 对话` 两类主操作 | 对齐已确认的产品真相 |
+| 下一步实现优先考虑 case 管理 | 与当前产品承诺差距最大，且不依赖更大架构改动 |
 
 ## Issues / Blockers
-- 用户正在换 key，需要在新 key 就位后继续实现
-- 参考框架迁移尚未开始写代码
+- 无硬阻塞
+- 下一步只缺优先级选择
 
 ## Next Actions
-- 恢复后先实现共享 `Sovereign Shell`
-- 再把 `Workspace` 迁入新壳层并继续贴近参考图
-- 最后重跑完整验证
+- 先把旅程分析输出成 backlog 版硬表
+- 再决定下一步实现：
+  - case 管理
+  - 登录 / 账号密码
+  - 多模态证据输入
+  - 结果对象产品化
