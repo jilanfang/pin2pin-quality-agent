@@ -344,12 +344,12 @@ describe("Workspace", () => {
 
     render(<Workspace />);
 
-    expect(screen.getByText("异常响应 Copilot")).toBeInTheDocument();
-    expect(
-      screen.getByText(/把零碎线索整理成一版能交差的 8D 初稿/)
-    ).toBeInTheDocument();
+    expect(screen.getByText("芯科元析")).toBeInTheDocument();
+    expect(screen.getByText("Pin2Pin 出品的失效分析工作台")).toBeInTheDocument();
+    expect(screen.getByText(/把零碎异常整理成可推进、可复审、可交付的分析工作流/)).toBeInTheDocument();
     expect(screen.getByText(/先跑通第一单，再继续补证据和出稿/)).toBeInTheDocument();
     expect(screen.getByText(/先创建或载入一个案件，我再带着你把第一单跑通/)).toBeInTheDocument();
+    expect(screen.queryByText("Pin2Pin / 芯科元析")).not.toBeInTheDocument();
   });
 
   it("keeps the sidebar lightweight until the user opens case creation", async () => {
@@ -384,7 +384,7 @@ describe("Workspace", () => {
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
     expect(screen.queryByText("案件标题")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "新建" }));
+    fireEvent.click(screen.getByRole("button", { name: "新建案件" }));
     expect(screen.getByText("案件标题")).toBeInTheDocument();
   });
 
@@ -420,7 +420,7 @@ describe("Workspace", () => {
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
     expect(screen.queryByText("报告版本")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "报告工具" }));
+    fireEvent.click(screen.getByRole("button", { name: "打开报告工具" }));
     expect(screen.getByText("报告版本")).toBeInTheDocument();
     expect(screen.getByText("文风")).toBeInTheDocument();
   });
@@ -460,7 +460,7 @@ describe("Workspace", () => {
 
     expect(within(stageRail).queryByRole("button", { name: /D1/ })).not.toBeInTheDocument();
     expect(within(stageRail).getByRole("button", { name: /D3/ })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "查看全部阶段" }));
+    fireEvent.click(screen.getByRole("button", { name: "展开全部阶段" }));
     expect(within(stageRail).getByRole("button", { name: /D1/ })).toBeInTheDocument();
     expect(within(stageRail).getByRole("button", { name: /D8/ })).toBeInTheDocument();
   });
@@ -599,6 +599,9 @@ describe("Workspace", () => {
     expect(
       within(brief).getByText("先确认失效位置，以及客户现场、已发货、库存、在制品分别怎么处理。")
     ).toBeInTheDocument();
+
+    const summaryStrip = screen.getByTestId("summary-strip");
+    expect(brief.compareDocumentPosition(summaryStrip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("shows output guidance and expert review snapshot for urgent complaint cases", async () => {
@@ -780,7 +783,7 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
-    fireEvent.click(screen.getByRole("button", { name: "报告工具" }));
+    fireEvent.click(screen.getByRole("button", { name: "打开报告工具" }));
 
     expect(screen.getByText("当前报告含待复审章节")).toBeInTheDocument();
     expect(screen.getByText("建议先回看 D3 / D4，再决定是否导出正式稿。")).toBeInTheDocument();
@@ -817,7 +820,7 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
-    fireEvent.click(screen.getByRole("button", { name: "报告工具" }));
+    fireEvent.click(screen.getByRole("button", { name: "打开报告工具" }));
 
     expect(screen.getByText("当前版本：可预览，但会连同待复审提示一起导出。")).toBeInTheDocument();
     expect(screen.getByText("快速响应版（含待复审）")).toBeInTheDocument();
@@ -1071,7 +1074,7 @@ describe("Workspace", () => {
     render(<Workspace />);
 
     await screen.findByText("钽电容反向贴装客诉");
-    fireEvent.click(screen.getByRole("button", { name: "报告工具" }));
+    fireEvent.click(screen.getByRole("button", { name: "打开报告工具" }));
     fireEvent.change(screen.getByLabelText("报告版本"), {
       target: { value: "final" },
     });

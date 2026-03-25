@@ -719,10 +719,10 @@ export function Workspace() {
       <aside className="sidebar">
         <div className="brand-card">
           <div className="brand-line">
-            <strong>异常响应 Copilot</strong>
-            <span>Pin2Pin / 芯科元析</span>
+            <strong>芯科元析</strong>
+            <span>Pin2Pin 出品的失效分析工作台</span>
           </div>
-          <p>帮你把零碎线索整理成一版能交差的 8D 初稿。</p>
+          <p>把零碎异常整理成可推进、可复审、可交付的分析工作流。</p>
         </div>
 
         <section className="panel grow">
@@ -735,13 +735,13 @@ export function Workspace() {
                 type="button"
                 onClick={() => setIsCreateOpen((value) => !value)}
               >
-                {isCreateOpen ? "收起" : "新建"}
+                {isCreateOpen ? "收起新建" : "新建案件"}
               </button>
             </div>
           </div>
           {!hasCases ? (
             <div className="first-run-card">
-              <span className="eyebrow">First Run</span>
+              <span className="eyebrow">开始第一单</span>
               <h3>先跑通第一单，再继续补证据和出稿。</h3>
               <p>推荐先加载一个种子案例，3 分钟内看到第一版结果。</p>
               <p>如果你手头已经有真实异常，也可以直接新建空白案件开始录入。</p>
@@ -817,7 +817,7 @@ export function Workspace() {
               type="button"
               onClick={() => setIsReportToolsOpen((value) => !value)}
             >
-              {isReportToolsOpen ? "收起工具" : "报告工具"}
+              {isReportToolsOpen ? "收起报告工具" : "打开报告工具"}
             </button>
             {isReportToolsOpen ? (
               <div className="report-tooltray">
@@ -901,26 +901,6 @@ export function Workspace() {
             </div>
           </section>
         ) : null}
-
-        <section className="summary-strip" data-testid="summary-strip" aria-label="关键摘要">
-          <div className="summary-grid">
-            {summaryItems.map((item) => (
-              <div
-                key={item.key}
-                className={`summary-card${
-                  item.tone === "signal"
-                    ? " summary-card-signal"
-                    : item.tone === "warning"
-                      ? " summary-card-gap"
-                      : ""
-                }`}
-              >
-                <span>{item.label}</span>
-                <strong>{item.value}</strong>
-              </div>
-            ))}
-          </div>
-        </section>
 
         <section className="conversation-shell panel">
           <div className="conversation-head">
@@ -1104,7 +1084,7 @@ export function Workspace() {
                       type="button"
                       onClick={() => setIsStageRailExpanded((value) => !value)}
                     >
-                      {isStageRailExpanded ? "收起阶段" : "查看全部阶段"}
+                      {isStageRailExpanded ? "收起阶段" : "展开全部阶段"}
                     </button>
                   </div>
 
@@ -1172,6 +1152,26 @@ export function Workspace() {
                   : "先创建案件，再开始输入证据"}
               </span>
             </div>
+          </div>
+        </section>
+
+        <section className="summary-strip" data-testid="summary-strip" aria-label="关键摘要">
+          <div className="summary-grid">
+            {summaryItems.map((item) => (
+              <div
+                key={item.key}
+                className={`summary-card${
+                  item.tone === "signal"
+                    ? " summary-card-signal"
+                    : item.tone === "warning"
+                      ? " summary-card-gap"
+                      : ""
+                }`}
+              >
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -1601,6 +1601,7 @@ export function Workspace() {
 
         .summary-strip {
           min-width: 0;
+          opacity: 0.92;
         }
 
         .summary-grid {
@@ -1614,7 +1615,7 @@ export function Workspace() {
           border: 1px solid var(--line);
           border-radius: 999px;
           background: rgba(255, 255, 255, 0.92);
-          padding: 10px 12px;
+          padding: 8px 12px;
           display: inline-flex;
           align-items: center;
           gap: 8px;
