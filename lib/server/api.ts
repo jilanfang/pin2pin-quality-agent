@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { ReportBuildOptions, StyleMode, WorkflowStage } from "@/lib/domain/types";
+import type { ReportBuildOptions, ResultArtifactKind, StyleMode, WorkflowStage } from "@/lib/domain/types";
 import { buildOutputDocument } from "@/lib/domain/report-builder";
 import {
   applyEvidence,
@@ -41,7 +41,35 @@ const reportQuerySchema = z.object({
   styleMode: z
     .enum(["professional_neutral", "customer_formal", "internal_direct"])
     .default("professional_neutral") as z.ZodType<StyleMode>,
+  artifact: z.enum(["analysis_summary", "action_plan", "eight_d"]).optional() as z.ZodType<
+    ResultArtifactKind | undefined
+  >,
 });
+
+function normalizeReportOptions(parsed: z.infer<typeof reportQuerySchema>): ReportBuildOptions {
+  if (parsed.artifact === "analysis_summary") {
+    return {
+      reportStage: "initial_24h",
+      styleMode: "professional_neutral",
+    };
+  }
+
+  if (parsed.artifact === "action_plan") {
+    return {
+      reportStage: "interim",
+      styleMode: "professional_neutral",
+    };
+  }
+
+  if (parsed.artifact === "eight_d") {
+    return {
+      reportStage: "final",
+      styleMode: "professional_neutral",
+    };
+  }
+
+  return parsed as ReportBuildOptions;
+}
 
 const telemetryEventSchema = z.object({
   name: z.enum([
@@ -53,13 +81,13 @@ const telemetryEventSchema = z.object({
     "final_report_generated",
     "app_error",
   ]),
-  caseId: z.string().trim().optional(),
+  caseId: z.string().trim().nullable().optional(),
   metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
 });
 
 const feedbackSchema = z.object({
   category: z.enum(["hard_to_understand", "not_professional_enough", "bug", "other"]),
-  caseId: z.string().trim().optional(),
+  caseId: z.string().trim().nullable().optional(),
   note: z.string().trim().max(1000).optional(),
 });
 
@@ -144,6 +172,7 @@ export async function stageActionHandler(
 
 export async function reportPreviewHandler(caseId: string, searchParams: URLSearchParams) {
   const parsed = reportQuerySchema.parse(Object.fromEntries(searchParams.entries()));
+  const options = normalizeReportOptions(parsed);
   const store = getCaseStore();
   const aggregate = await store.getCase(caseId);
   if (!aggregate) {
@@ -153,31 +182,39 @@ export async function reportPreviewHandler(caseId: string, searchParams: URLSear
     name: "report_preview_generated",
     caseId,
     metadata: {
-      reportStage: parsed.reportStage,
-      styleMode: parsed.styleMode,
+      reportStage: options.reportStage,
+      styleMode: options.styleMode,
+      artifact: parsed.artifact ?? null,
     },
   });
-  return serializeReportPreview(aggregate, parsed as ReportBuildOptions);
+  return serializeReportPreview(aggregate, options);
 }
 
 export async function reportHtmlHandler(caseId: string, searchParams: URLSearchParams) {
   const parsed = reportQuerySchema.parse(Object.fromEntries(searchParams.entries()));
+  const options = normalizeReportOptions(parsed);
   const store = getCaseStore();
   const aggregate = await store.getCase(caseId);
   if (!aggregate) {
     throw new Error("Case not found");
   }
-  const preview = serializeReportPreview(aggregate, parsed as ReportBuildOptions);
-  if (parsed.reportStage === "final" && !preview.document.exportCapabilities.finalReport.allowed) {
+  const preview = serializeReportPreview(aggregate, options);
+  if (options.reportStage !== "final") {
+    return preview.html;
+  }
+
+  if (!("exportCapabilities" in preview.document) || !preview.document.exportCapabilities.finalReport.allowed) {
     throw new Error("Case is not ready for final report export.");
   }
+
   await store.saveReport(preview.document);
   return preview.html;
 }
 
 export async function closeCaseForFinalReport(caseId: string, searchParams: URLSearchParams) {
   const parsed = reportQuerySchema.parse(Object.fromEntries(searchParams.entries()));
-  if (parsed.reportStage !== "final") {
+  const options = normalizeReportOptions(parsed);
+  if (options.reportStage !== "final") {
     throw new Error("Only final report can close a case.");
   }
   const store = getCaseStore();
@@ -185,13 +222,13 @@ export async function closeCaseForFinalReport(caseId: string, searchParams: URLS
   if (!aggregate) {
     throw new Error("Case not found");
   }
-  const previewDocument = buildOutputDocument(aggregate, parsed as ReportBuildOptions);
+  const previewDocument = buildOutputDocument(aggregate, options);
   if (!previewDocument.exportCapabilities.finalReport.allowed) {
     throw new Error("Case is not ready for final report export.");
   }
   aggregate.caseRecord.status = "closed";
   aggregate.caseRecord.updatedAt = new Date().toISOString();
-  const document = buildOutputDocument(aggregate, parsed as ReportBuildOptions);
+  const document = buildOutputDocument(aggregate, options);
   if (!document.exportCapabilities.finalReport.allowed) {
     throw new Error("Case is not ready for final report export.");
   }
@@ -201,8 +238,9 @@ export async function closeCaseForFinalReport(caseId: string, searchParams: URLS
     name: "final_report_generated",
     caseId,
     metadata: {
-      reportStage: parsed.reportStage,
-      styleMode: parsed.styleMode,
+      reportStage: options.reportStage,
+      styleMode: options.styleMode,
+      artifact: parsed.artifact ?? "eight_d",
     },
   });
   return serializeCaseWorkflow(aggregate);

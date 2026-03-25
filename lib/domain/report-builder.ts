@@ -1,8 +1,12 @@
 import type {
+  ActionPlan,
+  AnalysisSummary,
   CaseAggregate,
   ExportCapabilities,
   OutputDocument,
   OutputSection,
+  ResultReadiness,
+  ResultRecommendation,
   ReportBuildOptions,
   WorkflowStage,
 } from "@/lib/domain/types";
@@ -75,6 +79,10 @@ function buildReasonedCapability(allowed: boolean, reasonCodes: string[]) {
   };
 }
 
+function uniqueLines(lines: Array<string | null | undefined>) {
+  return [...new Set(lines.map((item) => item?.trim()).filter(Boolean) as string[])];
+}
+
 function buildPendingItems(aggregate: CaseAggregate) {
   const items = aggregate.missingFields.map((item) => item.reason);
   if (aggregate.caseRecord.d1Status !== "complete") {
@@ -137,6 +145,165 @@ export function buildReportCapabilities(aggregate: CaseAggregate): ExportCapabil
     finalReport: buildReasonedCapability(finalReasons.length === 0, finalReasons),
     pdf: buildReasonedCapability(initialReasons.length === 0, initialReasons),
   };
+}
+
+export function buildAnalysisSummary(aggregate: CaseAggregate): AnalysisSummary {
+  const confirmedFacts = uniqueLines([
+    factValue(aggregate, "customer") ? `客户：${factValue(aggregate, "customer")}` : null,
+    factValue(aggregate, "model") ? `机种：${factValue(aggregate, "model")}` : null,
+    factValue(aggregate, "batch") ? `批次：${factValue(aggregate, "batch")}` : null,
+    factValue(aggregate, "impact") ? `影响范围：${factValue(aggregate, "impact")}` : null,
+    factValue(aggregate, "failure_location") ? `失效位置：${factValue(aggregate, "failure_location")}` : null,
+    ...aggregate.knownFacts.slice(0, 4).map((item) => `${factLabel(item.field)}：${item.value}`),
+  ]).slice(0, 6);
+
+  const openQuestions = uniqueLines([
+    ...aggregate.missingFields.slice(0, 4).map((item) => item.reason),
+    ...aggregate.assumptions.filter((item) => item.needsValidation).slice(0, 2).map((item) => item.statement),
+  ]);
+
+  const risks = uniqueLines([
+    ...aggregate.riskFlags,
+    aggregate.assumptions.some((item) => item.needsValidation) ? "未验证前不能把根因写死。" : null,
+  ]);
+
+  return {
+    title: "分析结论",
+    overview:
+      confirmedFacts.length > 0
+        ? "当前已具备一部分稳定事实，可以先沉淀分析结论，但仍需对关键假设继续验证。"
+        : "当前事实仍不足，需先补关键现场信息后再整理分析结论。",
+    confirmedFacts,
+    openQuestions,
+    risks,
+  };
+}
+
+export function buildActionPlan(aggregate: CaseAggregate): ActionPlan | null {
+  const immediateActions = uniqueLines([
+    factValue(aggregate, "containment_action"),
+    factValue(aggregate, "containment_customer_site") ? `客户现场：${cleanStructuredValue(factValue(aggregate, "containment_customer_site"))}` : null,
+    factValue(aggregate, "containment_shipped") ? `已发货：${cleanStructuredValue(factValue(aggregate, "containment_shipped"))}` : null,
+    factValue(aggregate, "containment_stock") ? `成品库存：${cleanStructuredValue(factValue(aggregate, "containment_stock"))}` : null,
+    factValue(aggregate, "containment_wip") ? `在制品：${cleanStructuredValue(factValue(aggregate, "containment_wip"))}` : null,
+  ]);
+
+  const verificationChecks = uniqueLines([
+    ...aggregate.missingFields.slice(0, 4).map((item) => item.reason),
+    ...aggregate.assumptions.filter((item) => item.needsValidation).slice(0, 2).map((item) => item.statement),
+  ]);
+
+  if (!immediateActions.length && !verificationChecks.length) {
+    return null;
+  }
+
+  const owners = uniqueLines([
+    aggregate.stages.D1.confirmedContent || aggregate.stages.D1.workingContent,
+  ])
+    .flatMap((text) =>
+      text
+        .split(/[、,，\n]/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+    .slice(0, 4);
+
+  return {
+    title: "行动方案",
+    overview: "先围堵风险窗口，再补关键验证，随后再决定是否进入正式 8D。",
+    immediateActions: immediateActions.length ? immediateActions : ["当前围堵动作仍待补齐。"],
+    owners,
+    verificationChecks: verificationChecks.length ? verificationChecks : ["当前验证检查项待补充。"],
+  };
+}
+
+export function buildResultReadiness(aggregate: CaseAggregate): ResultReadiness {
+  const capabilities = buildReportCapabilities(aggregate);
+  const analysisSummary = aggregate.knownFacts.length > 0;
+  const hasCorrectiveLayer =
+    ["D5", "D6", "D7"].some((stage) => {
+      const record = aggregate.stages[stage as WorkflowStage];
+      return Boolean(record?.confirmedContent.trim() || record?.workingContent.trim());
+    }) || aggregate.stages.D4.locked;
+  const actionPlan =
+    Boolean(buildActionPlan(aggregate)?.immediateActions.length) &&
+    (aggregate.stages.D3.locked || Boolean(factValue(aggregate, "containment_action"))) &&
+    hasCorrectiveLayer;
+
+  return {
+    analysisSummary,
+    actionPlan,
+    eightD: capabilities.finalReport.allowed,
+  };
+}
+
+export function buildResultRecommendation(aggregate: CaseAggregate): ResultRecommendation {
+  const readiness = buildResultReadiness(aggregate);
+
+  if (readiness.eightD) {
+    return {
+      kind: "eight_d",
+      title: "建议生成 8D",
+      rationale: "当前关键阶段已闭环，可以整理成正式 8D。",
+      primaryActionLabel: "生成 8D",
+      secondaryActionLabel: "预览 8D",
+      deferActionLabel: "继续检查",
+    };
+  }
+
+  if (readiness.actionPlan) {
+    return {
+      kind: "action_plan",
+      title: "建议整理行动方案",
+      rationale: "当前围堵和纠正方向已经成形，先把行动方案收口，再决定何时进入 8D。",
+      primaryActionLabel: "整理行动方案",
+      secondaryActionLabel: "继续补信息",
+      deferActionLabel: "稍后再说",
+    };
+  }
+
+  return {
+    kind: "analysis_summary",
+    title: "建议先整理分析结论",
+    rationale: "当前已具备稳定事实，可以先沉淀分析结论；根因仍待验证，不建议直接生成 8D。",
+    primaryActionLabel: "整理分析结论",
+    secondaryActionLabel: "继续补信息",
+    deferActionLabel: "稍后再说",
+  };
+}
+
+export function renderAnalysisSummaryText(summary: AnalysisSummary) {
+  return [
+    summary.title,
+    "",
+    `当前判断\n${summary.overview}`,
+    "",
+    `已确认事实\n${summary.confirmedFacts.map((item) => `- ${item}`).join("\n") || "- 暂无"}`,
+    "",
+    `待确认 / 待补信息\n${summary.openQuestions.map((item) => `- ${item}`).join("\n") || "- 暂无"}`,
+    "",
+    `风险提醒\n${summary.risks.map((item) => `- ${item}`).join("\n") || "- 暂无"}`,
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
+export function renderActionPlanText(plan: ActionPlan) {
+  return [
+    plan.title,
+    "",
+    `执行判断\n${plan.overview}`,
+    "",
+    `立即动作\n${plan.immediateActions.map((item) => `- ${item}`).join("\n") || "- 暂无"}`,
+    "",
+    `责任角色\n${plan.owners.map((item) => `- ${item}`).join("\n") || "- 待补充"}`,
+    "",
+    `验证检查\n${plan.verificationChecks.map((item) => `- ${item}`).join("\n") || "- 暂无"}`,
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .trim();
 }
 
 function initialReadinessSummary(aggregate: CaseAggregate) {
@@ -726,6 +893,94 @@ function escapeHtml(content: string) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;")
     .replaceAll("\n", "<br />");
+}
+
+export function renderAnalysisSummaryHtml(summary: AnalysisSummary, aggregate: CaseAggregate) {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${escapeHtml(summary.title)}</title>
+    <style>
+      body { font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; background:#f5f7fb; color:#18202c; padding:24px; }
+      .sheet { max-width: 880px; margin: 0 auto; background:#fff; border:1px solid #d7ddea; border-radius:20px; padding:24px; }
+      h1, h2 { margin:0 0 12px; }
+      h1 { font-size:24px; }
+      h2 { font-size:16px; margin-top:20px; }
+      .meta { color:#647287; font-size:12px; margin-bottom:16px; }
+      ul { margin:0; padding-left:20px; }
+      li { margin:6px 0; line-height:1.6; }
+      .lead { line-height:1.7; }
+    </style>
+  </head>
+  <body>
+    <article class="sheet">
+      <h1>${escapeHtml(summary.title)}</h1>
+      <div class="meta">案件：${escapeHtml(aggregate.caseRecord.title)} | 状态：${escapeHtml(aggregate.caseRecord.status)}</div>
+      <section>
+        <h2>当前判断</h2>
+        <p class="lead">${escapeHtml(summary.overview)}</p>
+      </section>
+      <section>
+        <h2>已确认事实</h2>
+        <ul>${summary.confirmedFacts.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+      </section>
+      <section>
+        <h2>待确认 / 待补信息</h2>
+        <ul>${summary.openQuestions.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+      </section>
+      <section>
+        <h2>风险提醒</h2>
+        <ul>${summary.risks.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+      </section>
+    </article>
+  </body>
+</html>`;
+}
+
+export function renderActionPlanHtml(plan: ActionPlan, aggregate: CaseAggregate) {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${escapeHtml(plan.title)}</title>
+    <style>
+      body { font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; background:#f5f7fb; color:#18202c; padding:24px; }
+      .sheet { max-width: 880px; margin: 0 auto; background:#fff; border:1px solid #d7ddea; border-radius:20px; padding:24px; }
+      h1, h2 { margin:0 0 12px; }
+      h1 { font-size:24px; }
+      h2 { font-size:16px; margin-top:20px; }
+      .meta { color:#647287; font-size:12px; margin-bottom:16px; }
+      ul { margin:0; padding-left:20px; }
+      li { margin:6px 0; line-height:1.6; }
+      .lead { line-height:1.7; }
+    </style>
+  </head>
+  <body>
+    <article class="sheet">
+      <h1>${escapeHtml(plan.title)}</h1>
+      <div class="meta">案件：${escapeHtml(aggregate.caseRecord.title)} | 状态：${escapeHtml(aggregate.caseRecord.status)}</div>
+      <section>
+        <h2>执行判断</h2>
+        <p class="lead">${escapeHtml(plan.overview)}</p>
+      </section>
+      <section>
+        <h2>立即动作</h2>
+        <ul>${plan.immediateActions.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+      </section>
+      <section>
+        <h2>责任角色</h2>
+        <ul>${plan.owners.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+      </section>
+      <section>
+        <h2>验证检查</h2>
+        <ul>${plan.verificationChecks.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+      </section>
+    </article>
+  </body>
+</html>`;
 }
 
 export function renderFormalHtml(document: OutputDocument) {

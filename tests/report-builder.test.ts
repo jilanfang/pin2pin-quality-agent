@@ -1,7 +1,12 @@
 import {
+  buildActionPlan,
+  buildAnalysisSummary,
   buildOutputDocument,
   buildReportCapabilities,
+  buildResultRecommendation,
   buildTextOutput,
+  renderActionPlanHtml,
+  renderAnalysisSummaryHtml,
   renderFormalHtml,
 } from "@/lib/domain/report-builder";
 import { applyEvidence, confirmStage, createCaseAggregate } from "@/lib/domain/workflow-engine";
@@ -28,6 +33,95 @@ function buildInitialReadyAggregate() {
 }
 
 describe("reportBuilder", () => {
+  it("builds analysis summary from confirmed facts and keeps unverified root cause out of conclusions", () => {
+    const aggregate = buildInitialReadyAggregate();
+
+    const summary = buildAnalysisSummary(aggregate);
+
+    expect(summary.title).toBe("分析结论");
+    expect(summary.confirmedFacts.join(" ")).toContain("批次");
+    expect(summary.openQuestions.length).toBeGreaterThan(0);
+    expect(summary.risks.join(" ")).toContain("未验证");
+    expect(summary.overview).not.toContain("根因已确认");
+  });
+
+  it("builds action plan only when containment and corrective direction are available", () => {
+    const aggregate = buildInitialReadyAggregate();
+
+    const plan = buildActionPlan(aggregate);
+
+    expect(plan).not.toBeNull();
+    expect(plan?.title).toBe("行动方案");
+    expect(plan?.immediateActions.join(" ")).toContain("暂停出货");
+    expect(plan?.verificationChecks.length).toBeGreaterThan(0);
+  });
+
+  it("recommends analysis summary before 8D when facts are stable but closure threshold is not met", () => {
+    const aggregate = buildInitialReadyAggregate();
+
+    const recommendation = buildResultRecommendation(aggregate);
+
+    expect(recommendation.kind).toBe("analysis_summary");
+    expect(recommendation.title).toBe("建议先整理分析结论");
+    expect(recommendation.rationale).toContain("不建议直接生成 8D");
+  });
+
+  it("recommends 8D only when all stages are closed and no impacted stage remains", () => {
+    let aggregate = buildInitialReadyAggregate();
+    aggregate = applyEvidence(aggregate, {
+      content: "QE、PE、SMT、IQC、客服负责人已组建团队。",
+      contextStage: "D1",
+    });
+    aggregate = confirmStage(aggregate, { stage: "D1" });
+
+    for (const stage of ["D4", "D5", "D6", "D7", "D8"] as const) {
+      aggregate = applyEvidence(aggregate, {
+        content: `${stage} 已补充完整内容。`,
+        contextStage: stage,
+      });
+      aggregate = confirmStage(aggregate, { stage });
+    }
+
+    const recommendation = buildResultRecommendation(aggregate);
+
+    expect(recommendation.kind).toBe("eight_d");
+    expect(recommendation.title).toBe("建议生成 8D");
+  });
+
+  it("renders analysis summary preview as a compact conclusion artifact instead of an 8D report", () => {
+    const aggregate = buildInitialReadyAggregate();
+    const summary = buildAnalysisSummary(aggregate);
+    const html = renderAnalysisSummaryHtml(summary, aggregate);
+
+    expect(html).toContain("分析结论");
+    expect(html).toContain("已确认事实");
+    expect(html).toContain("待确认 / 待补信息");
+    expect(html).not.toContain("D1");
+    expect(html).not.toContain("D8");
+    expect(html).not.toContain("完整 8D");
+  });
+
+  it("renders action plan preview as an action artifact instead of reusing 8D sections", () => {
+    let aggregate = buildInitialReadyAggregate();
+    aggregate = applyEvidence(aggregate, {
+      content: "D5 已补充长期纠正措施和责任人。",
+      contextStage: "D5",
+    });
+
+    const plan = buildActionPlan(aggregate);
+    if (!plan) {
+      throw new Error("Expected action plan");
+    }
+    const html = renderActionPlanHtml(plan, aggregate);
+
+    expect(html).toContain("行动方案");
+    expect(html).toContain("立即动作");
+    expect(html).toContain("验证检查");
+    expect(html).not.toContain("D4");
+    expect(html).not.toContain("D8");
+    expect(html).not.toContain("完整 8D");
+  });
+
   it("allows initial_24h output before final closure but blocks final report", () => {
     const aggregate = buildInitialReadyAggregate();
     const capabilities = buildReportCapabilities(aggregate);

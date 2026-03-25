@@ -1,98 +1,64 @@
-# Task Plan: MVP Review And Hardening Plan
+# Task Plan: Fireline Sovereign Shell Alignment
 
 ## Goal
-核对当前 ai-quality 的最新代码与文档状态，完成 MVP 架构/设计评审，并锁定下一步硬化动作。
+把当前 ai-quality 的前端升级成参考稿要求的 “Sovereign Shell” 框架，同时保留现有工作台能力与后端 API。
 
 ## Success Criteria
-- 当前代码、文档、架构判断已经对齐到真实主链路
-- fresh verification 通过，能证明当前主链路可跑
-- 对 “MVP 是否 still ok” 给出明确结论，而不是停留在感觉判断
-- 合并 eng review 与 design review，产出可直接执行的优先级工作清单
+- 当前 `/` 页面迁入共享壳层，形成顶部导航 + 左 rail + 中央会话舞台 + 右侧报告抽屉的统一框架
+- 视觉和布局尽量贴近参考稿，但内容和文案按 Pin2pin / Fireline 语境改写
+- 不改后端 API，现有案件、证据、阶段、报告能力保持可用
+- 通过 `npm test`、`npm run typecheck`、`npm run build`、`npm run smoke:browser`
 
 ## Scope
-- 当前真实主链路仅限 `/Users/jilanfang/ai-quality/app`
-- 当前真实主链路仅限 `/Users/jilanfang/ai-quality/components`
-- 当前真实主链路仅限 `/Users/jilanfang/ai-quality/lib`
-- 评审与同步覆盖 `/Users/jilanfang/ai-quality/AGENTS.md`
-- 评审与同步覆盖 `/Users/jilanfang/ai-quality/docs`
-- UI / UX 评审以 `/Users/jilanfang/ai-quality/DESIGN.md` 为基线
+- 当前只做“全局壳层 + 当前 `/` 工作台”
+- 暂不把 `Anomalies / Insights / Library / History` 做成完整业务页
+- 保持现有 `/api/cases*`、`/api/feedback`、`/api/telemetry` 接口不变
 
 ## Current Phase
-处于“评审已完成、主链路已核对、文档已同步，接下来进入 MVP hardening 与第一轮 UI 收口”的阶段。
+已完成会话优先改版和全部验证；当前处于参考框架迁移的设计已收口、待继续实现阶段。
 
 ## Completed Work
-- 完成 repo 最新状态核对，明确当前产品主链路是 `Next.js App Router + TypeScript`
-- 完成 fresh verification：
-  - `node --test deck.test.mjs` 通过，`30 passed`
-  - `npm test` 通过，`8 files, 71 tests passed`
-  - `npm run typecheck` 通过
-  - `npm run build` 通过
-- 清理了本地遗留 `3001 / 3002` 进程后，重新验证了干净的 Next 实例：
-  - 首页 `200`
-  - `/api/health` `200`
-  - 匹配的 `_next/static` chunk `200`
-- 完成 eng review，结论是当前架构对 MVP 仍然成立，不应现在重写
-- 完成 design review，结论是 UI 可用但还没到“资深工程师工作台”质感
-- 已同步关键文档与当前现实：
-  - `/Users/jilanfang/ai-quality/AGENTS.md`
-  - `/Users/jilanfang/ai-quality/docs/README.md`
-  - `/Users/jilanfang/ai-quality/docs/current-handoff.md`
-  - `/Users/jilanfang/ai-quality/docs/deployment-and-demo.md`
-- 新增 `/Users/jilanfang/ai-quality/docs/mvp-hardening-checklist.md`，作为合并后的后续动作清单
+- 已完成 `Workspace` 的会话优先改版并验证通过
+- 已同步 `DESIGN.md` 的“会话主舞台 + 抽屉辅助区”基线
+- 已适配 `tests/workspace.test.tsx`
+- 已适配 `scripts/browser-smoke.sh`
+- 已完成参考 `code.html` / `DESIGN.md` / `screen.png` 的设计探索
+- 已确认：
+  - 范围选 `1`：先做全局壳层 + 当前 `/` 工作台
+  - 视觉选 `A`：尽量贴近参考图，内容和文案按 Pin2pin 语境改写
 
 ## Remaining Work
-- 按 `/Users/jilanfang/ai-quality/docs/mvp-hardening-checklist.md` 推进当前所有未完成动作
-- 其中 P0 优先覆盖：
-  - 部署边界写死
-  - LLM 接入边界写死
-  - `index.html -> Next.js` 迁移账本
-  - 运行态污染规则固化
-  - 第一轮工作台 UI / UX 收口
-- P1 再覆盖：
-  - 浏览器 smoke
-  - LLM observability
-  - Postgres preview 验证
-  - `workspace.tsx` 最小拆分准备
+- 实现共享 `Sovereign Shell`
+- 把 `Workspace` 迁入新壳层并继续视觉对齐
+- 同步设计系统到更偏 `Sovereign Console / Industrial Manuscript`
+- 完成新一轮 fresh verification
 
 ## Next Actions
-- 当前唯一待办 source of truth 是 `/Users/jilanfang/ai-quality/docs/mvp-hardening-checklist.md`
-- 先完成 checklist 的 `2.x`
-- 再进入 checklist 的 `3.x`
+- 恢复后先实现共享壳层
+- 再改 `Workspace` 的消息流、header、dock、drawer 细节
+- 最后重跑完整验证
 
 ## Blockers
-- 当前目录不是 git repo / worktree root，无法直接使用完整的 git clean-tree 审查流程
-- Postgres preview deployment 这轮还没做 fresh re-verify
+- 用户正在换 key，需要在新 key 就位后继续实现
 
 ## Decisions Made
 | Decision | Rationale |
 |----------|-----------|
-| `Next.js App Router + TypeScript` 是当前唯一主链路 | 代码、fresh verification、页面验证都指向这一实现 |
-| 根目录 `index.html` 仍可保留为离线 mockup / 参考链路，但不是产品主链路 | 这样既保留参考价值，也避免继续误导文档和讨论 |
-| 当前架构对 MVP 仍然 OK，不做大改造 | 问题主要在边界与运营硬化，不在于主链路跑不通 |
-| 无数据库模式必须表述为“本地文件存储”，不是“纯内存模式” | 当前真实行为就是 local file store，之前这里已经踩过坑 |
-| 对外 MVP / preview 部署应使用 Postgres，本地文件存储只用于本地 demo | 本地 fallback 方案不适合外部预览或多人环境 |
-| 后续在线 LLM 集成继续收敛在 `/Users/jilanfang/ai-quality/lib/server/llm.ts` 边界后面 | 避免 provider / model 细节扩散进 UI 和 domain 层 |
-| 接下来优先做 hardening 和 UI 收口，而不是继续铺新功能 | 当前最值钱的工作是把可 demo、可部署、可解释性做稳 |
+| 本轮先做“全局壳层 + 当前 `/` 工作台” | 当前仓库真实产品页只有 `/`，先把骨架抽稳最值钱 |
+| 视觉执行选 `A`：尽量贴近参考图，内容和文案按 Pin2pin 语境改写 | 用户明确选择 `a` |
+| 推荐方案是“壳层优先，工作台跟进” | 方便后续其它栏目复用同一框架 |
+| 不改后端 API | 当前任务只做前端框架与视觉迁移 |
 
 ## Touched Files
-- /Users/jilanfang/ai-quality/AGENTS.md
-- /Users/jilanfang/ai-quality/DESIGN.md
 - /Users/jilanfang/ai-quality/components/workspace.tsx
-- /Users/jilanfang/ai-quality/lib/server/llm.ts
-- /Users/jilanfang/ai-quality/lib/server/case-store.ts
-- /Users/jilanfang/ai-quality/docs/README.md
-- /Users/jilanfang/ai-quality/docs/current-handoff.md
-- /Users/jilanfang/ai-quality/docs/deployment-and-demo.md
-- /Users/jilanfang/ai-quality/docs/mvp-hardening-checklist.md
-- /Users/jilanfang/ai-quality/.task-archive/current.md
+- /Users/jilanfang/ai-quality/tests/workspace.test.tsx
+- /Users/jilanfang/ai-quality/DESIGN.md
+- /Users/jilanfang/ai-quality/scripts/browser-smoke.sh
 
 ## Verification
 | Check | Status | Details |
 |-------|--------|---------|
-| `node --test deck.test.mjs` | passed | `30 passed` |
-| `npm test` | passed | `8 files, 71 tests passed` |
+| `npm test` | passed | `10 files, 70 tests passed` |
 | `npm run typecheck` | passed | exit 0 |
 | `npm run build` | passed | Next.js production build completed |
-| `GET /` on local Next instance | passed | homepage returned `200` on `127.0.0.1:3001` |
-| `GET /api/health` on local Next instance | passed | returned `200` on `127.0.0.1:3001` |
-| `GET /_next/static/...` sample chunk | passed | matching chunk returned `200` |
+| `npm run smoke:browser` | passed | smoke created case, sent evidence, opened report drawer |

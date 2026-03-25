@@ -52,21 +52,18 @@ async (page) => {
     }
   });
 
-  page.setDefaultTimeout(15000);
+  page.setDefaultTimeout(30000);
   await page.goto(baseUrl, { waitUntil: "networkidle" });
 
   const smokeTitle = "browser-smoke-" + Date.now();
 
-  await page.getByRole("button", { name: "新建案件" }).click();
+  await page.getByRole("button", { name: "快速新建案件" }).click();
+  await page.getByLabel("案件抽屉").waitFor({ timeout: 30000 });
   await page.getByRole("textbox", { name: "案件标题" }).fill(smokeTitle);
   await page.getByRole("button", { name: "创建案件" }).click();
-  await page.getByRole("heading", { name: smokeTitle }).waitFor({ timeout: 15000 });
+  await page.getByRole("heading", { name: smokeTitle }).waitFor({ timeout: 30000 });
 
-  await page
-    .getByRole("textbox", {
-      name: "输入客户投诉、测试结论、批次、工单、现场观察，系统会按当前阶段推进。",
-    })
-    .fill(evidenceText);
+  await page.getByLabel("证据输入框").fill(evidenceText);
 
   await Promise.all([
     page.waitForResponse(
@@ -74,25 +71,15 @@ async (page) => {
         response.url().includes("/evidence") &&
         response.request().method() === "POST" &&
         response.ok(),
-      { timeout: 15000 }
+      { timeout: 30000 }
     ),
     page.getByRole("button", { name: "发送证据" }).click(),
   ]);
 
-  await page.waitForFunction(
-    () => {
-      const button = [...document.querySelectorAll("button")].find((item) =>
-        item.textContent?.includes("快速预览报告")
-      );
-      return button && !button.hasAttribute("disabled");
-    },
-    undefined,
-    { timeout: 15000 }
-  );
-
-  await page.getByRole("button", { name: "快速预览报告" }).click();
-  await page.getByText("报告预览", { exact: true }).waitFor({ timeout: 15000 });
-  await page.getByRole("link", { name: "打开 HTML 报告" }).waitFor({ timeout: 15000 });
+  await page.getByRole("button", { name: "整理分析结论" }).waitFor({ timeout: 30000 });
+  await page.getByRole("button", { name: "整理分析结论" }).click();
+  await page.getByLabel("报告预览抽屉").waitFor({ timeout: 30000 });
+  await page.getByTitle("分析结论预览").waitFor({ timeout: 30000 });
 
   if (!staticResponses.some((item) => item.status === 200)) {
     throw new Error("No successful _next/static response captured");

@@ -1,6 +1,6 @@
-# 芯科元析失效分析工作台 Current Handoff
+# Pin2pin Fireline 当前交接说明
 
-> 目的：给新线程一个与当前代码一致的恢复点。当前项目不是单一实现，而是存在 `Next.js` 主应用与根目录 `index.html` 离线 mockup 两条并行线路。
+> 目的：给新线程一个与当前代码一致的恢复点。当前项目不是单一实现，而是存在 `Next.js` 主应用与根目录 `index.html` 离线原型两条并行线路。
 
 > 2026-03-24 补充：产品主定位已升级为 `失效分析 / 异常响应工具`，`8D` 是正式输出物之一，不再是唯一中心对象。
 
@@ -10,16 +10,16 @@
 
 1. `Next.js App Router + TypeScript` 单项目实现  
    入口在 `app/`、`components/`、`lib/`，可通过 `npm run dev` 启动。
-2. 根目录 `index.html` 单文件离线 mockup  
-   仍可运行，适合做离线 demo、交互试验和报告展示对照。
+2. 根目录 `index.html` 单文件离线原型
+   仍可运行，适合做离线演示、交互试验和报告展示对照。
 
-这两条线路都还能跑，但功能已经发生分叉。  
-**如果是沿着本线程继续做 UI / mockup / 报告导出，请以 `index.html` 为准。**  
+这两条线路都还能跑，但功能已经发生分叉。
+**如果是沿着本线程继续做界面 / 离线原型 / 报告导出，请以 `index.html` 为准。**
 **如果是沿着产品化 / API / LLM / 存储 / Next 页面继续做，请以 `app/ + components/ + lib/` 为准。**
 
 ---
 
-## 1. Fresh Verification
+## 1. 最新验证
 
 本轮新鲜验证结果：
 
@@ -44,7 +44,7 @@ npm run build
 
 说明：
 
-- `index.html` 离线 mockup 当前可用
+- `index.html` 离线原型当前可用
 - `Next.js` 主应用当前也没有坏
 - 当前真正的问题不是“哪条线不能跑”，而是**文档口径滞后、两条线的边界没有写清**
 - 本机 `3001 / 3002` 旧实例存在运行态污染，不能直接拿来代表当前 build；干净实例验证应以新起服务为准
@@ -53,7 +53,7 @@ npm run build
 
 ## 2. 当前真实实现边界
 
-### A. `index.html` 离线 mockup 线路
+### A. `index.html` 离线演示线路
 
 文件：
 
@@ -73,11 +73,11 @@ npm run build
 - `D1` 已固定团队成员：
   - `方暨兰，温阿利，耿向宇，崔杰，张涛，吴蕙羽`
 - 品牌已切为：
-  - 主标题：`芯科元析`
-  - 副标题：`面向电子制造与电子研发体系的失效分析智能体平台`
-  - logo：`assets/xkyx-tech-grid.svg`
+  - 主标题：`Pin2pin Fireline`
+  - 副标题：`Pin2pin.ai 旗下的异常响应与失效分析工作台`
+  - 标识：`assets/xkyx-tech-grid.svg`
 
-当前 UI 已具备：
+当前界面已具备：
 
 - 新建项目
 - 项目切换
@@ -124,8 +124,8 @@ npm run build
 - 文风选择
 - 文本 / HTML 报告预览
 - Final 结案
-- 本地文件 store / Postgres store
-- LLM adapter 与 extract 路由
+- 本地文件存储 / Postgres 存储
+- LLM 适配层与 `extract` 路由
 
 当前 API：
 
@@ -154,14 +154,14 @@ npm run build
 - `deck.test.mjs`：`27 passed`
 - `npm test`：`52 passed`
 
-但当前 fresh verification 已更新为：
+但当前最新验证结果已更新为：
 
 - `deck.test.mjs`：`30 passed`
 - `npm test`：`71 passed`
 
 ### 3.2 `docs/README.md` 和 `docs/current-handoff.md` 对“最近工作发生在哪条线”描述已落后
 
-截至 `2026-03-25`，最近一轮产品 hardening 主要发生在 `Next.js`：
+截至 `2026-03-25`，最近一轮产品加固主要发生在 `Next.js`：
 
 - `旅程 1` 高压副驾感
 - `旅程 3` 认知重建和问题排序
@@ -178,14 +178,14 @@ npm run build
 当前写法容易让人误读成：
 
 - `index.html` 已经失活
-- 不能再用于 demo 或交互试验
+- 不能再用于演示或交互试验
 
 更准确的说法应是：
 
 - `Next.js` 是权威产品主线
-- `index.html` 是仍在维护的离线 mockup / demo 线
+- `index.html` 是仍在维护的离线原型 / 演示线
 
-### 3.4 `task_plan.md` 不是旧的 LLM routing 任务
+### 3.4 `task_plan.md` 不是旧的 LLM 路由任务
 
 当前 `task_plan.md` 已切成：
 
@@ -201,20 +201,20 @@ npm run build
 
 ### 4.1 `index.html` 已有，但 Next.js 主应用未对齐的能力
 
-以下能力当前在线下 mockup 有，`components/workspace.tsx` 主工作台未见对应实现：
+以下能力当前在离线原型里有，`components/workspace.tsx` 主工作台未见对应实现：
 
 - 项目重命名 / 删除
 - 左侧折叠态的新版交互
-- 品牌替换为 `芯科元析 + xkyx-tech-grid.svg`
+- 品牌替换为 `Pin2pin Fireline + xkyx-tech-grid.svg`
 - 完整报告 Word 导出
 - 完整报告 PDF 导出入口
 - D1 固定团队成员
 - D2 中文 5W1H 强调样式
-- 单文件离线 fallback 的完整 `D2 -> D8` mockup 逻辑
+- 单文件离线回退的完整 `D2 -> D8` 原型逻辑
 
 ### 4.2 Next.js 主应用已有，但 `index.html` 未对齐的能力
 
-以下能力当前在 Next.js 路线上已有明显实现，而离线 mockup 没有：
+以下能力当前在 Next.js 路线上已有明显实现，而离线原型没有：
 
 - 本地文件 / Postgres 存储切换
 - Route Handlers API 主链路
@@ -226,9 +226,9 @@ npm run build
 
 ### 4.3 文档层未实现的事情
 
-- 还没有一份把“主线优先级”和“mockup 角色”彻底写死的总决策文档
-- 还没有一份明确的“mockup -> Next.js 回灌清单”
-- 运行态污染风险还没写进 handoff 的显眼位置
+- 还没有一份把“主线优先级”和“离线原型角色”彻底写死的总决策文档
+- 还没有一份明确的“离线原型 -> Next.js 回灌清单”
+- 运行态污染风险还没写进交接说明的显眼位置
 
 ---
 
@@ -239,7 +239,7 @@ npm run build
 1. **承认双线并存，但把 `Next.js` 明确成默认产品主线**
 2. **新增产品能力默认优先落到 `Next.js`**
 3. **短期离线演示或交互试验时，仍可使用 `index.html`**
-4. **把 mockup 中仍有价值的能力整理成可迁移清单，而不是继续隐性分叉**
+4. **把离线原型中仍有价值的能力整理成可迁移清单，而不是继续隐性分叉**
 
 也就是说：
 
@@ -250,30 +250,30 @@ npm run build
 
 ## 6. 最新工作计划
 
-### Phase 1：文档收口（现在）
+### 阶段 1：文档收口（现在）
 
 - 更新 `docs/current-handoff.md`
 - 更新 `docs/README.md`
 - 重写 `task_plan.md`
 - 明确写出双线现状、验证结果、功能分叉和推荐下一步
 
-### 当前待办 source of truth
+### 当前待办唯一依据
 
-- 当前 `eng review + design review` 的所有后续动作，统一收口在 [MVP Hardening Checklist](./mvp-hardening-checklist.md)
+- 当前“工程评审 + 设计评审”的所有后续动作，统一收口在 [MVP 加固清单](./mvp-hardening-checklist.md)
 - `task_plan.md`、`progress.md`、`findings.md` 现在只承担恢复上下文与阶段判断，不再各自维护平行待办
 - 如果后续新增评审动作，先更新 `mvp-hardening-checklist.md`
-- mockup 与主应用的差异账本见 [index-html-to-nextjs-migration-ledger.md](./index-html-to-nextjs-migration-ledger.md)
+- 离线原型与主应用的差异账本见 [index-html-to-nextjs-migration-ledger.md](./index-html-to-nextjs-migration-ledger.md)
 
-### Phase 2：当前默认方向
+### 阶段 2：当前默认方向
 
 当前默认方向已经可以收口为：
 
-#### 方向 B：以 `Next.js` 为正式主线，把 mockup 中仍有价值的能力按需回灌
+#### 方向 B：以 `Next.js` 为正式主线，把离线原型中仍有价值的能力按需回灌
 
 适合：
 
-- 近期主要目标是统一产品代码、后续部署和真实 provider 接入
-- 当前最新 hardening 已连续落在 `Next.js` 主链路
+- 近期主要目标是统一产品代码、后续部署和真实模型服务接入
+- 当前最新加固工作已连续落在 `Next.js` 主链路
 
 下一步：
 
@@ -286,9 +286,9 @@ npm run build
 
 风险：
 
-- 如果不记账迁移，mockup 和主应用会继续隐性分叉
+- 如果不记账迁移，离线原型和主应用会继续隐性分叉
 
-### Phase 3：无论选哪条线，都应该做的事
+### 阶段 3：无论选哪条线，都应该做的事
 
 - 明确“权威实现”并更新 `AGENTS.md`
 - 写一份迁移 / 对齐清单，避免继续隐性分叉
@@ -301,7 +301,7 @@ npm run build
 按优先级排序：
 
 1. 以 `Next.js` 作为下一阶段默认权威实现继续推进
-2. 立即建立“mockup 增量迁移清单”
+2. 立即建立“离线原型增量迁移清单”
 3. 清理本机旧实例后，再做一次 `3001` 端口的干净生产验证
 4. 不要继续在两条线上同时做新增功能而不记账
 

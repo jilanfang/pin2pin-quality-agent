@@ -1,12 +1,12 @@
-# 芯科元析工作台运行与部署说明
+# Pin2pin Fireline 运行与部署说明
 
-本文档描述当前 `芯科元析失效分析工作台` 的实际技术形态、运行方式和部署路径。当前权威实现是 `Next.js App Router + TypeScript` 单项目；根目录 `index.html` 仍保留为可运行的离线 mockup / demo 参考线，但不是上线目标架构。
+本文档描述当前 `Pin2pin Fireline` 的实际技术形态、运行方式和部署路径。当前权威实现是 `Next.js App Router + TypeScript` 单项目；根目录 `index.html` 仍保留为可运行的离线原型 / 演示参考线，但不是上线目标架构。
 
 ## 1. 当前实现状态
 
 - 前端与 API 在同一个 Next.js 项目中。
 - 首页工作台入口：`/`
-- API 路由已具备完整 demo 闭环：
+- API 路由已具备完整演示闭环：
   - `GET /api/health`
   - `GET /api/cases`
   - `POST /api/cases`
@@ -68,7 +68,7 @@ npm run smoke:browser
   - 新建空白案件
   - 输入一条证据
   - 打开报告预览
-- 这条 smoke 还会额外检查：
+- 这条冒烟验证还会额外检查：
   - `/_next/static` 返回正常
   - 页面无控制台报错
   - 关键接口没有 `4xx/5xx`
@@ -79,14 +79,14 @@ npm run smoke:browser
 
 ### 模式 A：本地文件存储（无数据库）
 
-只适合本机 demo、自测、无数据库时快速启动。
+只适合本机演示、自测、无数据库时快速启动。
 
 - 不设置 `DATABASE_URL`
 - 案件数据保存在本地文件
 - 默认路径是 `AI_QUALITY_STORE_PATH`，未设置时回落到 `/tmp/ai-quality-demo-store.json`
 - 同一台机器上重启服务后可继续读到之前的案件
-- 不适合任何外部试用、Vercel 预览部署或 serverless demo，因为实例切换后本地文件不可靠
-- `/tmp/ai-quality-demo-store.json` 只用于本机临时 demo，不应被描述成对外试用方案
+- 不适合任何外部试用、Vercel 预览部署或 `serverless` 场景，因为实例切换后本地文件不可靠
+- `/tmp/ai-quality-demo-store.json` 只用于本机临时演示，不应被描述成对外试用方案
 
 `.env.example` 当前内容：
 
@@ -164,22 +164,22 @@ AI_QUALITY_LLM_EXTRACT_FALLBACK_MODEL=ark-code-latest
 
 ### 推荐演示配置
 
-- Preview / Demo 环境：使用 Neon 或 Supabase 的 Postgres
+- 预览 / 演示环境：使用 Neon 或 Supabase 的 Postgres
 - 生产前阶段先不开登录、不做多租户
 - 用种子案例直接展示完整路径，再补真实碎片输入
 
 ## 6. LLM 接入边界
 
 - 后续所有在线模型调用只能经由 [`lib/server/llm.ts`](/Users/jilanfang/ai-quality/lib/server/llm.ts)
-- 不要在以下位置直接写 provider / model / endpoint 逻辑：
+- 不要在以下位置直接写服务接入 / 模型 / 接口地址逻辑：
   - `lib/domain/workflow-engine.ts`
   - `lib/domain/guided-thinking.ts`
   - `lib/domain/report-builder.ts`
   - `components/workspace.tsx`
-- 当前已具备 provider / capability / fallback 路由，但默认只把这层能力接在 `extract` 上
-- `copilot` / `report` 如果后续要接在线模型，先扩 `lib/server/llm.ts` 的 facade / router，再落具体能力
+- 当前已具备服务方 / 能力 / 回退路由，但默认只把这层能力接在 `extract` 上
+- `copilot` / `report` 如果后续要接在线模型，先扩 `lib/server/llm.ts` 的统一入口与路由层，再落具体能力
 
-## 7. Demo 当前能力
+## 7. 演示环境当前能力
 
 ### 已具备
 
@@ -212,13 +212,13 @@ AI_QUALITY_LLM_EXTRACT_FALLBACK_MODEL=ark-code-latest
 - PDF 仍建议先用浏览器打印正式 HTML。
 - Postgres schema 当前通过 `drizzle-kit push` 直接同步，尚未沉淀正式 migration 流程。
 - 旧目录 `backend/` 仍保留作迁移参考，不是当前上线主链路。
-- 根目录 `index.html` 仍可运行，适合作离线 demo、交互试验和报告展示对照，但不应替代当前产品主线。
+- 根目录 `index.html` 仍可运行，适合作离线演示、交互试验和报告展示对照，但不应替代当前产品主线。
 
 ## 9. 建议的下一步
 
-按 demo 上线优先级，建议顺序如下：
+按演示上线优先级，建议顺序如下：
 
-1. 先继续把 `lib/server/llm.ts` 这层 facade / router 用到更多能力，再决定是否给 `copilot` / `report` 接真实 provider。
+1. 先继续把 `lib/server/llm.ts` 这层统一入口与路由层用到更多能力，再决定是否给 `copilot` / `report` 接真实服务方。
 2. 增加 benchmark case 的 API/页面级回归测试。
 3. 接通真实 Postgres 并完成一次 Vercel 预览部署。
 4. 优化正式报告页面，补 `打印为 PDF` 的演示路径。
@@ -226,7 +226,7 @@ AI_QUALITY_LLM_EXTRACT_FALLBACK_MODEL=ark-code-latest
 
 ## 10. 相关文档
 
-- [MVP Hardening Checklist](./mvp-hardening-checklist.md)
-- [Mockup Migration Ledger](./index-html-to-nextjs-migration-ledger.md)
-- [Current Handoff](./current-handoff.md)
+- [MVP 加固清单](./mvp-hardening-checklist.md)
+- [迁移账本](./index-html-to-nextjs-migration-ledger.md)
+- [当前交接说明](./current-handoff.md)
 - [`../AGENTS.md`](/Users/jilanfang/ai-quality/AGENTS.md)

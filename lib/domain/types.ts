@@ -14,6 +14,7 @@ export type StyleMode =
 export type ReportStage = "initial_24h" | "interim" | "final";
 export type CaseStatus = "open" | "closed";
 export type ExportTarget = "text" | "formalHtml" | "finalReport" | "pdf";
+export type ResultArtifactKind = "analysis_summary" | "action_plan" | "eight_d";
 
 export interface FactItem {
   field: string;
@@ -94,6 +95,37 @@ export interface ExportCapabilities {
   pdf: ExportCapability;
 }
 
+export interface AnalysisSummary {
+  title: "分析结论";
+  overview: string;
+  confirmedFacts: string[];
+  openQuestions: string[];
+  risks: string[];
+}
+
+export interface ActionPlan {
+  title: "行动方案";
+  overview: string;
+  immediateActions: string[];
+  owners: string[];
+  verificationChecks: string[];
+}
+
+export interface ResultReadiness {
+  analysisSummary: boolean;
+  actionPlan: boolean;
+  eightD: boolean;
+}
+
+export interface ResultRecommendation {
+  kind: ResultArtifactKind;
+  title: string;
+  rationale: string;
+  primaryActionLabel: string;
+  secondaryActionLabel?: string;
+  deferActionLabel?: string;
+}
+
 export interface OutputSection {
   sectionKey: WorkflowStage;
   sectionTitle: string;
@@ -166,7 +198,14 @@ export interface ReportBuildOptions {
 }
 
 export interface ReportPreview {
-  document: OutputDocument;
+  document:
+    | OutputDocument
+    | {
+        artifactKind: ResultArtifactKind;
+        title: string;
+        caseStatus: CaseStatus;
+        generatedAt: string;
+      };
   text: string;
   html: string;
   warnings: string[];

@@ -1,34 +1,35 @@
 # Current Checkpoint
 
+<!-- Update this file whenever you save a new checkpoint -->
+
 ## Snapshot ID
-20260325-020126-mvp-review-and-hardening-plan
+20260325-171559-sovereign-shell-alignment
 
 ## Saved At
-2026-03-25 02:01 CST
+2026-03-25 17:15 CST
 
 ## Project Path
 /Users/jilanfang/ai-quality
 
 ## Snapshot File
-.task-archive/snapshots/20260325-020126-mvp-review-and-hardening-plan.md
+.task-archive/snapshots/20260325-171559-sovereign-shell-alignment.md
 
 ## Goal
-核对当前 ai-quality 的最新代码与文档状态，完成 MVP 架构/设计评审，并锁定下一步硬化动作。
+把当前 ai-quality 的前端升级成参考稿要求的 “Sovereign Shell” 框架，同时保留现有工作台能力与后端 API。
 
 ## Current Phase
-当前处于“评审已完成、主链路已核对、文档已同步，接下来进入 MVP hardening 与第一轮 UI 收口”的阶段。
+已完成上一轮会话优先改版并全部验证通过；新一轮参考框架迁移已完成设计探索和用户范围确认，等待换 key 后继续实现。
 
 ## Next Actions
-- 先做 `docs/mvp-hardening-checklist.md` 里的 P0
-- 先补 `index.html -> Next.js` 迁移账本
-- 然后在 `components/workspace.tsx` 做第一轮 UI / UX 收口
-- 再进入 P1：浏览器 smoke、LLM observability、Postgres preview 验证、`workspace.tsx` 最小拆分准备
+- 恢复后先按“壳层优先，工作台跟进”开始实现共享 `Sovereign Shell`
+- 先改全局壳层，再把当前 `Workspace` 迁入新骨架
+- 实现后重跑 `npm test`、`npm run typecheck`、`npm run build`、`npm run smoke:browser`
 
 ## Blockers
-- 当前目录不是 git repo / worktree root，无法直接使用完整的 git clean-tree 审查流程
-- Postgres preview deployment 这轮还没做 fresh re-verify
+- 用户正在换 key，需要在新 key 就位后继续实现
+- 参考框架迁移尚未开始写代码
 
 ## Restore Checklist
 1. Read the snapshot file listed above.
 2. Rebuild `task_plan.md`, `progress.md`, and `findings.md` from that snapshot.
-3. 继续以 `app/`、`components/`、`lib/` 为唯一主链路，不要把 `backend/` 或根目录 `index.html` 当成产品主链路。
+3. Summarize the restored phase, next actions, and blockers before continuing.

@@ -38,11 +38,35 @@ type GuidedThinking = {
   warnings: string[];
 } | null;
 
-type ReportCapabilities = {
-  text: { allowed: boolean; reasonCodes: string[] };
-  formalHtml: { allowed: boolean; reasonCodes: string[] };
-  finalReport: { allowed: boolean; reasonCodes: string[] };
-  pdf: { allowed: boolean; reasonCodes: string[] };
+type AnalysisSummary = {
+  title: string;
+  overview: string;
+  confirmedFacts: string[];
+  openQuestions: string[];
+  risks: string[];
+};
+
+type ActionPlan = {
+  title: string;
+  overview: string;
+  immediateActions: string[];
+  owners: string[];
+  verificationChecks: string[];
+};
+
+type ResultReadiness = {
+  analysisSummary: boolean;
+  actionPlan: boolean;
+  eightD: boolean;
+};
+
+type ResultRecommendation = {
+  kind: "analysis_summary" | "action_plan" | "eight_d";
+  title: string;
+  rationale: string;
+  primaryActionLabel: string;
+  secondaryActionLabel?: string;
+  deferActionLabel?: string;
 };
 
 type CaseWorkflow = {
@@ -66,13 +90,18 @@ type CaseWorkflow = {
   knownFacts: { field: string; value: string }[];
   assumptions: { statement: string; needsValidation: boolean }[];
   riskFlags: string[];
-  reportCapabilities: ReportCapabilities;
+  analysisSummary: AnalysisSummary;
+  actionPlan: ActionPlan | null;
+  resultReadiness: ResultReadiness;
+  resultRecommendation: ResultRecommendation;
 };
 
 type ReportPreview = {
   document: {
-    reportStage: string;
-    styleMode: string;
+    artifactKind?: string;
+    reportStage?: string;
+    styleMode?: string;
+    title?: string;
     caseStatus: string;
   };
   text: string;
@@ -85,11 +114,6 @@ type SummaryItem = {
   label: string;
   value: string;
   tone?: "signal" | "warning" | "default";
-};
-
-type OutputGuidance = {
-  recommendedLabel: string;
-  rationale: string;
 };
 
 type ExpertReviewSnapshot = {
@@ -135,18 +159,6 @@ const seedCases = [
   },
 ] as const;
 
-const reportStageOptions = [
-  { value: "initial_24h", label: "快速响应版" },
-  { value: "interim", label: "阶段更新版" },
-  { value: "final", label: "完整 8D" },
-] as const;
-
-const styleModeOptions = [
-  { value: "professional_neutral", label: "专业克制" },
-  { value: "customer_formal", label: "对客正式" },
-  { value: "internal_direct", label: "内部直给" },
-] as const;
-
 const feedbackCategoryOptions: Array<{ value: FeedbackCategory; label: string }> = [
   { value: "hard_to_understand", label: "看不懂" },
   { value: "not_professional_enough", label: "结果不专业" },
@@ -163,6 +175,17 @@ function formatTime(value: string) {
   });
 }
 
+const STAGE_LABELS: Record<string, string> = {
+  D1: "D1 团队与分工",
+  D2: "D2 问题定义",
+  D3: "D3 临时遏制",
+  D4: "D4 原因分析",
+  D5: "D5 纠正措施",
+  D6: "D6 效果验证",
+  D7: "D7 防再发",
+  D8: "D8 结案沉淀",
+};
+
 async function readJson(response: Response) {
   if (!response.ok) {
     const payload = await response.json().catch(() => ({ error: "请求失败" }));
@@ -171,53 +194,9 @@ async function readJson(response: Response) {
   return response.json();
 }
 
-function capabilityLabel(capability: { allowed: boolean; reasonCodes: string[] }) {
-  if (capability.allowed) return "可用";
-  return capability.reasonCodes.length
-    ? capability.reasonCodes.map((code) => capabilityReasonCopy(code)).join("；")
-    : "暂不可用";
-}
-
-function capabilityReasonCopy(reasonCode: string) {
-  const copyMap: Record<string, string> = {
-    d2_unconfirmed: "请先确认 D2 问题描述",
-    containment_missing: "请先补齐 D3 临时围堵措施",
-    analysis_direction_missing: "请先补充 D4 分析方向或待验证假设",
-    d1_incomplete: "待补齐 D1 团队与职责信息",
-    impacted_stages: "存在受影响章节，请先复审",
-    stages_unconfirmed: "仍有章节未确认，暂不能出完整 8D",
-  };
-  return copyMap[reasonCode] ?? reasonCode;
-}
-
-function initialReadinessCopyForCase(currentCase: CaseWorkflow | null) {
-  if (!currentCase) return "待判断";
-  if (currentCase.reportCapabilities.formalHtml.allowed) {
-    return "问题描述、围堵动作、根因方向已具备";
-  }
-
-  const gapMap = new Map(currentCase.missingFields.map((item) => [item.field, item.reason]));
-  const blockers: string[] = [];
-
-  if (currentCase.reportCapabilities.formalHtml.reasonCodes.includes("d2_unconfirmed")) {
-    blockers.push("问题描述未确认");
-  }
-  if (currentCase.reportCapabilities.formalHtml.reasonCodes.includes("containment_missing")) {
-    blockers.push("围堵状态未具备");
-  }
-  if (gapMap.has("failure_location")) {
-    blockers.push("失效位置未明确");
-  }
-  if (currentCase.reportCapabilities.formalHtml.reasonCodes.includes("analysis_direction_missing")) {
-    blockers.push("根因方向未形成");
-  }
-
-  const uniqueBlockers = [...new Set(blockers)];
-  if (uniqueBlockers.length) {
-    return `还差${uniqueBlockers.join("；")}`;
-  }
-
-  return capabilityLabel(currentCase.reportCapabilities.formalHtml);
+function stageLabel(stage?: string) {
+  if (!stage) return "未开始";
+  return STAGE_LABELS[stage] ?? stage;
 }
 
 function caseStatusLabel(status?: string) {
@@ -288,49 +267,6 @@ function factValue(items: { field: string; value: string }[], field: string) {
   return items.find((item) => item.field === field)?.value;
 }
 
-function buildOutputGuidance(currentCase: CaseWorkflow | null): OutputGuidance | null {
-  if (!currentCase) return null;
-  const isUrgentComplaint =
-    factValue(currentCase.knownFacts, "mode") === "customer_complaint_urgent";
-  const gapMap = new Map(currentCase.missingFields.map((item) => [item.field, item.reason]));
-
-  if (currentCase.reportCapabilities.finalReport.allowed) {
-    return {
-      recommendedLabel: "完整 8D（可结案）",
-      rationale: "所有关键阶段已确认，可直接生成完整 8D。",
-    };
-  }
-
-  if (currentCase.reportCapabilities.formalHtml.allowed) {
-    return {
-      recommendedLabel: "快速响应版（可流转）",
-      rationale: "问题描述、围堵动作和分析方向已具备，可先对内对外同步一版。",
-    };
-  }
-
-  if (isUrgentComplaint) {
-    if (gapMap.has("failure_location") || gapMap.has("containment_status")) {
-      return {
-        recommendedLabel: "分析摘要（建议）",
-        rationale:
-          "还不能交快速响应版，先确认失效位置，再逐项补齐客户现场、已发货、成品库存、在制品的围堵状态。",
-      };
-    }
-
-    if (gapMap.has("batch_trace")) {
-      return {
-        recommendedLabel: "分析摘要（建议）",
-        rationale: "围堵已有基础，但还要先锁工单、批次、线别或生产时间，避免追溯边界失真。",
-      };
-    }
-  }
-
-  return {
-    recommendedLabel: "分析摘要（建议）",
-    rationale: "正式报告还不能出，先继续补失效位置和围堵状态，避免把未稳信息写成正式稿。",
-  };
-}
-
 function buildExpertReviewSnapshot(currentCase: CaseWorkflow | null): ExpertReviewSnapshot | null {
   if (!currentCase) return null;
 
@@ -345,9 +281,9 @@ function buildExpertReviewSnapshot(currentCase: CaseWorkflow | null): ExpertRevi
     return !!record?.confirmedContent || !!record?.workingContent;
   });
   const causeChainLabel =
-    currentCase.reportCapabilities.finalReport.allowed || hasD4 ? "原因链已成形" : "原因链待收口";
+    currentCase.resultReadiness.eightD || hasD4 ? "原因链已成形" : "原因链待收口";
   const actionLayerLabel =
-    currentCase.reportCapabilities.finalReport.allowed || hasActionLayers
+    currentCase.resultReadiness.eightD || hasActionLayers
       ? "措施层次已成形"
       : "措施层次待补强";
 
@@ -412,6 +348,435 @@ function buildRebuildReviewCard(currentCase: CaseWorkflow | null): RebuildReview
   };
 }
 
+function hasActionFact(
+  item: [string, string | undefined]
+): item is [string, string] {
+  return Boolean(item[1]);
+}
+
+function WorkspaceContextHeader({
+  currentCaseId,
+  currentCase,
+  impactedStageNames,
+}: {
+  currentCaseId: string | null;
+  currentCase: CaseWorkflow | null;
+  impactedStageNames: string[];
+}) {
+  return (
+    <header className="workspace-context" aria-label="案件上下文">
+      <div className="workspace-context-main">
+        <div className="workspace-context-copy">
+          <strong>Fireline Workspace</strong>
+          <span className="workspace-context-meta">
+            {currentCaseId ? `ACTIVE CASE #${currentCaseId.toUpperCase()}` : "ACTIVE CASE NOT INITIALIZED"}
+          </span>
+          <h2>{currentCase?.title ?? "先跑通第一单"}</h2>
+          <p>
+            {currentCaseId
+              ? currentCase?.guidedThinking?.thinkingGoal ?? "继续补证据，再让 AI 带着往前推。"
+              : "先选一个开始方式，我再带着你把第一单跑通。"}
+          </p>
+        </div>
+
+        <div className="workspace-track-block">
+          <div className="workspace-stage-dots" aria-hidden="true">
+            {(currentCase?.stages ?? []).map((stage) => {
+              const stageIndex = Number(stage.stage.replace("D", ""));
+              const currentIndex = Number((currentCase?.currentStage ?? "D1").replace("D", ""));
+              const isActive = stage.stage === currentCase?.currentStage;
+              const isComplete = stageIndex < currentIndex;
+
+              return (
+                <span
+                  key={stage.stage}
+                  className={`workspace-stage-dot${isActive ? " active" : ""}${isComplete ? " complete" : ""}${
+                    stage.impacted ? " impacted" : ""
+                  }`}
+                />
+              );
+            })}
+          </div>
+          <span className="workspace-track-label">
+            {currentCaseId ? stageLabel(currentCase?.currentStage ?? "D2") : stageLabel("D1")}
+          </span>
+        </div>
+      </div>
+
+      <div className="topbar-chips">
+        {currentCaseId ? (
+          <>
+            <span className="status-chip">{stageLabel(currentCase?.currentStage ?? "D2")}</span>
+            <span className="status-chip">{caseStatusLabel(currentCase?.status)}</span>
+            <span className="status-chip">{`D1 ${d1StatusLabel(currentCase?.d1Status)}`}</span>
+            {impactedStageNames.length ? (
+              <span className="status-chip status-chip-warning">{`回看 ${impactedStageNames.map(stageLabel).join(" / ")}`}</span>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <span className="status-chip">未开始</span>
+            <span className="status-chip">先创建或载入案件</span>
+          </>
+        )}
+      </div>
+    </header>
+  );
+}
+
+function AssistantStageCard({
+  currentCase,
+  selectedStage,
+  summaryItems,
+  impactSummary,
+  rebuildReviewCard,
+  copilotBrief,
+  guidanceFactsList,
+  guidanceAssumptions,
+  nextQuestion,
+  isUrgentComplaint,
+  actionFacts,
+  resultRecommendation,
+  expertReviewSnapshot,
+  visibleStages,
+  isStageRailExpanded,
+  loading,
+  onToggleStageRail,
+  onSelectStage,
+  onConfirmStage,
+  onPrimaryRecommendation,
+  onSecondaryRecommendation,
+  currentCaseId,
+}: {
+  currentCase: CaseWorkflow | null;
+  selectedStage: StageRecord | null;
+  summaryItems: SummaryItem[];
+  impactSummary: string | null;
+  rebuildReviewCard: RebuildReviewCard | null;
+  copilotBrief: CopilotBrief | null;
+  guidanceFactsList: { field: string; value: string }[];
+  guidanceAssumptions: { statement: string; needsValidation: boolean }[];
+  nextQuestion: string | null;
+  isUrgentComplaint: boolean;
+  actionFacts: Array<[string, string | undefined]>;
+  resultRecommendation: ResultRecommendation | null;
+  expertReviewSnapshot: ExpertReviewSnapshot | null;
+  visibleStages: StageRecord[];
+  isStageRailExpanded: boolean;
+  loading: boolean;
+  onToggleStageRail: () => void;
+  onSelectStage: (stage: string) => void;
+  onConfirmStage: (stage: string) => void;
+  onPrimaryRecommendation: () => void;
+  onSecondaryRecommendation: () => void;
+  currentCaseId: string | null;
+}) {
+  return (
+    <article className="message-card message-assistant stage-focus-card" aria-label="AI 主分析卡">
+      <div className="message-meta">
+        <span className="message-role">当前阶段</span>
+        <span>{stageLabel(selectedStage?.stage ?? currentCase?.currentStage ?? "D2")}</span>
+      </div>
+      {summaryItems.length ? (
+        <div className="inline-summary">
+          {summaryItems.map((item) => (
+            <div
+              key={item.key}
+              className={`summary-chip${
+                item.tone === "signal"
+                  ? " summary-chip-signal"
+                  : item.tone === "warning"
+                    ? " summary-chip-warning"
+                    : ""
+              }`}
+            >
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {impactSummary ? (
+        <div className="inline-alert" role="status">
+          <strong>案件认知已变化</strong>
+          <p>{impactSummary}</p>
+        </div>
+      ) : null}
+      <div className="assistant-manuscript">
+        <div className="assistant-manuscript-head">
+          <span className="section-label">Assistant Brief</span>
+          <span className="assistant-manuscript-stage">
+            {stageLabel(selectedStage?.stage ?? currentCase?.currentStage ?? "D2")}
+          </span>
+        </div>
+        {copilotBrief ? (
+          <div className="assistant-prose" data-testid="copilot-brief">
+            <p>
+              <span className="copilot-label">我现在怎么看</span>
+              <span className="assistant-lead assistant-lead-inline">{copilotBrief.currentView}</span>
+            </p>
+            <p>
+              <span className="copilot-label">为什么先问这个</span>
+              {copilotBrief.whyThis}
+            </p>
+            <p>
+              <span className="copilot-label">你只需要补什么</span>
+              {copilotBrief.nextNeed}
+            </p>
+          </div>
+        ) : (
+          <div className="assistant-prose">
+            <p className="assistant-lead">
+              {currentCase?.guidedThinking?.thinkingGoal ?? "发送第一条证据后，我会在这里持续推进。"}
+            </p>
+            <p>{currentCase?.guidedThinking?.guidanceText ?? "先补事实，再进入分析。"}</p>
+          </div>
+        )}
+      </div>
+      {rebuildReviewCard ? (
+        <div className="rebuild-review-card" data-testid="rebuild-review-card">
+          <div className="rebuild-review-head">
+            <strong>复审提示</strong>
+            <span>先校正认知，再继续推进</span>
+          </div>
+          <div className="rebuild-review-grid">
+            <div className="rebuild-review-item">
+              <span className="copilot-label">变了什么</span>
+              <p>{rebuildReviewCard.changedWhat}</p>
+            </div>
+            <div className="rebuild-review-item">
+              <span className="copilot-label">先回看哪一步</span>
+              <p>{rebuildReviewCard.revisitStages}</p>
+            </div>
+            <div className="rebuild-review-item">
+              <span className="copilot-label">为什么先回这里</span>
+              <p>{rebuildReviewCard.whyRevisit}</p>
+            </div>
+            <div className="rebuild-review-item">
+              <span className="copilot-label">暂时不稳的结论</span>
+              <p>{rebuildReviewCard.unstableConclusions}</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <div className="copilot-grid">
+        <section className="copilot-panel copilot-panel-primary">
+          <span className="copilot-label">已知事实</span>
+          {guidanceFactsList.length ? (
+            <ul className="list compact-list">
+              {guidanceFactsList.map((item) => (
+                <li key={`${item.field}-${item.value}`}>{`${factLabel(item.field)}：${item.value}`}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="copilot-empty">还没有稳定事实，先补现象、时间、批次和影响范围。</p>
+          )}
+        </section>
+
+        <section className="copilot-panel">
+          <span className="copilot-label">当前缺口</span>
+          {currentCase?.missingFields.length ? (
+            <ul className="list compact-list">
+              {currentCase.missingFields.slice(0, 3).map((item) => (
+                <li key={`${item.field}-${item.reason}`}>{item.reason}</li>
+              ))}
+            </ul>
+          ) : guidanceAssumptions.length ? (
+            <ul className="list compact-list">
+              {guidanceAssumptions.map((item) => (
+                <li key={item.statement}>{item.statement}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="copilot-empty">当前关键缺口已较少，可以继续确认本阶段工作稿。</p>
+          )}
+        </section>
+
+        <section className="copilot-panel">
+          <span className="copilot-label">下一步建议</span>
+          <p className="copilot-next">{nextQuestion ?? "继续补充当前阶段证据，或确认进入下一步。"}</p>
+          {currentCase?.riskFlags.length ? (
+            <div className="mini-note">{currentCase.riskFlags.slice(0, 1).join("；")}</div>
+          ) : null}
+        </section>
+
+        {isUrgentComplaint && actionFacts.length ? (
+          <section className="copilot-panel">
+            <span className="copilot-label">客户侧 / 厂内侧当前动作</span>
+            <ul className="list compact-list">
+              {actionFacts.map(([label, value]) => (
+                <li key={`${label}-${value}`}>{`${label}：${value}`}</li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        {resultRecommendation ? (
+          <section className="copilot-panel">
+            <span className="copilot-label">当前建议整理</span>
+            <p className="copilot-next">
+              {resultRecommendation.kind === "analysis_summary"
+                ? "分析结论"
+                : resultRecommendation.kind === "action_plan"
+                  ? "行动方案"
+                  : "8D"}
+            </p>
+            <div className="mini-note">{resultRecommendation.rationale}</div>
+          </section>
+        ) : null}
+
+        {expertReviewSnapshot ? (
+          <section className="copilot-panel">
+            <span className="copilot-label">专家审稿视角</span>
+            <ul className="list compact-list">
+              <li>{`事实 ${expertReviewSnapshot.factCount} 项`}</li>
+              <li>{`假设 ${expertReviewSnapshot.assumptionCount} 项`}</li>
+              <li>{`风险 ${expertReviewSnapshot.riskCount} 项`}</li>
+              <li>{expertReviewSnapshot.causeChainLabel}</li>
+              <li>{expertReviewSnapshot.actionLayerLabel}</li>
+            </ul>
+          </section>
+        ) : null}
+      </div>
+
+      <div className="timeline-wrap">
+        <div className="timeline-head">
+          <span className="section-label">阶段时间线</span>
+          <button className="ghost-button ghost-button-tight" type="button" onClick={onToggleStageRail}>
+            {isStageRailExpanded ? "收起阶段" : "展开全部阶段"}
+          </button>
+        </div>
+        <div className="stage-timeline" data-testid="stage-timeline">
+          {visibleStages.map((stage) => (
+            <button
+              key={stage.stage}
+              type="button"
+              className={`stage-node${stage.stage === selectedStage?.stage ? " active" : ""}${stage.locked ? " locked" : ""}${
+                stage.impacted ? " impacted" : ""
+              }`}
+              onClick={() => onSelectStage(stage.stage)}
+            >
+              <span>{stageLabel(stage.stage)}</span>
+              <small>{stage.impacted ? "受影响" : stage.locked ? "已确认" : "工作稿"}</small>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {selectedStage ? (
+        <div className={`stage-detail-card${selectedStage.impacted ? " stage-detail-impacted" : ""}`}>
+          <div className="stage-head">
+            <strong>
+              {stageLabel(selectedStage.stage)} {selectedStage.stage === currentCase?.currentStage ? "· 当前聚焦" : ""}
+            </strong>
+            <span>{selectedStage.impacted ? "需要回看" : selectedStage.locked ? "已确认" : "工作稿"}</span>
+          </div>
+          <p>{stageCardPreview(selectedStage)}</p>
+          {selectedStage.impactSummary ? <div className="mini-note">{selectedStage.impactSummary}</div> : null}
+          {selectedStage.stage === currentCase?.currentStage ? (
+            <div className="stage-footnote">
+              <button
+                className="ghost-button ghost-button-tight"
+                type="button"
+                onClick={() => onConfirmStage(selectedStage.stage)}
+                disabled={loading}
+              >
+                确认当前阶段
+              </button>
+              <span>不再用解锁 / 复审按钮驱动，变化会直接在会话里解释。</span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {resultRecommendation ? (
+        <div className="report-action-card" data-testid="result-recommendation-card">
+          <div className="report-action-copy">
+            <span className="section-label">AI 建议卡</span>
+            <p className="report-action-lead">{resultRecommendation.title}</p>
+            <p>{resultRecommendation.rationale}</p>
+          </div>
+          <div className="report-action-row report-action-row-inline">
+            <button
+              className="primary-button"
+              type="button"
+              onClick={onPrimaryRecommendation}
+              disabled={!currentCaseId || loading}
+            >
+              {resultRecommendation.primaryActionLabel}
+            </button>
+            {resultRecommendation.secondaryActionLabel ? (
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={onSecondaryRecommendation}
+                disabled={!currentCaseId || loading}
+              >
+                {resultRecommendation.secondaryActionLabel}
+              </button>
+            ) : null}
+            {resultRecommendation.deferActionLabel ? (
+              <button className="ghost-button" type="button" disabled>
+                {resultRecommendation.deferActionLabel}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function ComposerDock({
+  focusArea,
+  composer,
+  isExpanded,
+  loading,
+  currentCaseId,
+  onChange,
+  onToggleExpanded,
+  onSend,
+}: {
+  focusArea: string | null | undefined;
+  composer: string;
+  isExpanded: boolean;
+  loading: boolean;
+  currentCaseId: string | null;
+  onChange: (value: string) => void;
+  onToggleExpanded: () => void;
+  onSend: () => void;
+}) {
+  return (
+    <div
+      className={`composer-dock${isExpanded ? " expanded" : ""}`}
+      data-testid="composer-dock"
+      aria-label="证据输入停靠区"
+    >
+      <span className="helper-inline">
+        {focusArea ? `当前建议先推进 ${focusArea}` : "先创建案件，再开始输入证据"}
+      </span>
+      <div className="composer-frame">
+        <textarea
+          aria-label="证据输入框"
+          className="composer"
+          rows={isExpanded ? 4 : 1}
+          placeholder="输入客户投诉、测试结论、批次、工单、现场观察，系统会按当前阶段推进。"
+          value={composer}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <div className="composer-actions">
+          <button className="ghost-button ghost-button-tight" type="button" onClick={onToggleExpanded}>
+            {isExpanded ? "收起输入框" : "展开输入框"}
+          </button>
+          <button className="primary-button" type="button" onClick={onSend} disabled={!composer.trim() || loading || !currentCaseId}>
+            发送证据
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Workspace() {
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [currentCaseId, setCurrentCaseId] = useState<string | null>(null);
@@ -419,19 +784,14 @@ export function Workspace() {
   const [composer, setComposer] = useState("");
   const [titleInput, setTitleInput] = useState("新的 8D 案件");
   const [seedCase, setSeedCase] = useState<(typeof seedCases)[number]["key"] | "">("");
-  const [reportStage, setReportStage] = useState<(typeof reportStageOptions)[number]["value"]>(
-    "initial_24h"
-  );
-  const [styleMode, setStyleMode] = useState<(typeof styleModeOptions)[number]["value"]>(
-    "professional_neutral"
-  );
   const [preview, setPreview] = useState<ReportPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [focusedStage, setFocusedStage] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isReportToolsOpen, setIsReportToolsOpen] = useState(false);
+  const [isCaseDrawerOpen, setIsCaseDrawerOpen] = useState(false);
   const [isStageRailExpanded, setIsStageRailExpanded] = useState(false);
+  const [isComposerExpanded, setIsComposerExpanded] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [feedbackCategory, setFeedbackCategory] = useState<FeedbackCategory>("hard_to_understand");
   const [feedbackNote, setFeedbackNote] = useState("");
@@ -468,8 +828,7 @@ export function Workspace() {
   const nextQuestion = currentCase?.guidedThinking?.suggestedQuestions[0] ?? null;
   const isUrgentComplaint =
     factValue(currentCase?.knownFacts ?? [], "mode") === "customer_complaint_urgent";
-  const initialReadinessCopy = initialReadinessCopyForCase(currentCase);
-  const outputGuidance = buildOutputGuidance(currentCase);
+  const resultRecommendation = currentCase?.resultRecommendation ?? null;
   const expertReviewSnapshot = buildExpertReviewSnapshot(currentCase);
   const impactSummary = currentImpactSummary(currentCase);
   const copilotBrief = buildCopilotBrief(currentCase, nextQuestion, isUrgentComplaint);
@@ -478,22 +837,13 @@ export function Workspace() {
     () => currentCase?.stages.filter((stage) => stage.impacted).map((stage) => stage.stage) ?? [],
     [currentCase]
   );
-  const reportStageRiskCopy = impactedStageNames.length
-    ? reportStage === "final"
-      ? "完整 8D：请先完成复审，再进入结案导出。"
-      : "当前版本：可预览，但会连同待复审提示一起导出。"
-    : null;
-  const previewActionStatus = impactedStageNames.length
-    ? reportStage === "final"
-      ? "完整 8D（需先复审）"
-      : `${reportStageOptions.find((item) => item.value === reportStage)?.label ?? "当前版本"}（含待复审）`
-    : null;
-  const actionFacts = [
+  const actionFactEntries: Array<[string, string | undefined]> = [
     ["客户现场", factValue(currentCase?.knownFacts ?? [], "containment_customer_site")],
     ["已发货", factValue(currentCase?.knownFacts ?? [], "containment_shipped")],
     ["成品库存", factValue(currentCase?.knownFacts ?? [], "containment_stock")],
     ["在制品", factValue(currentCase?.knownFacts ?? [], "containment_wip")],
-  ].filter(([, value]) => value);
+  ];
+  const actionFacts = actionFactEntries.filter(hasActionFact);
 
   const summaryItems = useMemo<SummaryItem[]>(() => {
     if (!currentCase) return [];
@@ -503,37 +853,45 @@ export function Workspace() {
         ? [
             {
               key: "revisit",
-              label: "待复审",
-              value: impactedStageNames.join(" / "),
+              label: "受影响",
+              value: impactedStageNames.map(stageLabel).join(" / "),
               tone: "warning" as const,
             },
           ]
         : []),
-      ...(outputGuidance
+      ...(resultRecommendation
         ? [
             {
               key: "output",
-              label: "输出快览",
-              value: outputGuidance.recommendedLabel,
+              label: "当前建议",
+              value:
+                resultRecommendation.kind === "analysis_summary"
+                  ? "分析结论"
+                  : resultRecommendation.kind === "action_plan"
+                    ? "行动方案"
+                    : "8D",
               tone: "signal" as const,
             },
           ]
         : []),
-      ...(!currentCase.reportCapabilities.formalHtml.allowed
+      ...(!currentCase.resultReadiness.actionPlan
         ? [
             {
               key: "formal-gap",
-              label: "出稿前还差",
-              value: initialReadinessCopy,
+              label: "当前还缺",
+              value: currentCase.missingFields.slice(0, 2).map((item) => item.reason).join("；") || "继续补证据",
               tone: "warning" as const,
             },
           ]
-        : !currentCase.reportCapabilities.finalReport.allowed
+        : !currentCase.resultReadiness.eightD
           ? [
               {
                 key: "final-gap",
-                label: "结案前还差",
-                value: capabilityLabel(currentCase.reportCapabilities.finalReport),
+                label: "8D 前还缺",
+                value:
+                  impactedStageNames.length > 0
+                    ? `先回看 ${impactedStageNames.map(stageLabel).join(" / ")}`
+                    : "仍有阶段未确认",
                 tone: "warning" as const,
               },
             ]
@@ -545,13 +903,13 @@ export function Workspace() {
         tone: "default" as const,
       })),
     ];
-  }, [currentCase, impactedStageNames, initialReadinessCopy, outputGuidance, summaryFacts]);
+  }, [currentCase, impactedStageNames, resultRecommendation, summaryFacts]);
 
   const visibleStages = useMemo(() => {
     if (!currentCase) return [];
     if (isStageRailExpanded) return currentCase.stages;
     const target = selectedStage?.stage ?? currentCase.currentStage;
-    return currentCase.stages.filter((stage) => stage.stage === target);
+    return currentCase.stages.filter((stage) => stage.stage === target || stage.impacted);
   }, [currentCase, isStageRailExpanded, selectedStage]);
 
   useEffect(() => {
@@ -645,6 +1003,7 @@ export function Workspace() {
       setComposer("");
       setSeedCase("");
       setIsCreateOpen(false);
+      setIsCaseDrawerOpen(false);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "创建案件失败");
     } finally {
@@ -669,6 +1028,7 @@ export function Workspace() {
       )) as CaseWorkflow;
       setCurrentCase(payload);
       setComposer("");
+      setIsComposerExpanded(false);
       await refreshCases(currentCaseId);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "提交证据失败");
@@ -698,15 +1058,19 @@ export function Workspace() {
     }
   }
 
-  async function openPreview() {
+  function artifactForRecommendation(kind: ResultRecommendation["kind"] | undefined) {
+    if (kind === "action_plan") return "action_plan";
+    if (kind === "eight_d") return "eight_d";
+    return "analysis_summary";
+  }
+
+  async function openPreview(artifact?: "analysis_summary" | "action_plan" | "eight_d") {
     if (!currentCaseId) return;
     setLoading(true);
     setError(null);
     try {
       const payload = (await readJson(
-        await fetch(
-          `/api/cases/${currentCaseId}/report-preview?reportStage=${reportStage}&styleMode=${styleMode}`
-        )
+        await fetch(`/api/cases/${currentCaseId}/report-preview?artifact=${artifact ?? "analysis_summary"}`)
       )) as ReportPreview;
       setPreview(payload);
     } catch (nextError) {
@@ -722,12 +1086,9 @@ export function Workspace() {
     setError(null);
     try {
       const payload = (await readJson(
-        await fetch(
-          `/api/cases/${currentCaseId}/report?reportStage=final&styleMode=${styleMode}`,
-          {
-            method: "POST",
-          }
-        )
+        await fetch(`/api/cases/${currentCaseId}/report?artifact=eight_d`, {
+          method: "POST",
+        })
       )) as CaseWorkflow;
       setCurrentCase(payload);
       await refreshCases(currentCaseId);
@@ -767,38 +1128,59 @@ export function Workspace() {
   function startWithSeedCase(defaultSeedCase: (typeof seedCases)[number]["key"]) {
     setSeedCase(defaultSeedCase);
     setIsCreateOpen(true);
+    setIsCaseDrawerOpen(true);
   }
 
   function startWithBlankCase() {
     setSeedCase("");
     setIsCreateOpen(true);
+    setIsCaseDrawerOpen(true);
   }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    function handleToggleCaseDrawer() {
+      setIsCaseDrawerOpen((value) => !value);
+    }
+
+    function handleStartBlankCase() {
+      startWithBlankCase();
+    }
+
+    function handleOpenReportDrawer() {
+      if (!preview && !loading && currentCaseId) {
+        void openPreview();
+      }
+    }
+
+    window.addEventListener("fireline:toggle-case-drawer", handleToggleCaseDrawer);
+    window.addEventListener("fireline:start-blank-case", handleStartBlankCase);
+    window.addEventListener("fireline:open-report-drawer", handleOpenReportDrawer);
+
+    return () => {
+      window.removeEventListener("fireline:toggle-case-drawer", handleToggleCaseDrawer);
+      window.removeEventListener("fireline:start-blank-case", handleStartBlankCase);
+      window.removeEventListener("fireline:open-report-drawer", handleOpenReportDrawer);
+    };
+  }, [currentCaseId, loading, preview]);
 
   return (
     <div className="workspace-shell">
-      <aside className="sidebar">
-        <div className="brand-card">
-          <div className="brand-line">
-            <strong>芯科元析</strong>
-            <span>Pin2Pin 出品的失效分析工作台</span>
-          </div>
-          <p>把零碎异常整理成可推进、可复审、可交付的分析工作流。</p>
-        </div>
+      {isCaseDrawerOpen ? <button className="drawer-scrim" type="button" aria-label="关闭抽屉遮罩" onClick={() => setIsCaseDrawerOpen(false)} /> : null}
 
-        <section className="panel grow">
-          <div className="panel-head">
-            <strong>案件列表</strong>
-            <div className="sidebar-actions">
-              <span>{cases.length}</span>
-              <button
-                className="ghost-button sidebar-mini-button"
-                type="button"
-                onClick={() => setIsCreateOpen((value) => !value)}
-              >
-                {isCreateOpen ? "收起新建" : "新建案件"}
-              </button>
+      {isCaseDrawerOpen ? (
+        <section className="case-drawer panel" aria-label="案件抽屉">
+          <div className="drawer-head">
+            <div className="drawer-copy">
+              <strong>案件抽屉</strong>
+              <span>缩起来只留主会话，展开时再切案件或新建。</span>
             </div>
+            <button className="ghost-button ghost-button-tight" type="button" onClick={() => setIsCaseDrawerOpen(false)}>
+              收起案件抽屉
+            </button>
           </div>
+
           {!hasCases ? (
             <div className="first-run-card">
               <span className="eyebrow">开始第一单</span>
@@ -819,6 +1201,24 @@ export function Workspace() {
               </div>
             </div>
           ) : null}
+
+          <div className="drawer-tools">
+            <div className="drawer-tools-copy">
+              <strong>案件列表</strong>
+              <span>{`${cases.length} 个案件`}</span>
+            </div>
+            <button
+              className="ghost-button ghost-button-tight"
+              type="button"
+              onClick={() => {
+                setSeedCase("");
+                setIsCreateOpen((value) => !value);
+              }}
+            >
+              {isCreateOpen ? "收起新建" : "新建案件"}
+            </button>
+          </div>
+
           {isCreateOpen ? (
             <div className="create-drawer">
               <label className="field">
@@ -842,13 +1242,17 @@ export function Workspace() {
               </button>
             </div>
           ) : null}
+
           <div className="case-list">
             {cases.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 className={`case-card${item.id === currentCaseId ? " active" : ""}`}
-                onClick={() => setCurrentCaseId(item.id)}
+                onClick={() => {
+                  setCurrentCaseId(item.id);
+                  setIsCaseDrawerOpen(false);
+                }}
               >
                 <div className="case-title">{item.title}</div>
                 <div className="case-meta">
@@ -859,154 +1263,42 @@ export function Workspace() {
             ))}
           </div>
         </section>
-      </aside>
+      ) : null}
 
       <main className="main-panel">
-        <header className="topbar">
-          <div className="topbar-title">
-            <h2>{currentCase?.title ?? "先跑通第一单"}</h2>
-            <p>
-              {currentCaseId ? (
-                <>
-                  <span>阶段 {currentCase?.currentStage ?? "D2"}</span>
-                  <span>D1 {d1StatusLabel(currentCase?.d1Status)}</span>
-                  <span>{caseStatusLabel(currentCase?.status)}</span>
-                </>
-              ) : (
-                <>
-                  <span>未开始</span>
-                  <span>先创建或载入案件</span>
-                  <span>3 分钟看到第一版结果</span>
-                </>
-              )}
-            </p>
-          </div>
-          <div className="hero-actions">
-            {currentCaseId ? (
-              <>
-                <button
-                  className="secondary-button quick-preview-button"
-                  type="button"
-                  onClick={openPreview}
-                  disabled={!currentCaseId || loading}
-                >
-                  快速预览报告
-                </button>
-                <button
-                  className="ghost-button toolbar-toggle"
-                  type="button"
-                  onClick={() => setIsReportToolsOpen((value) => !value)}
-                >
-                  {isReportToolsOpen ? "收起报告工具" : "打开报告工具"}
-                </button>
-                {isReportToolsOpen ? (
-                  <div className="report-tooltray">
-                    {impactedStageNames.length ? (
-                      <div className="tooltray-warning" role="status">
-                        <strong>当前报告含待复审章节</strong>
-                        <span>{`建议先回看 ${impactedStageNames.join(" / ")}，再决定是否导出正式稿。`}</span>
-                        {reportStageRiskCopy ? <em>{reportStageRiskCopy}</em> : null}
-                      </div>
-                    ) : null}
-                    <label className="field compact">
-                      <span>报告版本</span>
-                      <select value={reportStage} onChange={(event) => setReportStage(event.target.value as typeof reportStage)}>
-                        {reportStageOptions.map((item) => (
-                          <option key={item.value} value={item.value}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="field compact">
-                      <span>文风</span>
-                      <select value={styleMode} onChange={(event) => setStyleMode(event.target.value as typeof styleMode)}>
-                        {styleModeOptions.map((item) => (
-                          <option key={item.value} value={item.value}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <div className="preview-action-group">
-                      <button className="secondary-button" type="button" onClick={openPreview} disabled={!currentCaseId || loading}>
-                        生成预览
-                      </button>
-                      {previewActionStatus ? <span className="preview-action-status">{previewActionStatus}</span> : null}
-                    </div>
-                    {reportStage === "final" ? (
-                      <button
-                        className="primary-button"
-                        type="button"
-                        onClick={closeCaseWithFinalReport}
-                        disabled={!currentCaseId || loading || !currentCase?.reportCapabilities.finalReport.allowed}
-                        title={
-                          currentCase?.reportCapabilities.finalReport.allowed
-                            ? "生成完整 8D 并将案件状态切换为已结案"
-                            : capabilityLabel(
-                                currentCase?.reportCapabilities.finalReport ?? {
-                                  allowed: false,
-                                  reasonCodes: [],
-                                }
-                              )
-                        }
-                      >
-                        生成完整 8D 并结案
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <>
-                <button className="primary-button" type="button" onClick={() => startWithSeedCase(seedCases[0].key)}>
-                  加载演示案件
-                </button>
-                <button className="ghost-button toolbar-toggle" type="button" onClick={startWithBlankCase}>
-                  录入真实异常
-                </button>
-              </>
-            )}
-          </div>
-        </header>
+        <WorkspaceContextHeader
+          currentCaseId={currentCaseId}
+          currentCase={currentCase}
+          impactedStageNames={impactedStageNames}
+        />
 
         {error ? <div className="alert error">{error}</div> : null}
-
-        {!currentCaseId ? (
-          <section className="panel onboarding-panel">
-            <div className="panel-head">
-              <strong>开始第一单</strong>
-              <span>试用准备</span>
-            </div>
-            <div className="onboarding-grid">
-              <article className="onboarding-card">
-                <span className="eyebrow">下一步</span>
-                <h3>先从一个可跑通的案件开始，再决定补证据还是出稿。</h3>
-                <p>推荐先加载种子案例，3 分钟内看见第一版摘要和报告预览。</p>
-              </article>
-              <article className="onboarding-card">
-                <span className="eyebrow">真实录入</span>
-                <h3>如果你已经有现场信息，现在就可以直接开一个空白案件。</h3>
-                <p>如果你手头已经有真实异常，也可以直接新建空白案件，先录入客户投诉或测试结论。</p>
-              </article>
-            </div>
-          </section>
-        ) : null}
 
         <section className="conversation-shell panel">
           <div className="conversation-head">
             <strong>AI 协作区</strong>
-            <span>{loading ? "处理中…" : currentCaseId ? "对话驱动推进" : "先选开始方式，再录入第一条证据"}</span>
+            <span>{loading ? "处理中…" : currentCaseId ? "会话主舞台" : "先选开始方式，再录入第一条证据"}</span>
           </div>
 
           <div className="conversation-feed">
             {!currentCaseId ? (
               <article className="message-card message-assistant message-empty">
                 <span className="message-role">AI 协作</span>
-                <h3>先选一个开始方式，我再带着你把第一单跑通。</h3>
+                <h3>先跑通第一单，再继续补证据和出稿。</h3>
                 <p>
-                  先从上方加载演示案件，或者直接录入真实异常。案件建立后，再输入客户投诉、测试结论、批次工单或现场观察，我会先帮你识别事实、指出缺口，再给出下一步最值得补的证据。
+                  先选一个开始方式，我再带着你把第一单跑通。
                 </p>
+                <p>
+                  推荐先加载一个种子案例，3 分钟内看到第一版结果。也可以直接录入真实异常，随后把客户投诉、测试结论、批次工单或现场观察发进来，我会继续往前推进。
+                </p>
+                <div className="empty-actions">
+                  <button className="primary-button" type="button" onClick={() => startWithSeedCase(seedCases[0].key)}>
+                    从种子案例开始
+                  </button>
+                  <button className="ghost-button" type="button" onClick={startWithBlankCase}>
+                    新建空白案件
+                  </button>
+                </div>
               </article>
             ) : (
               <>
@@ -1025,280 +1317,86 @@ export function Workspace() {
                   </article>
                 ))}
 
-                <article className="message-card message-assistant stage-focus-card">
-                  <div className="message-meta">
-                    <span className="message-role">当前阶段</span>
-                    <span>{selectedStage?.stage ?? currentCase?.currentStage ?? "D2"}</span>
-                  </div>
-                  {impactSummary ? (
-                    <div className="inline-alert" role="status">
-                      <strong>案件认知已变化</strong>
-                      <p>{impactSummary}</p>
-                    </div>
-                  ) : null}
-                  {rebuildReviewCard ? (
-                    <div className="rebuild-review-card" data-testid="rebuild-review-card">
-                      <div className="rebuild-review-head">
-                        <strong>复审提示</strong>
-                        <span>先校正认知，再继续推进</span>
-                      </div>
-                      <div className="rebuild-review-grid">
-                        <div className="rebuild-review-item">
-                          <span className="copilot-label">变了什么</span>
-                          <p>{rebuildReviewCard.changedWhat}</p>
-                        </div>
-                        <div className="rebuild-review-item">
-                          <span className="copilot-label">先回看哪一步</span>
-                          <p>{rebuildReviewCard.revisitStages}</p>
-                        </div>
-                        <div className="rebuild-review-item">
-                          <span className="copilot-label">为什么先回这里</span>
-                          <p>{rebuildReviewCard.whyRevisit}</p>
-                        </div>
-                        <div className="rebuild-review-item">
-                          <span className="copilot-label">暂时不稳的结论</span>
-                          <p>{rebuildReviewCard.unstableConclusions}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                  {copilotBrief ? (
-                    <div className="copilot-brief" data-testid="copilot-brief">
-                      <div className="copilot-brief-item">
-                        <span className="copilot-label">我现在怎么看</span>
-                        <p>{copilotBrief.currentView}</p>
-                      </div>
-                      <div className="copilot-brief-item">
-                        <span className="copilot-label">为什么先问这个</span>
-                        <p>{copilotBrief.whyThis}</p>
-                      </div>
-                      <div className="copilot-brief-item">
-                        <span className="copilot-label">你只需要补什么</span>
-                        <p>{copilotBrief.nextNeed}</p>
-                      </div>
-                    </div>
-                  ) : null}
-                  {!copilotBrief ? (
-                    <>
-                      <h3>{currentCase?.guidedThinking?.thinkingGoal ?? "发送第一条证据后，我会在这里持续推进。"} </h3>
-                      <p>{currentCase?.guidedThinking?.guidanceText ?? "先补事实，再进入分析。"} </p>
-                    </>
-                  ) : null}
-                  <div className="copilot-grid">
-                    <section className="copilot-panel">
-                      <span className="copilot-label">已知事实</span>
-                      {guidanceFactsList.length ? (
-                        <ul className="list compact-list">
-                          {guidanceFactsList.map((item) => (
-                            <li key={`${item.field}-${item.value}`}>{`${factLabel(item.field)}：${item.value}`}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="copilot-empty">还没有稳定事实，先补现象、时间、批次和影响范围。</p>
-                      )}
-                    </section>
-
-                    <section className="copilot-panel">
-                      <span className="copilot-label">当前缺口</span>
-                      {currentCase?.missingFields.length ? (
-                        <ul className="list compact-list">
-                          {currentCase.missingFields.slice(0, 3).map((item) => (
-                            <li key={`${item.field}-${item.reason}`}>{item.reason}</li>
-                          ))}
-                        </ul>
-                      ) : guidanceAssumptions.length ? (
-                        <ul className="list compact-list">
-                          {guidanceAssumptions.map((item) => (
-                            <li key={item.statement}>{item.statement}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="copilot-empty">当前关键缺口已较少，可以继续确认本阶段工作稿。</p>
-                      )}
-                    </section>
-
-                    <section className="copilot-panel">
-                      <span className="copilot-label">下一步建议</span>
-                      <p className="copilot-next">{nextQuestion ?? "继续补充当前阶段证据，或确认进入下一步。"}</p>
-                      {currentCase?.riskFlags.length ? (
-                        <div className="mini-note">{currentCase.riskFlags.slice(0, 1).join("；")}</div>
-                      ) : null}
-                    </section>
-
-                    {isUrgentComplaint && actionFacts.length ? (
-                      <section className="copilot-panel">
-                        <span className="copilot-label">客户侧 / 厂内侧当前动作</span>
-                        <ul className="list compact-list">
-                          {actionFacts.map(([label, value]) => (
-                            <li key={`${label}-${value}`}>{`${label}：${value}`}</li>
-                          ))}
-                        </ul>
-                      </section>
-                    ) : null}
-
-                    {outputGuidance ? (
-                      <section className="copilot-panel">
-                        <span className="copilot-label">当前最适合输出</span>
-                        <p className="copilot-next">{outputGuidance.recommendedLabel}</p>
-                        <div className="mini-note">{outputGuidance.rationale}</div>
-                      </section>
-                    ) : null}
-
-                    {expertReviewSnapshot ? (
-                      <section className="copilot-panel">
-                        <span className="copilot-label">专家审稿视角</span>
-                        <ul className="list compact-list">
-                          <li>{`事实 ${expertReviewSnapshot.factCount} 项`}</li>
-                          <li>{`假设 ${expertReviewSnapshot.assumptionCount} 项`}</li>
-                          <li>{`风险 ${expertReviewSnapshot.riskCount} 项`}</li>
-                          <li>{expertReviewSnapshot.causeChainLabel}</li>
-                          <li>{expertReviewSnapshot.actionLayerLabel}</li>
-                        </ul>
-                      </section>
-                    ) : null}
-                  </div>
-
-                  <div className="stage-rail-wrap">
-                    <div className="stage-rail" role="tablist" aria-label="阶段轨迹">
-                      {visibleStages.map((stage) => (
-                        <button
-                          key={stage.stage}
-                          type="button"
-                          className={`stage-pill${stage.stage === selectedStage?.stage ? " active" : ""}${
-                            stage.locked ? " locked" : ""
-                          }${stage.impacted ? " impacted" : ""}`}
-                          onClick={() => setFocusedStage(stage.stage)}
-                        >
-                          <span>{stage.stage}</span>
-                          <small>{stage.locked ? "已确认" : stage.impacted ? "待复审" : "工作稿"}</small>
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      className="ghost-button stage-toggle"
-                      type="button"
-                      onClick={() => setIsStageRailExpanded((value) => !value)}
-                    >
-                      {isStageRailExpanded ? "收起阶段" : "展开全部阶段"}
-                    </button>
-                  </div>
-
-                  {selectedStage ? (
-                    <div
-                      className={`stage-inline-card${selectedStage.impacted ? " stage-inline-impacted" : ""}`}
-                    >
-                      <div className="stage-head">
-                        <strong>
-                          {selectedStage.stage} {selectedStage.stage === currentCase?.currentStage ? "· 当前聚焦" : ""}
-                        </strong>
-                        <span>{selectedStage.locked ? "已确认" : "待推进"}</span>
-                      </div>
-                      <p>{stageCardPreview(selectedStage)}</p>
-                      {selectedStage.impactSummary ? <div className="mini-note">{selectedStage.impactSummary}</div> : null}
-                      <div className="stage-actions">
-                        {selectedStage.stage === currentCase?.currentStage ? (
-                          <button
-                            className="primary-button"
-                            type="button"
-                            onClick={() => stageAction(selectedStage.stage, "confirm")}
-                            disabled={loading}
-                          >
-                            确认并进入下一步
-                          </button>
-                        ) : null}
-                        <button
-                          className="ghost-button"
-                          type="button"
-                          onClick={() => stageAction(selectedStage.stage, "unlock")}
-                          disabled={loading}
-                        >
-                          解锁
-                        </button>
-                        <button
-                          className="ghost-button"
-                          type="button"
-                          onClick={() => stageAction(selectedStage.stage, "revalidate")}
-                          disabled={loading}
-                        >
-                          复审
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                </article>
+                <AssistantStageCard
+                  currentCase={currentCase}
+                  selectedStage={selectedStage}
+                  summaryItems={summaryItems}
+                  impactSummary={impactSummary}
+                  rebuildReviewCard={rebuildReviewCard}
+                  copilotBrief={copilotBrief}
+                  guidanceFactsList={guidanceFactsList}
+                  guidanceAssumptions={guidanceAssumptions}
+                  nextQuestion={nextQuestion}
+                  isUrgentComplaint={isUrgentComplaint}
+                  actionFacts={actionFacts}
+                  resultRecommendation={resultRecommendation}
+                  expertReviewSnapshot={expertReviewSnapshot}
+                  visibleStages={visibleStages}
+                  isStageRailExpanded={isStageRailExpanded}
+                  loading={loading}
+                  onToggleStageRail={() => setIsStageRailExpanded((value) => !value)}
+                  onSelectStage={setFocusedStage}
+                  onConfirmStage={(stage) => void stageAction(stage, "confirm")}
+                  onPrimaryRecommendation={() => {
+                    if (resultRecommendation?.kind === "eight_d") {
+                      void closeCaseWithFinalReport();
+                      return;
+                    }
+                    void openPreview(artifactForRecommendation(resultRecommendation?.kind));
+                  }}
+                  onSecondaryRecommendation={() =>
+                    void openPreview(
+                      resultRecommendation?.kind === "eight_d" ? "eight_d" : artifactForRecommendation(resultRecommendation?.kind)
+                    )
+                  }
+                  currentCaseId={currentCaseId}
+                />
               </>
             )}
           </div>
 
-          <div className="composer-shell" data-testid="composer-dock">
-            <textarea
-              className="composer"
-              placeholder="输入客户投诉、测试结论、批次、工单、现场观察，系统会按当前阶段推进。"
-              value={composer}
-              onChange={(event) => setComposer(event.target.value)}
-            />
-            <div className="toolbar">
-              <button className="primary-button" type="button" onClick={sendEvidence} disabled={!composer.trim() || loading || !currentCaseId}>
-                发送证据
-              </button>
-              <span className="helper-inline">
-                {currentCase?.guidedThinking?.focusArea
-                  ? `当前建议先推进 ${currentCase.guidedThinking.focusArea}`
-                  : "先创建案件，再开始输入证据"}
-              </span>
-            </div>
-          </div>
+          <ComposerDock
+            focusArea={currentCase?.guidedThinking?.focusArea}
+            composer={composer}
+            isExpanded={isComposerExpanded}
+            loading={loading}
+            currentCaseId={currentCaseId}
+            onChange={setComposer}
+            onToggleExpanded={() => setIsComposerExpanded((value) => !value)}
+            onSend={() => void sendEvidence()}
+          />
         </section>
 
-        {summaryItems.length ? (
-          <section className="summary-strip" data-testid="summary-strip" aria-label="关键摘要">
-            <div className="summary-grid">
-              {summaryItems.map((item) => (
-                <div
-                  key={item.key}
-                  className={`summary-card${
-                    item.tone === "signal"
-                      ? " summary-card-signal"
-                      : item.tone === "warning"
-                        ? " summary-card-gap"
-                        : ""
-                  }`}
-                >
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
         {preview ? (
-          <section className="preview-shell panel">
+          <aside className="preview-drawer panel" data-testid="preview-drawer" aria-label="报告预览抽屉">
+            <div className="drawer-head">
+              <div className="drawer-copy">
+                <strong>结果预览</strong>
+                <span>默认折叠，只有在需要查看整理结果时才展开。</span>
+              </div>
+              <button className="ghost-button ghost-button-tight" type="button" onClick={() => setPreview(null)}>
+                关闭预览
+              </button>
+            </div>
             <div className="panel-head">
-              <strong>报告预览</strong>
-              <a
-                className="secondary-link"
-                href={`/api/cases/${currentCaseId}/report-html?reportStage=${reportStage}&styleMode=${styleMode}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                打开 HTML 报告
-              </a>
+              <strong>{preview.document.title ?? "HTML 预览"}</strong>
             </div>
             <div className="preview-meta">
-              <span>版本：{preview.document.reportStage}</span>
-              <span>文风：{preview.document.styleMode}</span>
+              <span>类型：{preview.document.artifactKind ?? preview.document.reportStage ?? "analysis_summary"}</span>
               <span>状态：{preview.document.caseStatus}</span>
             </div>
-            <div className="preview-grid">
-              <pre className="text-preview">{preview.text}</pre>
+            <div className="preview-body">
               <iframe
                 className="html-preview"
-                title="8D 正式报告预览"
+                title={preview.document.title ? `${preview.document.title}预览` : "分析结论预览"}
                 srcDoc={preview.html}
               />
+              <details className="text-preview-wrap">
+                <summary>查看文本预览</summary>
+                <pre className="text-preview">{preview.text}</pre>
+              </details>
             </div>
-          </section>
+          </aside>
         ) : null}
       </main>
 
@@ -1368,102 +1466,173 @@ export function Workspace() {
 
       <style>{`
         .workspace-shell {
-          display: grid;
-          grid-template-columns: 272px minmax(0, 1fr);
-          height: 100vh;
-          gap: 14px;
-          padding: 18px;
+          position: relative;
+          display: block;
+          height: 100%;
+          min-height: 0;
+          padding: 0;
           overflow: hidden;
         }
 
-        .sidebar,
         .main-panel {
           min-width: 0;
           min-height: 0;
         }
 
-        .sidebar {
+        .main-panel {
+          position: relative;
           display: flex;
           flex-direction: column;
           gap: 12px;
-          min-height: 0;
+          max-width: 1180px;
+          width: min(100%, 1180px);
+          margin: 0 auto;
         }
 
-        .main-panel {
-          display: grid;
-          gap: 12px;
-          grid-template-rows: auto auto minmax(0, 1fr);
-          min-height: 0;
-        }
-
-        .brand-card,
         .panel {
-          background: var(--paper);
-          border: 1px solid rgba(255, 255, 255, 0.55);
-          backdrop-filter: blur(18px);
-          border-radius: var(--radius-xl);
+          background: rgba(255, 255, 255, 0.76);
+          border: 1px solid rgba(255, 255, 255, 0.5);
+          backdrop-filter: blur(16px);
+          border-radius: 18px;
           box-shadow: var(--shadow);
-          padding: 16px;
+          padding: 12px;
         }
 
-        .brand-line {
+        .rail-brand,
+        .rail-button {
           display: flex;
-          align-items: baseline;
-          justify-content: space-between;
-          gap: 12px;
-        }
-
-        .brand-line strong {
-          font-size: 18px;
-          letter-spacing: -0.03em;
-        }
-
-        .brand-line span {
-          font-size: 12px;
-          color: var(--muted);
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          min-height: 52px;
+          border-radius: 18px;
+          border: 1px solid rgba(215, 221, 234, 0.88);
+          background: rgba(255, 255, 255, 0.9);
+          color: var(--text);
+          cursor: pointer;
+          font-size: 11px;
           font-weight: 700;
         }
 
-        .brand-card p,
-        .topbar p,
-        .helper {
+        .rail-brand span {
+          font-size: 14px;
+          letter-spacing: 0.08em;
+        }
+
+        .rail-brand small {
           color: var(--muted);
-          line-height: 1.6;
+          font-size: 11px;
+          font-weight: 700;
+        }
+
+        .rail-button-muted {
+          color: var(--muted);
+        }
+
+        .drawer-scrim {
+          position: absolute;
+          inset: 0;
+          border: 0;
+          padding: 0;
+          background: rgba(16, 24, 40, 0.08);
+          cursor: pointer;
+          z-index: 10;
+        }
+
+        .case-drawer,
+        .preview-drawer {
+          position: absolute;
+          top: 8px;
+          bottom: 8px;
+          z-index: 20;
+          display: grid;
+          align-content: start;
+          gap: 12px;
+          overflow: hidden;
+        }
+
+        .case-drawer {
+          left: 0;
+          width: min(320px, calc(100vw - 148px));
+        }
+
+        .preview-drawer {
+          right: 0;
+          width: min(520px, calc(100vw - 112px));
+        }
+
+        .drawer-head,
+        .drawer-copy,
+        .panel-head,
+        .stage-head,
+        .report-action-row,
+        .preview-meta {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+
+        .drawer-copy {
+          min-width: 0;
+          display: grid;
+          gap: 4px;
+        }
+
+        .drawer-copy strong,
+        .panel-head strong {
+          font-size: 13px;
+        }
+
+        .drawer-copy span,
+        .panel-head span,
+        .helper,
+        .helper-inline,
+        .case-meta,
+        .preview-meta,
+        .message-meta {
+          color: var(--muted);
+          font-size: 12px;
+          line-height: 1.55;
           margin: 0;
         }
 
         .eyebrow {
           display: inline-flex;
           align-items: center;
-          min-height: 28px;
-          padding: 0 10px;
+          min-height: 24px;
+          padding: 0 8px;
           border-radius: 999px;
           background: var(--brand-soft);
           color: var(--brand);
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 700;
           letter-spacing: 0.04em;
           text-transform: uppercase;
         }
 
-        .panel {
+        .first-run-card,
+        .message-card,
+        .copilot-panel,
+        .copilot-brief-item,
+        .rebuild-review-item,
+        .stage-detail-card,
+        .report-action-card {
           display: grid;
-          gap: 14px;
-          min-height: 0;
+          gap: 8px;
+          padding: 12px;
+          border-radius: 14px;
+          border: 1px solid rgba(215, 221, 234, 0.86);
         }
 
-        .first-run-card,
-        .onboarding-card {
-          display: grid;
-          gap: 12px;
-          padding: 16px;
-          border-radius: 18px;
-          background: linear-gradient(180deg, rgba(248, 250, 255, 0.92), rgba(241, 245, 255, 0.9));
-          border: 1px solid rgba(215, 221, 234, 0.95);
+        .first-run-card {
+          background: linear-gradient(180deg, rgba(248, 250, 255, 0.94), rgba(241, 245, 255, 0.92));
         }
 
         .first-run-card h3,
-        .onboarding-card h3 {
+        .message-empty h3,
+        .report-action-copy h3 {
           margin: 0;
           font-size: 18px;
           line-height: 1.35;
@@ -1471,161 +1640,145 @@ export function Workspace() {
         }
 
         .first-run-card p,
-        .onboarding-card p {
+        .message-empty p,
+        .message-content,
+        .stage-detail-card p,
+        .copilot-next,
+        .copilot-empty,
+        .rebuild-review-item p,
+        .copilot-brief-item p,
+        .report-action-copy p {
           margin: 0;
-          color: var(--muted);
-          line-height: 1.65;
+          line-height: 1.62;
         }
 
         .first-run-actions {
           display: flex;
           flex-wrap: wrap;
-          gap: 10px;
+          gap: 8px;
         }
 
-        .onboarding-panel {
+        .workspace-context {
+          display: grid;
+          gap: 8px;
+          padding: 4px 8px 2px;
+        }
+
+        .workspace-context-main {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
           gap: 16px;
         }
 
-        .onboarding-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 12px;
-        }
-
-        .panel.grow {
-          flex: 1;
-          min-height: 0;
-        }
-
-        .panel-head,
-        .topbar,
-        .stage-head,
-        .toolbar,
-        .hero-actions,
-        .preview-meta {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-        }
-
-        .topbar {
-          background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 255, 0.94));
-          border: 1px solid rgba(255, 255, 255, 0.65);
-          border-radius: 20px;
-          padding: 14px 16px;
-          box-shadow: var(--shadow);
-          align-items: center;
-        }
-
-        .topbar-title {
+        .workspace-context-copy {
           min-width: 0;
           display: grid;
-          gap: 6px;
+          gap: 4px;
         }
 
-        .topbar-title h2 {
-          margin: 0;
-          letter-spacing: -0.03em;
-          font-size: 22px;
-          line-height: 1.2;
-        }
-
-        .topbar-title p {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
+        .workspace-context-copy strong {
+          font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
           font-size: 13px;
+          line-height: 1.1;
+          letter-spacing: -0.03em;
+          color: var(--text);
         }
 
-        .topbar-title p span {
+        .workspace-context-copy h2 {
+          margin: 0;
+          font-size: 16px;
+          line-height: 1.2;
+          letter-spacing: -0.03em;
+        }
+
+        .workspace-context-copy p {
+          color: var(--muted);
+          font-size: 11px;
+          line-height: 1.55;
+          margin: 0;
+          max-width: 540px;
+        }
+
+        .workspace-context-meta,
+        .workspace-track-label {
+          color: var(--secondary);
+          font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+        }
+
+        .workspace-track-block {
+          display: grid;
+          justify-items: end;
+          gap: 5px;
+          flex-shrink: 0;
+          padding-top: 2px;
+        }
+
+        .workspace-stage-dots {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+        }
+
+        .workspace-stage-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 999px;
+          background: rgba(136, 115, 100, 0.24);
+        }
+
+        .workspace-stage-dot.complete {
+          background: var(--secondary);
+        }
+
+        .workspace-stage-dot.active {
+          background: var(--brand);
+        }
+
+        .workspace-stage-dot.impacted {
+          background: var(--warning);
+        }
+
+        .topbar-chips {
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+          gap: 6px;
+          flex-wrap: wrap;
+          padding-top: 2px;
+        }
+
+        .status-chip,
+        .summary-chip {
           display: inline-flex;
           align-items: center;
-          min-height: 28px;
-          padding: 0 10px;
+          gap: 6px;
+          min-height: 22px;
+          padding: 0 8px;
           border-radius: 999px;
           background: rgba(25, 73, 203, 0.06);
-        }
-
-        .hero-actions {
-          flex-wrap: wrap;
-          justify-content: flex-end;
-          align-items: flex-start;
-        }
-
-        .toolbar-toggle {
-          min-height: 42px;
-          padding: 0 14px;
-          border-radius: 999px;
-        }
-
-        .quick-preview-button {
-          min-width: 132px;
-        }
-
-        .report-tooltray {
-          display: flex;
-          flex-wrap: wrap;
-          justify-content: flex-end;
-          gap: 10px;
-          padding: 10px 12px;
-          border: 1px solid rgba(215, 221, 234, 0.9);
-          border-radius: 18px;
-          background: rgba(255, 255, 255, 0.82);
-        }
-
-        .tooltray-warning {
-          display: grid;
-          gap: 4px;
-          min-width: min(320px, 100%);
-          padding: 10px 12px;
-          border-radius: 14px;
-          background: #fff8ed;
-          border: 1px solid #efd9af;
-          color: #8a4b14;
-        }
-
-        .tooltray-warning strong,
-        .tooltray-warning span,
-        .tooltray-warning em {
-          margin: 0;
-        }
-
-        .tooltray-warning strong {
-          font-size: 13px;
-        }
-
-        .tooltray-warning span {
-          font-size: 12px;
-          line-height: 1.5;
-        }
-
-        .tooltray-warning em {
-          font-size: 12px;
-          line-height: 1.5;
-          font-style: normal;
-          color: #7a4a13;
-        }
-
-        .preview-action-group {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          flex-wrap: wrap;
-        }
-
-        .preview-action-status {
-          display: inline-flex;
-          align-items: center;
-          min-height: 32px;
-          padding: 0 10px;
-          border-radius: 999px;
-          background: rgba(138, 75, 20, 0.08);
-          color: #8a4b14;
-          font-size: 12px;
+          color: var(--text);
+          font-size: 10px;
           font-weight: 700;
-          white-space: nowrap;
+        }
+
+        .status-chip-warning,
+        .summary-chip-warning {
+          background: #fff7e8;
+          color: #8a4b14;
+        }
+
+        .summary-chip-signal {
+          background: #f7faff;
+          color: var(--brand);
+        }
+
+        .summary-chip strong {
+          font-size: 12px;
         }
 
         .field {
@@ -1635,7 +1788,7 @@ export function Workspace() {
 
         .field span {
           color: var(--muted);
-          font-size: 13px;
+          font-size: 11px;
           font-weight: 700;
         }
 
@@ -1649,24 +1802,19 @@ export function Workspace() {
         .composer {
           width: 100%;
           border: 1px solid var(--line);
-          border-radius: var(--radius-md);
+          border-radius: 12px;
           background: var(--paper-strong);
           color: var(--text);
-          padding: 12px 14px;
+          padding: 9px 11px;
           outline: none;
-        }
-
-        .composer {
-          min-height: 180px;
-          resize: vertical;
-          line-height: 1.6;
+          font: inherit;
+          font-size: 13px;
         }
 
         .field textarea {
-          min-height: 108px;
+          min-height: 96px;
           resize: vertical;
           line-height: 1.6;
-          font: inherit;
         }
 
         .primary-button,
@@ -1686,9 +1834,11 @@ export function Workspace() {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          min-height: 44px;
-          padding: 0 16px;
-          border-radius: 14px;
+          min-height: 32px;
+          padding: 0 11px;
+          border-radius: 11px;
+          font-size: 11px;
+          font-weight: 700;
         }
 
         .primary-button {
@@ -1709,6 +1859,12 @@ export function Workspace() {
           color: var(--brand);
         }
 
+        .ghost-button-tight {
+          min-height: 32px;
+          padding: 0 10px;
+          border-radius: 999px;
+        }
+
         .primary-button:disabled,
         .secondary-button:disabled,
         .ghost-button:disabled {
@@ -1716,38 +1872,53 @@ export function Workspace() {
           cursor: not-allowed;
         }
 
-        .case-list,
-        .stage-grid {
+        .drawer-tools {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+
+        .drawer-tools-copy {
           display: grid;
-          gap: 10px;
+          gap: 2px;
+        }
+
+        .drawer-tools-copy strong {
+          font-size: 13px;
+        }
+
+        .drawer-tools-copy span {
+          color: var(--muted);
+          font-size: 11px;
         }
 
         .feedback-dock {
           position: fixed;
-          right: 18px;
-          bottom: 18px;
+          right: 12px;
+          bottom: 12px;
           display: grid;
           justify-items: end;
-          gap: 10px;
+          gap: 8px;
           z-index: 20;
         }
 
         .feedback-trigger {
-          min-width: 88px;
+          min-width: 74px;
           border-radius: 999px;
           box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
         }
 
         .feedback-panel {
           width: min(340px, calc(100vw - 36px));
-          gap: 12px;
-          padding: 14px;
+          gap: 10px;
+          padding: 12px;
           box-shadow: 0 24px 44px rgba(15, 23, 42, 0.16);
         }
 
         .feedback-actions {
           display: flex;
-          gap: 10px;
+          gap: 8px;
           justify-content: flex-end;
           flex-wrap: wrap;
         }
@@ -1766,38 +1937,28 @@ export function Workspace() {
           box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
         }
 
-        .sidebar-actions {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .sidebar-mini-button {
-          min-height: 42px;
-          padding: 0 14px;
-          border-radius: 999px;
-        }
-
         .create-drawer {
           display: grid;
-          gap: 12px;
+          gap: 10px;
           padding: 12px;
-          border: 1px solid rgba(215, 221, 234, 0.9);
-          border-radius: 18px;
+          border: 1px solid rgba(215, 221, 234, 0.92);
+          border-radius: 16px;
           background: rgba(255, 255, 255, 0.7);
         }
 
         .case-list {
           overflow: auto;
           padding-right: 2px;
+          display: grid;
+          gap: 8px;
         }
 
         .case-card {
           text-align: left;
           background: rgba(255, 255, 255, 0.72);
           border: 1px solid transparent;
-          border-radius: var(--radius-lg);
-          padding: 14px;
+          border-radius: 14px;
+          padding: 10px 11px;
         }
 
         .case-card.active {
@@ -1807,138 +1968,132 @@ export function Workspace() {
 
         .case-title {
           font-weight: 700;
-          margin-bottom: 6px;
-        }
-
-        .case-meta,
-        .preview-meta {
-          color: var(--muted);
-          font-size: 13px;
-        }
-
-        .summary-strip {
-          min-width: 0;
-          opacity: 0.92;
-        }
-
-        .summary-grid {
-          display: flex;
-          gap: 8px;
-          overflow: auto;
-          padding-bottom: 2px;
-        }
-
-        .summary-card {
-          border: 1px solid var(--line);
-          border-radius: 999px;
-          background: rgba(255, 255, 255, 0.92);
-          padding: 8px 12px;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          white-space: nowrap;
-          flex: 0 0 auto;
-        }
-
-        .summary-card span {
-          color: var(--muted);
-          font-size: 12px;
-          font-weight: 700;
-        }
-
-        .summary-card strong {
-          font-size: 13px;
-          line-height: 1.4;
-        }
-
-        .summary-card-signal {
-          color: var(--brand);
-          background: #f7faff;
-        }
-
-        .summary-card-gap {
-          background: #fff8ed;
-          border-color: #efd9af;
+          margin-bottom: 4px;
         }
 
         .conversation-feed {
           display: grid;
-          gap: 14px;
+          gap: 12px;
           min-height: 0;
           flex: 1;
           overflow: auto;
-          padding: 4px 4px 12px 0;
+          padding: 8px 0 104px;
+          max-width: 760px;
+          width: min(100%, 760px);
+          margin: 0 auto;
         }
 
         .message-card {
-          display: grid;
-          gap: 10px;
-          padding: 18px;
-          border-radius: var(--radius-lg);
-          border: 1px solid var(--line);
           background: rgba(255, 255, 255, 0.95);
+          box-shadow: 0 10px 28px rgba(24, 32, 44, 0.035);
         }
 
         .message-user {
-          background: linear-gradient(135deg, #eff4ff, #f7faff);
-          border-color: rgba(25, 73, 203, 0.16);
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(252, 248, 244, 0.94));
+          border-color: rgba(177, 95, 0, 0.22);
+          justify-self: end;
+          width: min(100%, 430px);
+          border-right: 2px solid rgba(177, 95, 0, 0.72);
         }
 
         .message-assistant {
-          background: #ffffff;
+          background: rgba(255, 255, 255, 0.97);
+          justify-self: start;
+          width: min(100%, 640px);
         }
 
         .message-empty {
-          min-height: 180px;
+          min-height: 220px;
           align-content: center;
-        }
-
-        .message-empty h3,
-        .stage-focus-card h3 {
-          margin: 0;
-          font-size: 24px;
-          line-height: 1.3;
-        }
-
-        .message-empty p,
-        .stage-focus-card p,
-        .message-content {
-          margin: 0;
-          line-height: 1.75;
-          white-space: pre-wrap;
+          width: 100%;
         }
 
         .message-meta {
+          white-space: nowrap;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
-          color: var(--muted);
-          font-size: 12px;
+          gap: 8px;
+          font-size: 11px;
         }
 
         .message-role {
           font-weight: 700;
           color: var(--brand);
+          letter-spacing: 0.04em;
+          font-size: 10px;
+          text-transform: uppercase;
+        }
+
+        .message-content {
+          white-space: pre-wrap;
         }
 
         .stage-focus-card {
-          gap: 16px;
-          border-color: rgba(25, 73, 203, 0.18);
-          box-shadow: inset 0 0 0 1px rgba(25, 73, 203, 0.05);
+          gap: 12px;
+          width: 100%;
+          border-color: rgba(25, 73, 203, 0.1);
+          box-shadow: inset 0 0 0 1px rgba(25, 73, 203, 0.04);
         }
 
-        .copilot-brief {
+        .inline-summary {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+
+        .assistant-manuscript {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 10px;
+          padding: 2px 0 0;
+        }
+
+        .assistant-manuscript-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+
+        .assistant-manuscript-stage {
+          color: var(--secondary);
+          font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+        }
+
+        .assistant-prose {
+          display: grid;
+          gap: 8px;
+          max-width: 620px;
+        }
+
+        .assistant-prose p {
+          margin: 0;
+          line-height: 1.68;
+        }
+
+        .assistant-lead {
+          font-size: 15px;
+          line-height: 1.55;
+          color: var(--text);
+        }
+
+        .assistant-lead-inline {
+          display: block;
+          margin-top: 2px;
+        }
+
+        .assistant-prose .copilot-label {
+          display: block;
+          margin-bottom: 2px;
         }
 
         .rebuild-review-card {
           display: grid;
-          gap: 12px;
-          padding: 14px;
-          border-radius: 18px;
+          gap: 10px;
           background: linear-gradient(180deg, rgba(255, 248, 237, 0.96), rgba(255, 244, 226, 0.94));
           border: 1px solid #efd9af;
         }
@@ -1964,173 +2119,139 @@ export function Workspace() {
         .rebuild-review-grid {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 10px;
+          gap: 8px;
         }
 
         .rebuild-review-item {
-          display: grid;
-          gap: 8px;
-          padding: 12px 14px;
-          border-radius: 16px;
           background: rgba(255, 255, 255, 0.58);
           border: 1px solid rgba(239, 217, 175, 0.9);
-        }
-
-        .rebuild-review-item p {
-          margin: 0;
-          line-height: 1.65;
-          color: var(--text);
-        }
-
-        .copilot-brief-item {
-          display: grid;
-          gap: 8px;
-          padding: 14px;
-          border: 1px solid rgba(215, 221, 234, 0.9);
-          border-radius: 16px;
-          background: linear-gradient(180deg, rgba(248, 250, 255, 0.92), rgba(241, 245, 255, 0.9));
-          min-width: 0;
-        }
-
-        .copilot-brief-item p {
-          margin: 0;
-          line-height: 1.65;
-          color: var(--text);
         }
 
         .copilot-grid {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 10px;
+          gap: 8px;
         }
 
         .copilot-panel {
-          display: grid;
-          gap: 8px;
-          padding: 14px;
-          border: 1px solid rgba(215, 221, 234, 0.9);
-          border-radius: 16px;
-          background: rgba(248, 250, 254, 0.9);
-          min-width: 0;
+          background: rgba(248, 250, 254, 0.7);
+          border-style: dashed;
+          border-color: rgba(215, 221, 234, 0.72);
+          padding-top: 10px;
+          padding-bottom: 10px;
+        }
+
+        .copilot-panel-primary {
+          background: rgba(248, 250, 254, 0.86);
+          border-style: solid;
         }
 
         .copilot-label {
-          font-size: 12px;
+          font-size: 11px;
           line-height: 1.4;
           font-weight: 800;
           letter-spacing: 0.04em;
           color: var(--brand);
         }
 
-        .copilot-panel .list {
-          margin: 0;
-        }
-
-        .copilot-empty,
-        .copilot-next {
-          margin: 0;
-          line-height: 1.7;
-          color: var(--text);
-        }
-
-        .stage-rail-wrap {
+        .timeline-wrap {
           display: grid;
-          gap: 10px;
+          gap: 8px;
+          padding-top: 2px;
         }
 
-        .stage-rail {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 10px;
+        .timeline-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
         }
 
-        .stage-toggle {
-          justify-self: flex-start;
-          min-height: 42px;
-          padding: 0 14px;
-          border-radius: 999px;
+        .section-label {
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0.06em;
+          color: var(--muted);
+          text-transform: uppercase;
         }
 
-        .stage-pill {
+        .stage-timeline {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .stage-node {
           text-align: left;
-          border: 1px solid var(--line);
-          border-radius: 16px;
-          background: #f8fafe;
-          padding: 14px 16px;
-          min-height: 72px;
+          border: 1px solid rgba(215, 221, 234, 0.76);
+          border-radius: 999px;
+          background: rgba(248, 250, 254, 0.74);
+          padding: 8px 11px;
           display: grid;
-          gap: 4px;
+          gap: 2px;
           cursor: pointer;
         }
 
-        .stage-pill span {
+        .stage-node span {
           font-weight: 800;
           color: var(--text);
         }
 
-        .stage-pill small {
+        .stage-node small {
           color: var(--muted);
+          font-size: 11px;
         }
 
-        .stage-pill.active {
+        .stage-node.active {
           border-color: rgba(25, 73, 203, 0.28);
           background: #eef4ff;
         }
 
-        .stage-pill.locked {
+        .stage-node.locked {
           background: #f3fbf8;
           border-color: rgba(17, 116, 91, 0.16);
         }
 
-        .stage-pill.impacted {
+        .stage-node.impacted {
           background: #fff8ed;
           border-color: #efd9af;
         }
 
-        .stage-inline-card {
-          border: 1px solid var(--line);
-          border-radius: var(--radius-lg);
-          background: var(--paper-strong);
-          padding: 16px;
-          display: grid;
-          gap: 12px;
+        .stage-detail-card {
+          background: rgba(255, 255, 255, 0.72);
         }
 
-        .stage-inline-impacted {
+        .stage-detail-impacted {
           background: #fff8ed;
           border-color: #efd9af;
         }
 
-        .compact-list {
-          margin-top: -4px;
+        .stage-footnote {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          flex-wrap: wrap;
+          color: var(--muted);
+          font-size: 12px;
         }
 
         .list {
           margin: 0;
           padding-left: 18px;
-          line-height: 1.7;
-        }
-
-        .stage-current {
-          border-color: rgba(25, 73, 203, 0.24);
-          box-shadow: inset 0 0 0 1px rgba(25, 73, 203, 0.08);
-        }
-
-        .stage-impacted {
-          background: #fff8ed;
-          border-color: #efd9af;
+          line-height: 1.6;
         }
 
         .mini-note,
         .alert {
-          padding: 12px 14px;
-          border-radius: var(--radius-md);
+          padding: 10px 12px;
+          border-radius: 14px;
           line-height: 1.6;
         }
 
         .inline-alert {
-          padding: 12px 14px;
-          border-radius: var(--radius-md);
+          padding: 10px 12px;
+          border-radius: 14px;
           line-height: 1.6;
           background: #fff8ed;
           color: #8a4b14;
@@ -2155,143 +2276,215 @@ export function Workspace() {
           border: 1px solid rgba(176, 68, 68, 0.12);
         }
 
-        .stage-actions {
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-        }
-
         .conversation-shell {
           overflow: hidden;
           display: flex;
           flex-direction: column;
-          gap: 12px;
+          gap: 10px;
           min-height: 0;
-          padding: 12px 14px 14px;
+          padding: 10px 12px 8px;
         }
 
         .conversation-head {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
+          gap: 10px;
           color: var(--muted);
-          font-size: 13px;
-          padding: 2px 2px 0;
+          font-size: 11px;
+          padding: 2px 6px 0;
+          max-width: 760px;
+          width: min(100%, 760px);
+          margin: 0 auto;
         }
 
-        .composer-shell {
+        .empty-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .report-action-card {
+          gap: 10px;
+          background: linear-gradient(180deg, rgba(248, 250, 255, 0.66), rgba(255, 255, 255, 0.9));
+          border-style: dashed;
+          border-color: rgba(219, 194, 176, 0.44);
+        }
+
+        .report-action-grid {
           display: grid;
-          gap: 12px;
-          position: sticky;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+        }
+
+        .report-action-copy {
+          display: grid;
+          gap: 4px;
+        }
+
+        .report-action-copy p {
+          margin: 0;
+          line-height: 1.62;
+        }
+
+        .report-action-lead {
+          font-size: 14px;
+          color: var(--text);
+        }
+
+        .report-action-row-inline {
+          justify-content: flex-start;
+          flex-wrap: wrap;
+        }
+
+        .composer-dock {
+          display: grid;
+          gap: 6px;
+          position: absolute;
+          right: 0;
           bottom: 0;
-          z-index: 2;
-          background: linear-gradient(180deg, rgba(237, 241, 247, 0), rgba(237, 241, 247, 0.9) 18%, rgba(237, 241, 247, 1) 42%);
-          padding-top: 10px;
-          margin-top: auto;
+          left: 0;
+          z-index: 3;
+          padding: 0 12px 12px;
+          pointer-events: none;
         }
 
-        .helper-inline {
-          color: var(--muted);
-          font-size: 13px;
-          line-height: 1.6;
+        .composer-frame {
+          display: flex;
+          align-items: flex-end;
+          gap: 8px;
+          background: rgba(255, 255, 255, 0.96);
+          border: 1px solid rgba(219, 194, 176, 0.28);
+          border-radius: 16px;
+          padding: 8px;
+          box-shadow: 0 10px 24px rgba(24, 32, 44, 0.08);
+          max-width: 760px;
+          width: min(100%, 760px);
+          margin: 0 auto;
+          pointer-events: auto;
         }
 
-        .composer-shell .toolbar {
-          background: rgba(255, 255, 255, 0.92);
-          border: 1px solid rgba(215, 221, 234, 0.9);
-          border-radius: 18px;
-          padding: 10px 12px;
+        .composer-actions {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-shrink: 0;
         }
 
         .composer {
-          min-height: 132px;
-          border-radius: 22px;
-          border-color: rgba(197, 207, 223, 0.95);
-          box-shadow: 0 10px 30px rgba(24, 32, 44, 0.06);
+          min-height: 38px;
+          border-radius: 12px;
+          border-color: rgba(197, 207, 223, 0.72);
+          box-shadow: none;
+          resize: none;
+          padding-top: 8px;
+          padding-bottom: 8px;
         }
 
-        .preview-shell {
-          margin-bottom: 6px;
+        .composer-dock.expanded .composer {
+          min-height: 104px;
         }
 
-        .preview-grid {
+        .helper-inline {
+          max-width: 760px;
+          width: min(100%, 760px);
+          margin: 0 auto;
+          padding: 0 4px;
+          pointer-events: none;
+        }
+
+        .preview-body {
           display: grid;
-          grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-          gap: 18px;
+          gap: 10px;
+          min-height: 0;
         }
 
         .text-preview,
         .html-preview {
           margin: 0;
-          min-height: 580px;
           border: 1px solid var(--line);
-          border-radius: var(--radius-lg);
+          border-radius: 16px;
           background: white;
         }
 
+        .text-preview-wrap summary {
+          cursor: pointer;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 700;
+        }
+
         .text-preview {
-          padding: 18px;
+          padding: 14px;
           overflow: auto;
           white-space: pre-wrap;
-          line-height: 1.7;
+          line-height: 1.6;
         }
 
         .html-preview {
           width: 100%;
+          min-height: 520px;
         }
 
         @media (max-width: 1280px) {
-          .preview-grid {
-            grid-template-columns: 1fr;
-          }
-
           .rebuild-review-grid,
-          .copilot-brief,
-          .copilot-grid,
-          .stage-rail {
+          .copilot-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
         }
 
         @media (max-width: 960px) {
           .workspace-shell {
-            grid-template-columns: 1fr;
             height: auto;
+            min-height: 100vh;
             overflow: visible;
           }
 
           .main-panel {
-            order: 1;
+            min-height: 100vh;
+            width: 100%;
           }
 
-          .sidebar {
-            order: 2;
-          }
-
-          .topbar {
+          .workspace-context-main {
             align-items: flex-start;
             flex-direction: column;
           }
 
           .rebuild-review-grid,
-          .copilot-brief,
           .copilot-grid,
-          .stage-rail {
+          .report-action-grid {
             grid-template-columns: 1fr;
           }
 
-          .main-panel {
-            grid-template-rows: auto auto minmax(520px, 1fr);
+          .composer-frame,
+          .stage-footnote,
+          .report-action-row {
+            align-items: stretch;
+            flex-direction: column;
           }
 
-          .onboarding-grid {
-            grid-template-columns: 1fr;
+          .message-user,
+          .message-assistant,
+          .conversation-feed,
+          .conversation-head,
+          .composer-frame,
+          .helper-inline {
+            width: 100%;
+            max-width: 100%;
+          }
+
+          .case-drawer,
+          .preview-drawer {
+            left: 12px;
+            right: 12px;
+            width: auto;
+            top: 12px;
+            bottom: 12px;
           }
 
           .feedback-dock {
-            right: 14px;
-            bottom: 14px;
+            right: 12px;
+            bottom: 12px;
           }
         }
       `}</style>

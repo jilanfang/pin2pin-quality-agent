@@ -197,8 +197,8 @@ test("frontend exposes the core 8D workspace layout", () => {
   const html = readHtml();
   assert.match(html, /id="project-sidebar"/);
   assert.match(html, /id="sidebar-toggle"/);
-  assert.match(html, /芯科元析/);
-  assert.match(html, /面向电子制造与电子研发体系的失效分析智能体平台/);
+  assert.match(html, /Pin2pin Fireline/);
+  assert.match(html, /Pin2pin\.ai 旗下的异常响应与失效分析工作台/);
   assert.match(html, /assets\/xkyx-tech-grid\.svg/);
   assert.match(html, /id="project-list"/);
   assert.match(html, /id="chat-thread"/);
