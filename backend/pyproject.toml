@@ -1,0 +1,18 @@
+[project]
+name = "eightd-copilot-backend"
+version = "0.1.0"
+description = "Phase 0 FastAPI backend for 8D Copilot"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi",
+  "pydantic",
+  "sqlalchemy",
+  "httpx",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"

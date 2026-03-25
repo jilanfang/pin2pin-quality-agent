@@ -1,0 +1,27 @@
+<svg width="1200" height="900" viewBox="0 0 1200 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="900" fill="#F8FBFD"/>
+  <g transform="translate(150 130)">
+    <rect x="0" y="0" width="220" height="220" rx="48" fill="url(#grid-bg)"/>
+    <rect x="38" y="38" width="144" height="144" rx="28" stroke="#E5F5F7" stroke-width="10"/>
+    <path d="M110 28V-18" stroke="#12B9C6" stroke-width="12" stroke-linecap="round"/>
+    <path d="M110 238V284" stroke="#12B9C6" stroke-width="12" stroke-linecap="round"/>
+    <path d="M28 110H-18" stroke="#12B9C6" stroke-width="12" stroke-linecap="round"/>
+    <path d="M238 110H284" stroke="#12B9C6" stroke-width="12" stroke-linecap="round"/>
+    <path d="M52 52L96 110L52 168" stroke="#11A5B2" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M168 52L124 110L168 168" stroke="#1A2B49" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="110" cy="110" r="18" fill="#12B9C6"/>
+    <circle cx="110" cy="110" r="8" fill="#F8FBFD"/>
+  </g>
+  <g transform="translate(480 198)">
+    <text x="0" y="0" fill="#15233D" font-family="'Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif" font-size="122" font-weight="700" letter-spacing="2">芯科元析</text>
+    <text x="8" y="76" fill="#2E5171" font-family="'Segoe UI','Arial',sans-serif" font-size="34" font-weight="700" letter-spacing="6">COREMETA AGENT</text>
+    <line x1="8" y1="100" x2="382" y2="100" stroke="#B9CBD9" stroke-width="2"/>
+    <text x="8" y="142" fill="#5C7A95" font-family="'Microsoft YaHei','PingFang SC',sans-serif" font-size="28" font-weight="400" letter-spacing="0.9">面向电子制造与电子研发体系的失效分析智能体平台</text>
+  </g>
+  <defs>
+    <linearGradient id="grid-bg" x1="0" y1="0" x2="220" y2="220" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#153C70"/>
+      <stop offset="1" stop-color="#0B9EAE"/>
+    </linearGradient>
+  </defs>
+</svg>

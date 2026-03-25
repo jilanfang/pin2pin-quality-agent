@@ -1,0 +1,3334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>芯科元析失效分析工作台</title>
+    <style>
+      :root {
+        --bg: #f5f7fb;
+        --surface: rgba(255, 255, 255, 0.92);
+        --surface-strong: #ffffff;
+        --line: #dfe5ef;
+        --line-strong: #c9d3e3;
+        --text: #182230;
+        --muted: #6f7d94;
+        --accent: #1e62ff;
+        --accent-soft: rgba(30, 98, 255, 0.1);
+        --success: #11795a;
+        --warning: #b86a09;
+        --danger: #a83f3f;
+        --sidebar: #f7f8fc;
+        --shadow: 0 18px 48px rgba(15, 33, 63, 0.08);
+        --radius-lg: 28px;
+        --radius-md: 20px;
+        --radius-sm: 14px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background:
+          radial-gradient(circle at top left, rgba(30, 98, 255, 0.08), transparent 20%),
+          radial-gradient(circle at bottom right, rgba(17, 121, 90, 0.08), transparent 22%),
+          var(--bg);
+        color: var(--text);
+        font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+      }
+
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+
+      button {
+        border: 0;
+        cursor: pointer;
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: 320px minmax(0, 1fr);
+        min-height: 100vh;
+        transition: grid-template-columns 180ms ease;
+      }
+
+      .workspace.sidebar-collapsed {
+        grid-template-columns: 88px minmax(0, 1fr);
+      }
+
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        padding: 22px 18px 18px;
+        border-right: 1px solid rgba(201, 211, 227, 0.8);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), var(--sidebar));
+        backdrop-filter: blur(22px);
+        min-width: 0;
+        overflow: hidden;
+      }
+
+      .sidebar-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .sidebar-toggle {
+        width: 42px;
+        min-width: 42px;
+        height: 42px;
+        padding: 0;
+        border-radius: 14px;
+        background: rgba(15, 33, 63, 0.06);
+        color: var(--text);
+      }
+
+      .workspace.sidebar-collapsed .sidebar {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 10px 12px;
+      }
+
+      .brand-mark {
+        width: 54px;
+        height: 54px;
+        flex: 0 0 54px;
+        display: block;
+        object-fit: contain;
+      }
+
+      .brand-copy strong {
+        display: block;
+        font-size: 26px;
+        letter-spacing: -0.04em;
+      }
+
+      .brand-copy span {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .primary-action {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        width: 100%;
+        padding: 16px 18px;
+        border-radius: 20px;
+        background: linear-gradient(135deg, #eaf1ff, #f4f8ff);
+        color: var(--accent);
+        border: 1px solid rgba(30, 98, 255, 0.18);
+        font-weight: 700;
+      }
+
+      .sidebar-section {
+        display: grid;
+        gap: 12px;
+        min-height: 0;
+      }
+
+      .section-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 6px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .project-list {
+        display: grid;
+        gap: 10px;
+        overflow: auto;
+        padding-right: 4px;
+      }
+
+      .workspace.sidebar-collapsed .brand {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+      }
+
+      .workspace.sidebar-collapsed .brand-copy,
+      .workspace.sidebar-collapsed .primary-action span,
+      .workspace.sidebar-collapsed .section-label span:first-child,
+      .workspace.sidebar-collapsed .project-title,
+      .workspace.sidebar-collapsed .project-meta span:last-child,
+      .workspace.sidebar-collapsed .project-actions {
+        display: none;
+      }
+
+      .workspace.sidebar-collapsed .primary-action {
+        min-height: 52px;
+        padding-left: 0;
+        padding-right: 0;
+        border-radius: 18px;
+      }
+
+      .workspace.sidebar-collapsed .project-card {
+        padding: 10px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.88);
+      }
+
+      .workspace.sidebar-collapsed .project-meta {
+        justify-content: center;
+        margin-top: 0;
+      }
+
+      .workspace.sidebar-collapsed .stage-pill {
+        justify-content: center;
+        width: 48px;
+        min-width: 48px;
+        min-height: 48px;
+        padding: 0;
+        border-radius: 16px;
+        font-size: 14px;
+        letter-spacing: -0.02em;
+      }
+
+      .project-card {
+        display: grid;
+        gap: 10px;
+        padding: 16px;
+        border-radius: 20px;
+        border: 1px solid transparent;
+        background: rgba(255, 255, 255, 0.7);
+        box-shadow: 0 8px 22px rgba(20, 30, 70, 0.04);
+        transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+      }
+
+      .project-card-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .project-open {
+        flex: 1;
+        min-width: 0;
+        text-align: left;
+        background: transparent;
+        color: inherit;
+        padding: 0;
+      }
+
+      .project-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .project-action {
+        width: 30px;
+        min-width: 30px;
+        height: 30px;
+        padding: 0;
+        border-radius: 10px;
+        background: rgba(15, 33, 63, 0.06);
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .project-action.delete {
+        color: var(--danger);
+      }
+
+      .project-card:hover {
+        transform: translateY(-1px);
+        border-color: rgba(30, 98, 255, 0.16);
+      }
+
+      .project-card.active {
+        border-color: rgba(30, 98, 255, 0.28);
+        background: linear-gradient(180deg, rgba(30, 98, 255, 0.1), rgba(255, 255, 255, 0.92));
+        box-shadow: 0 14px 28px rgba(30, 98, 255, 0.08);
+      }
+
+      .project-title {
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.4;
+      }
+
+      .project-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .stage-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 700;
+      }
+
+      .main {
+        display: grid;
+        grid-template-areas:
+          "header"
+          "composer"
+          "content";
+        grid-template-rows: auto auto minmax(0, 1fr);
+        min-width: 0;
+        position: relative;
+        min-height: 100vh;
+      }
+
+      .main-header {
+        grid-area: header;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 20px 24px 14px;
+      }
+
+      .main-title h1 {
+        margin: 0;
+        font-size: 34px;
+        letter-spacing: -0.05em;
+      }
+
+      .main-title p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .connection-badge {
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.78);
+        border: 1px solid rgba(201, 211, 227, 0.9);
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .status-stack {
+        display: grid;
+        gap: 10px;
+        justify-items: end;
+      }
+
+      .generation-meta-badge {
+        max-width: 360px;
+        padding: 12px 14px;
+        border-radius: 18px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(234, 241, 255, 0.86));
+        border: 1px solid rgba(30, 98, 255, 0.14);
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.6;
+        text-align: right;
+      }
+
+      .generation-meta-badge strong,
+      .preview-generation-meta strong {
+        color: var(--text);
+      }
+
+      .content-shell {
+        grid-area: content;
+        display: grid;
+        grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+        gap: 22px;
+        min-height: 0;
+        padding: 0 24px 18px;
+        align-items: start;
+      }
+
+      .conversation-panel,
+      .reasoning-panel,
+      .preview-drawer,
+      .stage-manager-drawer {
+        border: 1px solid rgba(201, 211, 227, 0.85);
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(22px);
+        box-shadow: var(--shadow);
+      }
+
+      .conversation-panel {
+        display: grid;
+        grid-template-rows: minmax(0, 1fr);
+        min-height: 0;
+        min-block-size: min(56vh, 760px);
+        border-radius: 30px;
+        overflow: hidden;
+      }
+
+      .chat-thread {
+        display: grid;
+        align-content: start;
+        gap: 16px;
+        padding: 24px;
+        overflow: auto;
+      }
+
+      .empty-state {
+        align-self: start;
+        justify-self: start;
+        max-width: 720px;
+        text-align: left;
+        padding: 8px 12px 20px;
+      }
+
+      .empty-state h2 {
+        margin: 0;
+        font-size: clamp(34px, 5vw, 56px);
+        letter-spacing: -0.06em;
+      }
+
+      .empty-state p {
+        margin: 14px 0 0;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.7;
+      }
+
+      .message-bubble {
+        max-width: min(720px, 86%);
+        padding: 18px 20px;
+        border-radius: 24px;
+        line-height: 1.7;
+        white-space: pre-wrap;
+        box-shadow: 0 10px 26px rgba(24, 34, 48, 0.06);
+      }
+
+      .message-bubble.user {
+        justify-self: end;
+        background: linear-gradient(135deg, #1e62ff, #4a90ff);
+        color: white;
+        border-bottom-right-radius: 10px;
+      }
+
+      .message-bubble.assistant {
+        justify-self: start;
+        background: var(--surface-strong);
+        border: 1px solid rgba(201, 211, 227, 0.78);
+        border-bottom-left-radius: 10px;
+      }
+
+      .message-bubble.fact-summary-card,
+      .message-bubble.stage-result-card,
+      .message-bubble.decision-prompt,
+      .message-bubble.output-card {
+        display: grid;
+        gap: 12px;
+      }
+
+      .message-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        width: fit-content;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(30, 98, 255, 0.08);
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+      }
+
+      .message-content {
+        color: inherit;
+      }
+
+      .message-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .message-action-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        padding: 0 14px;
+        border-radius: 999px;
+        background: rgba(15, 33, 63, 0.06);
+        color: var(--text);
+        font-weight: 700;
+      }
+
+      .message-action-button.primary {
+        background: linear-gradient(135deg, #1e62ff, #4a90ff);
+        color: white;
+      }
+
+      .attachment-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .attachment-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(15, 33, 63, 0.06);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .reasoning-panel {
+        display: grid;
+        gap: 14px;
+        align-content: start;
+        padding: 22px;
+        border-radius: 26px;
+        overflow: auto;
+      }
+
+      .panel-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .panel-title strong {
+        font-size: 15px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+
+      .reason-card {
+        padding: 16px;
+        border-radius: 20px;
+        border: 1px solid rgba(201, 211, 227, 0.78);
+        background: var(--surface-strong);
+      }
+
+      .reason-card h3 {
+        margin: 0 0 12px;
+        font-size: 16px;
+        letter-spacing: -0.03em;
+      }
+
+      .reason-card ul {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .reason-card p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .composer-shell {
+        grid-area: composer;
+        padding: 0 24px 24px;
+      }
+
+      .composer {
+        border-radius: 28px;
+        border: 1px solid rgba(158, 193, 255, 0.8);
+        background: rgba(255, 255, 255, 0.94);
+        box-shadow: 0 18px 36px rgba(30, 98, 255, 0.08);
+        padding: 18px 20px 16px;
+      }
+
+      .composer textarea {
+        width: 100%;
+        min-height: 88px;
+        border: 0;
+        resize: none;
+        outline: none;
+        background: transparent;
+        color: var(--text);
+        font-size: 16px;
+        line-height: 1.75;
+      }
+
+      .composer-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+      }
+
+      .toolbar-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .tool-button,
+      .send-button,
+      .ghost-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 44px;
+        padding: 0 16px;
+        border-radius: 999px;
+        font-weight: 700;
+      }
+
+      .tool-button,
+      .ghost-button {
+        background: rgba(15, 33, 63, 0.06);
+        color: var(--text);
+      }
+
+      .tool-button:disabled,
+      .send-button:disabled,
+      .ghost-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+        box-shadow: none;
+      }
+
+      .send-button {
+        background: linear-gradient(135deg, #1e62ff, #4a90ff);
+        color: white;
+        box-shadow: 0 16px 26px rgba(30, 98, 255, 0.22);
+      }
+
+      .draft-status {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .image-input {
+        display: none;
+      }
+
+      .upload-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .upload-card {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 16px;
+        background: rgba(30, 98, 255, 0.08);
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .upload-card img {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        object-fit: cover;
+        background: #dbe5ff;
+      }
+
+      .upload-card-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: rgba(30, 98, 255, 0.14);
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .preview-drawer {
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        bottom: 24px;
+        width: min(540px, calc(100vw - 32px));
+        border-radius: 30px;
+        padding: 22px;
+        display: none;
+        flex-direction: column;
+        gap: 16px;
+        z-index: 40;
+      }
+
+      .preview-drawer.open {
+        display: flex;
+      }
+
+      .stage-manager-drawer {
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        bottom: 24px;
+        width: min(460px, calc(100vw - 32px));
+        border-radius: 30px;
+        padding: 22px;
+        display: none;
+        flex-direction: column;
+        gap: 14px;
+        z-index: 45;
+      }
+
+      .stage-manager-drawer.open {
+        display: flex;
+      }
+
+      .drawer-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .drawer-header h2 {
+        margin: 0;
+        font-size: 28px;
+        letter-spacing: -0.04em;
+      }
+
+      .draft-stage-note {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .preview-generation-meta {
+        padding: 12px 14px;
+        border-radius: 18px;
+        background: rgba(15, 33, 63, 0.04);
+        border: 1px solid rgba(201, 211, 227, 0.72);
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.65;
+      }
+
+      .preview-summary {
+        display: grid;
+        gap: 14px;
+      }
+
+      .stage-manager-list {
+        display: grid;
+        gap: 10px;
+        overflow: auto;
+        padding-right: 4px;
+      }
+
+      .stage-manager-item {
+        padding: 14px 16px;
+        border-radius: 16px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.94));
+        border: 1px solid rgba(201, 211, 227, 0.82);
+        display: grid;
+        gap: 10px;
+      }
+
+      .stage-manager-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .stage-manager-header strong {
+        font-size: 16px;
+        letter-spacing: -0.03em;
+      }
+
+      .stage-status-chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 26px;
+        padding: 0 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .stage-status-chip.locked {
+        background: rgba(17, 121, 90, 0.12);
+        color: var(--success);
+      }
+
+      .stage-status-chip.working {
+        background: rgba(15, 33, 63, 0.08);
+        color: var(--muted);
+      }
+
+      .stage-status-chip.impacted {
+        background: rgba(184, 106, 9, 0.12);
+        color: var(--warning);
+      }
+
+      .stage-manager-actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .stage-manager-actions .ghost-button {
+        min-height: 36px;
+        padding: 0 12px;
+        font-size: 13px;
+      }
+
+      .preview-card {
+        padding: 18px 20px;
+        border-radius: 22px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.94));
+        border: 1px solid rgba(201, 211, 227, 0.78);
+      }
+
+      .preview-card h3 {
+        margin: 0 0 10px;
+        font-size: 17px;
+        letter-spacing: -0.03em;
+      }
+
+      .preview-card p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      .report-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 46px;
+        padding: 0 18px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #1e62ff, #4a90ff);
+        color: #fff;
+        font-weight: 700;
+        text-decoration: none;
+        box-shadow: 0 16px 26px rgba(30, 98, 255, 0.18);
+      }
+
+      .report-link[aria-disabled="true"] {
+        pointer-events: none;
+        opacity: 0.5;
+      }
+
+      .preview-hero {
+        padding: 22px 24px;
+        border-radius: 22px;
+        background: linear-gradient(135deg, rgba(30, 98, 255, 0.12), rgba(101, 180, 255, 0.12));
+        border: 1px solid rgba(30, 98, 255, 0.14);
+      }
+
+      .preview-kicker {
+        display: inline-block;
+        margin-bottom: 8px;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .preview-hero h2 {
+        margin: 0 0 10px;
+        font-size: 24px;
+        letter-spacing: -0.04em;
+      }
+
+      .preview-hero p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      .preview-section {
+        padding: 16px 18px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.96);
+        border: 1px solid rgba(201, 211, 227, 0.75);
+        box-shadow: 0 10px 20px rgba(24, 34, 48, 0.05);
+      }
+
+      .preview-section h3 {
+        margin: 0 0 10px;
+        font-size: 16px;
+        letter-spacing: -0.03em;
+      }
+
+      .preview-section p {
+        margin: 0 0 10px;
+        color: var(--muted);
+        line-height: 1.8;
+        white-space: pre-wrap;
+      }
+
+      .preview-section p:last-child {
+        margin-bottom: 0;
+      }
+
+      .drawer-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      @media (max-width: 1280px) {
+        .workspace:not(.sidebar-expanded) {
+          grid-template-columns: 88px minmax(0, 1fr);
+        }
+
+        .workspace:not(.sidebar-expanded) .sidebar {
+          padding-left: 12px;
+          padding-right: 12px;
+        }
+
+        .workspace:not(.sidebar-expanded) .brand {
+          justify-content: center;
+          padding-left: 0;
+          padding-right: 0;
+        }
+
+        .workspace:not(.sidebar-expanded) .brand-copy,
+        .workspace:not(.sidebar-expanded) .primary-action span,
+        .workspace:not(.sidebar-expanded) .section-label span:first-child,
+        .workspace:not(.sidebar-expanded) .project-title,
+        .workspace:not(.sidebar-expanded) .project-meta span:last-child,
+        .workspace:not(.sidebar-expanded) .project-actions {
+          display: none;
+        }
+
+        .workspace:not(.sidebar-expanded) .primary-action {
+          padding-left: 0;
+          padding-right: 0;
+        }
+
+        .workspace:not(.sidebar-expanded) .project-card {
+          padding: 12px 10px;
+        }
+
+        .workspace:not(.sidebar-expanded) .project-meta {
+          justify-content: center;
+          margin-top: 0;
+        }
+
+        .workspace:not(.sidebar-expanded) .stage-pill {
+          justify-content: center;
+          width: 100%;
+        }
+      }
+
+      @media (max-width: 1200px) {
+        .content-shell {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .reasoning-panel {
+          order: 2;
+        }
+      }
+
+      @media (max-width: 900px) {
+        .workspace {
+          grid-template-columns: 88px minmax(0, 1fr);
+        }
+
+        .sidebar {
+          border-right: 0;
+          border-bottom: 0;
+        }
+
+        .main-header,
+        .content-shell,
+        .composer-shell {
+          padding-left: 18px;
+          padding-right: 18px;
+        }
+
+        .preview-drawer {
+          top: 12px;
+          right: 12px;
+          bottom: 12px;
+        }
+
+        .stage-manager-drawer {
+          top: 12px;
+          right: 12px;
+          bottom: 12px;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .workspace {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar,
+        .workspace.sidebar-collapsed .sidebar,
+        .workspace:not(.sidebar-expanded) .sidebar {
+          padding: 14px 14px 10px;
+          border-right: 0;
+          border-bottom: 1px solid rgba(201, 211, 227, 0.8);
+        }
+
+        .sidebar-top {
+          justify-content: flex-start;
+        }
+
+        .workspace.sidebar-collapsed .brand-copy,
+        .workspace:not(.sidebar-expanded) .brand-copy,
+        .workspace.sidebar-collapsed .primary-action span,
+        .workspace:not(.sidebar-expanded) .primary-action span,
+        .workspace.sidebar-collapsed .section-label span:first-child,
+        .workspace:not(.sidebar-expanded) .section-label span:first-child,
+        .workspace.sidebar-collapsed .project-title,
+        .workspace:not(.sidebar-expanded) .project-title,
+        .workspace.sidebar-collapsed .project-meta span:last-child,
+        .workspace:not(.sidebar-expanded) .project-meta span:last-child,
+        .workspace.sidebar-collapsed .project-actions,
+        .workspace:not(.sidebar-expanded) .project-actions {
+          display: initial;
+        }
+
+        .workspace.sidebar-collapsed .brand,
+        .workspace:not(.sidebar-expanded) .brand {
+          justify-content: flex-start;
+          padding-left: 12px;
+          padding-right: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="workspace-shell" class="workspace">
+      <aside id="project-sidebar" class="sidebar">
+        <div class="sidebar-top">
+          <div class="brand">
+            <img class="brand-mark" src="./assets/xkyx-tech-grid.svg" alt="芯科元析 logo" />
+            <div class="brand-copy">
+              <strong>芯科元析</strong>
+              <span>面向电子制造与电子研发体系的失效分析智能体平台</span>
+            </div>
+          </div>
+          <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-label="折叠项目侧栏">☰</button>
+        </div>
+
+        <button id="new-project-button" class="primary-action" type="button"><span>+ 新建分析项目</span></button>
+
+        <section class="sidebar-section">
+          <div class="section-label">
+            <span>项目列表</span>
+            <span id="project-count">0</span>
+          </div>
+          <div id="project-list" class="project-list"></div>
+        </section>
+      </aside>
+
+      <main class="main">
+        <header class="main-header">
+          <div class="main-title">
+            <h1 id="workspace-title">新建失效分析项目</h1>
+            <p id="workspace-subtitle">分阶段推进：问题定义 → 根因结论 → 按需输出分析摘要、快速响应版或 8D 报告</p>
+          </div>
+          <div class="status-stack">
+            <div id="connection-badge" class="connection-badge">后端已断开，使用本地 fallback mockup</div>
+            <div id="generation-meta-badge" class="generation-meta-badge">生成信息：等待生成</div>
+          </div>
+        </header>
+
+        <section class="content-shell">
+          <section class="conversation-panel">
+            <div id="chat-thread" class="chat-thread"></div>
+          </section>
+
+          <aside class="reasoning-panel">
+            <div class="panel-title">
+              <strong>推理模式</strong>
+              <span id="current-stage-pill" class="stage-pill">接案</span>
+            </div>
+
+            <div class="reason-card">
+              <h3>当前已知事实</h3>
+              <ul id="known-facts-list">
+                <li class="muted">发送第一条信息后，这里会自动整理事实。</li>
+              </ul>
+            </div>
+
+            <div class="reason-card">
+              <h3>还缺哪些信息</h3>
+              <ul id="missing-fields-list">
+                <li class="muted">系统会优先提醒影响交付质量的关键信息缺口。</li>
+              </ul>
+            </div>
+
+            <div class="reason-card">
+              <h3>下一步建议</h3>
+              <p id="next-question-copy">先输入异常现象、时间、批次、客户场景、影响范围等碎片信息。</p>
+            </div>
+
+            <div class="reason-card">
+              <h3>当前阶段</h3>
+              <p id="current-stage-copy">接案</p>
+            </div>
+
+            <div class="reason-card">
+              <h3>下一阶段</h3>
+              <p id="next-stage-copy">信息补全</p>
+            </div>
+
+            <div class="reason-card">
+              <h3>推进状态</h3>
+              <p id="progress-status-copy">等待输入以开始接案。</p>
+            </div>
+
+            <div class="reason-card">
+              <h3>思考引导</h3>
+              <p id="guided-thinking-copy">当进入 D2 / D4 / D5-D7 关键阶段时，这里会给出引导问题。</p>
+              <ul id="guided-thinking-list"></ul>
+            </div>
+          </aside>
+        </section>
+
+        <section class="composer-shell">
+          <form id="composer-form" class="composer">
+            <textarea
+              id="composer-input"
+              placeholder="直接输入异常现象、客户邮件、测试记录、批次信息，系统会用对话方式帮你推进失效分析。"
+            ></textarea>
+
+            <div id="upload-strip" class="upload-strip"></div>
+
+            <div class="composer-toolbar">
+              <div class="toolbar-group">
+                <label class="tool-button" for="image-input">上传文件</label>
+                <input id="image-input" class="image-input" type="file" accept="image/*,.doc,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,application/pdf,.pdf" multiple />
+                <button id="preview-toggle" class="tool-button" type="button">8D预览</button>
+                <button id="stage-manager-toggle" class="tool-button" type="button">阶段管理</button>
+              </div>
+              <div class="toolbar-group">
+                <button id="advance-button" class="tool-button" type="button">进入下一步</button>
+                <span id="draft-status" class="draft-status">等待输入</span>
+                <button class="send-button" type="submit">发送</button>
+              </div>
+            </div>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <aside id="preview-drawer" class="preview-drawer" aria-hidden="true">
+      <div class="drawer-header">
+        <div>
+          <h2>输出预览</h2>
+          <div id="preview-stage-note" class="draft-stage-note">可打开完整结果查看最终渲染。</div>
+        </div>
+        <button id="close-preview" class="ghost-button" type="button">关闭</button>
+      </div>
+      <div id="preview-generation-meta" class="preview-generation-meta">生成信息：等待生成</div>
+      <div class="preview-summary">
+        <div class="preview-card">
+          <h3>报告状态</h3>
+          <p id="preview-report-status">完成 D8 确认后，这里会提供完整报告链接。</p>
+        </div>
+        <div class="preview-card">
+          <h3>完整结果</h3>
+          <p>点击下面的链接，在新标签页中查看完整渲染好的 HTML 结果页。</p>
+        </div>
+      </div>
+      <div class="drawer-actions">
+        <button id="export-word-button" class="tool-button" type="button">导出 Word</button>
+        <button id="export-pdf-button" class="tool-button" type="button">导出 PDF</button>
+        <a id="open-report-link" class="report-link" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">打开完整报告</a>
+      </div>
+    </aside>
+
+    <aside id="stage-manager-drawer" class="stage-manager-drawer" aria-hidden="true">
+      <div class="drawer-header">
+        <div>
+          <h2>阶段管理</h2>
+          <div id="stage-manager-note" class="draft-stage-note">已确认阶段可解锁修改；受影响阶段请重新复审。</div>
+        </div>
+        <button id="close-stage-manager" class="ghost-button" type="button">关闭</button>
+      </div>
+      <div id="stage-manager-list" class="stage-manager-list"></div>
+    </aside>
+
+    <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+    <script src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script>
+    <script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+    <script>
+      const STORAGE_KEY = "eightd-workspace-state-v2";
+      const SIDEBAR_STATE_KEY = "eightd-workspace-sidebar-collapsed-v1";
+      const FORCE_LOCAL_FALLBACK = true;
+      const STAGE_LABELS = {
+        intake: "接案",
+        fact_completion: "信息补全",
+        analysis: "分析中",
+        draft_ready: "初稿生成",
+        user_revision: "用户修订",
+        D2: "D2",
+        D3: "D3",
+        D4: "D4",
+        D5: "D5",
+        D6: "D6",
+        D7: "D7",
+        D8: "D8",
+      };
+      const USER_PHASES = {
+        intake: { current: "D1 接案准备", next: "D2 问题描述" },
+        fact_completion: { current: "D2 问题描述", next: "D3 临时遏制" },
+        analysis: { current: "D4 根因分析", next: "D5 永久纠正措施" },
+        draft_ready: { current: "D5 永久纠正措施", next: "D6 实施与验证" },
+        user_revision: { current: "D6 实施与验证", next: "D7 预防复发" },
+        D2: { current: "D2 问题描述", next: "D3 临时遏制" },
+        D3: { current: "D3 临时遏制", next: "D4 根因分析" },
+        D4: { current: "D4 根因分析", next: "D5 永久纠正措施" },
+        D5: { current: "D5 永久纠正措施", next: "D6 实施与验证" },
+        D6: { current: "D6 实施与验证", next: "D7 预防复发" },
+        D7: { current: "D7 预防复发", next: "D8 团队表彰与结案" },
+        D8: { current: "D8 团队表彰与结案", next: "最终报告汇总" },
+      };
+      const LOCAL_STAGE_SEQUENCE = ["D2", "D3", "D4", "D5", "D6", "D7", "D8"];
+      const LOCAL_GENERATION_META = {
+        source: "fallback",
+        prompt_version: "stage-driven-fallback-v1",
+        domain_profile: "electronics_quality_engineer_v1",
+        review_mode: "offline_mockup_mode",
+      };
+      const LOCAL_D1_TEAM = "方暨兰，温阿利，耿向宇，崔杰，张涛，吴蕙羽";
+      const REPORT_SECTION_TITLES = {
+        D1: { title: "团队成员", subtitle: "Establish the Team" },
+        D2: { title: "问题描述", subtitle: "Describe the Problem" },
+        D3: { title: "临时围堵措施", subtitle: "Interim Containment Actions" },
+        D4: { title: "根本原因分析", subtitle: "Root Cause Analysis" },
+        D5: { title: "制定永久对策", subtitle: "Develop Permanent Corrective Actions" },
+        D6: { title: "验证永久对策实施效果", subtitle: "Implement and Validate PCA" },
+        D7: { title: "预防再发生", subtitle: "Prevent Recurrence" },
+        D8: { title: "肯定团队贡献", subtitle: "Recognize the Team" },
+      };
+      const LOCAL_STAGE_CONTENT = {
+        D2: `D2: 问题描述 (Describe the Problem)
+
+Who & Where: 客户大麦科技总装线。
+
+When: 2026年3月21日上午（涉及生产日期：昨晚夜班 SMT 2号线）。
+
+What & How: 最新批次 MCU-800 主控板在首次上电测试时，C25位号元件（10uF/25V 贴片钽电容）发生严重短路爆板、冒烟伴随火花。退回的3片不良品经显微镜目检与万用表测量，C25本体炸毁，呈物理短路状态。
+
+How Many: 客户反馈连续3片不良，发生率为 3/投入量 (初步评估为批次性高发异常)。`,
+        D3: `D3: 临时围堵措施 (Interim Containment Actions - 24小时内完成)
+
+客户端围堵 (RMA & Sorting)： 通知客户立即停止该批次（WO-260320）上线，将已到货的成品进行隔离封存。安排驻厂人员/业务紧急前往客户现场进行 100% 极性外观全检。
+
+厂内成品/半成品冻结 (Hold)： 质量部已紧急冻结仓库未发货的同批次成品 500 PCS，以及在制半成品 300 PCS。
+
+厂内抽检结果： 对冻结品紧急抽查 50 PCS，发现 48 PCS 的 C25 钽电容极性全部贴反（不良率 96%），确认为严重批次性贴装反向事故。厂内库存全面转入 100% 挑选及返工流程。`,
+        D4: `D4: 根本原因分析 (Root Cause Analysis)
+
+利用 5 Why 分析法，从“发生原因”和“流出原因”两个维度进行彻底剖析。
+
+1. 发生原因 (Occurrence Root Cause) —— 为什么会贴反？
+
+直接原因： 钽电容极性贴反，上电后发生热击穿导致爆板。
+
+根本原因 (材料与方法)： 采购近期导入了替代供应商（B品牌）的物料。B品牌卷带编带方向与原厂（A品牌）相反。夜班换料员上线新料时，未通知技术员修改 SMT 贴装角度（应从0度改为180度），导致机器按照旧程序直接将整盘物料反向贴装。
+
+2. 流出原因 (Escape Root Cause) —— 为什么AOI没有拦截？
+
+直接原因： 炉后 AOI（自动光学检测）记录显示所有反向板均为“PASS”。
+
+根本原因 (人与机器)： B品牌钽电容表面的极性标识（白线）对比度低。AOI 视觉算法频繁产生“假报警”（误判）。夜班 AOI 操作员为了追求产能、避免频繁人工确认，严重违规私自放宽了 C25 的极性检测阈值，导致真正的反向缺陷被系统放行。`,
+        D5: `D5: 制定永久对策 (Develop Permanent Corrective Actions)
+
+工艺更新 (Method/Machine)： SMT 工程师立即针对 B品牌 物料新建独立的贴片程序，强制设定 C25 贴装角度为 180 度，并制作双品牌物料防呆对照SOP。
+
+AOI 算法优化与权限管控 (Machine/System)： * PE 工程师针对 B品牌 标识特征重新提取打光参数，优化极性检测算法，消除假报警。
+
+权限收回： 立即在全厂检测设备（AOI/SPI）实施三级密码权限管理。操作员仅保留“运行/停机”权限，参数修改权限严格收归至 PE 工程师及质量部。
+
+替代料导入流程升级 (System)： 质量部主导修订《新物料/替代料导入管理规范》。明确规定：IQC 发现替代料外观/包装特征（如编带方向）有变化时，必须开具联络单给 PE/SMT 签字确认，首件必须经过双人复核。`,
+        D6: `D6: 验证永久对策实施效果 (Implement and Validate PCA)
+
+重工验证： 将厂内拦截的 800 PCS 及客户退回的不良品，按标准重工作业指导书更换 C25 电容。重工后通过高精度的 AOI 复测及 100% FCT（功能测试），确保性能合格再安排发货。
+
+新对策试产验证： 使用 B品牌 钽电容及更新后的 SMT/AOI 程序进行 50 PCS 小批量试产验证。首件检验合格，AOI 无误报，炉后目检 100% 极性正确。对策有效。`,
+        D7: `D7: 预防再发生 (Prevent Recurrence)
+
+全面梳理 BOM 表中所有有极性元器件（如电解电容、二极管、IC等）的替代料清单，排查是否存在类似的“编带方向不一致”隐患。
+
+针对全体夜班操作员及换料员开展“质量红线”专项培训，严禁私自修改检测设备参数，遇到物料异常必须执行异常升级流程（停线、呼叫、等待）。
+
+将此次客诉处理纳入公司内部的《质量案例库（Lessons Learned）》，作为新员工入职的必修案例。`,
+        D8: `D8: 肯定团队贡献 (Recognize the Team)
+
+感谢各部门在突发客诉后的24小时内高度配合。生产部迅速完成了厂内拦截，SMT与工艺团队在2小时内找出了程序及参数的漏洞，IQC提供了关键的来料追溯线索。经过团队协作，目前风险已全面受控，客户端产线已恢复正常运作。本8D报告准予结案。`,
+      };
+      const LOCAL_STAGE_SUGGESTIONS = {
+        D2: "当前已整理出 D2 问题描述结论。若内容无误，再确认进入 D3 临时围堵措施。",
+        D3: "当前已整理出 D3 临时围堵措施结论。若内容无误，再确认进入 D4 根本原因分析。",
+        D4: "当前已整理出 D4 根本原因分析结论。你可以继续分析，也可以先按 D4 收口。",
+        D5: "当前已整理出 D5 永久对策结论。若内容无误，再确认进入 D6 验证实施效果。",
+        D6: "当前已整理出 D6 实施与验证结论。若内容无误，再确认进入 D7 预防再发生。",
+        D7: "当前已整理出 D7 预防再发生结论。若内容无误，再确认进入 D8 团队贡献确认。",
+        D8: "当前已整理出 D8 团队贡献确认结论。再次确认后会生成完整 8D 报告 HTML 预览。",
+      };
+      const MESSAGE_TYPE_LABELS = {
+        text: "对话回复",
+        attachment_received: "已接收附件",
+        fact_summary_card: "事实摘要",
+        stage_result_card: "阶段结论",
+        decision_prompt: "下一步建议",
+        output_card: "结果输出",
+      };
+      const STAGE_FLOW = ["intake", "fact_completion", "analysis", "draft_ready", "user_revision"];
+      const ADVANCE_COMMANDS = new Set(["进入下一步", "先继续", "继续", "先往下走", "先出初稿"]);
+      const CONTINUE_ANALYSIS_COMMANDS = new Set(["继续分析", "继续到D5", "继续深挖", "继续推进"]);
+      const CLOSE_AT_D4_COMMANDS = new Set(["先按 D4 收口", "按 D4 收口", "D4 收口", "先收口"]);
+      const GENERATE_SUMMARY_COMMANDS = new Set(["生成分析摘要", "先出分析摘要", "输出分析摘要"]);
+      const GENERATE_8D_COMMANDS = new Set(["生成8D", "生成 8D", "出8D", "输出8D"]);
+      const D1_REMINDER = "D1 尚未填写，正式完整报告导出前必须补齐团队/责任信息。";
+      const API_BASE = (() => {
+        if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+          return "http://localhost:8001";
+        }
+        return "";
+      })();
+
+      const state = {
+        projects: [],
+        currentProjectId: null,
+        previewOpen: false,
+        stageManagerOpen: false,
+        pendingAttachments: [],
+        backendConnected: false,
+        sidebarCollapsed: false,
+        reportUrlCache: new Map(),
+      };
+
+      const els = {
+        workspaceShell: document.getElementById("workspace-shell"),
+        projectList: document.getElementById("project-list"),
+        projectCount: document.getElementById("project-count"),
+        newProjectButton: document.getElementById("new-project-button"),
+        sidebarToggle: document.getElementById("sidebar-toggle"),
+        workspaceTitle: document.getElementById("workspace-title"),
+        workspaceSubtitle: document.getElementById("workspace-subtitle"),
+        connectionBadge: document.getElementById("connection-badge"),
+        generationMetaBadge: document.getElementById("generation-meta-badge"),
+        chatThread: document.getElementById("chat-thread"),
+        knownFactsList: document.getElementById("known-facts-list"),
+        missingFieldsList: document.getElementById("missing-fields-list"),
+        nextQuestionCopy: document.getElementById("next-question-copy"),
+        guidedThinkingCopy: document.getElementById("guided-thinking-copy"),
+        guidedThinkingList: document.getElementById("guided-thinking-list"),
+        currentStagePill: document.getElementById("current-stage-pill"),
+        currentStageCopy: document.getElementById("current-stage-copy"),
+        nextStageCopy: document.getElementById("next-stage-copy"),
+        progressStatusCopy: document.getElementById("progress-status-copy"),
+        composerForm: document.getElementById("composer-form"),
+        composerInput: document.getElementById("composer-input"),
+        imageInput: document.getElementById("image-input"),
+        uploadStrip: document.getElementById("upload-strip"),
+        previewToggle: document.getElementById("preview-toggle"),
+        stageManagerToggle: document.getElementById("stage-manager-toggle"),
+        advanceButton: document.getElementById("advance-button"),
+        draftStatus: document.getElementById("draft-status"),
+        previewDrawer: document.getElementById("preview-drawer"),
+        closePreview: document.getElementById("close-preview"),
+        previewStageNote: document.getElementById("preview-stage-note"),
+        previewGenerationMeta: document.getElementById("preview-generation-meta"),
+        previewReportStatus: document.getElementById("preview-report-status"),
+        exportWordButton: document.getElementById("export-word-button"),
+        exportPdfButton: document.getElementById("export-pdf-button"),
+        openReportLink: document.getElementById("open-report-link"),
+        stageManagerDrawer: document.getElementById("stage-manager-drawer"),
+        closeStageManager: document.getElementById("close-stage-manager"),
+        stageManagerNote: document.getElementById("stage-manager-note"),
+        stageManagerList: document.getElementById("stage-manager-list"),
+      };
+
+      function saveState() {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            projects: state.projects,
+            currentProjectId: state.currentProjectId,
+          })
+        );
+      }
+
+      function loadState() {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        state.sidebarCollapsed = localStorage.getItem(SIDEBAR_STATE_KEY) === "true";
+        if (!raw) {
+          createProject({ title: "默认分析项目" }, true);
+          return;
+        }
+        try {
+          const parsed = JSON.parse(raw);
+          state.projects = parsed.projects || [];
+          state.currentProjectId = parsed.currentProjectId || state.projects[0]?.id || null;
+          if (!state.projects.length) {
+            createProject({ title: "默认分析项目" }, true);
+          } else {
+            state.projects = state.projects.map((project) => ({
+              ...project,
+              localConfirmedStages: project.localConfirmedStages || {},
+              localImpactedStages: project.localImpactedStages || {},
+            }));
+          }
+        } catch (error) {
+          createProject({ title: "默认分析项目" }, true);
+        }
+      }
+
+      function saveSidebarState() {
+        localStorage.setItem(SIDEBAR_STATE_KEY, String(state.sidebarCollapsed));
+      }
+
+      function makeId() {
+        return `project-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+      }
+
+      function stageLabel(stage) {
+        return STAGE_LABELS[stage] || "接案";
+      }
+
+      function nextStageLabel(stage) {
+        const index = STAGE_FLOW.indexOf(stage);
+        if (index === -1 || index === STAGE_FLOW.length - 1) return "用户修订";
+        return stageLabel(STAGE_FLOW[index + 1]);
+      }
+
+      function currentUserPhase(stage) {
+        return USER_PHASES[stage]?.current || USER_PHASES.intake.current;
+      }
+
+      function nextUserPhase(stage) {
+        return USER_PHASES[stage]?.next || USER_PHASES.intake.next;
+      }
+
+      function isAdvanceCommand(content) {
+        return ADVANCE_COMMANDS.has((content || "").trim());
+      }
+
+      function getCurrentProject() {
+        return state.projects.find((project) => project.id === state.currentProjectId) || null;
+      }
+
+      function createProject(seed = {}, silent = false) {
+        const nextIndex = state.projects.length + 1;
+        const project = {
+          id: makeId(),
+          backendCaseId: null,
+          title: seed.title || `失效分析项目 ${String(nextIndex).padStart(2, "0")}`,
+          stage: FORCE_LOCAL_FALLBACK ? "D2" : "intake",
+          updatedAt: new Date().toISOString(),
+          messages: [],
+          latestState: null,
+          draftMarkdown: "",
+          closureMode: null,
+          outputKind: null,
+          localConfirmedStages: {},
+          localImpactedStages: {},
+        };
+        state.projects.unshift(project);
+        state.currentProjectId = project.id;
+        if (!silent) {
+          pushAssistantMessage(
+            project,
+            "已新建分析项目。你可以直接输入客户投诉、测试异常、批次信息，或者粘贴邮件、会议纪要和测试记录。",
+            null,
+            { messageType: "text" }
+          );
+        }
+        saveState();
+        render();
+      }
+
+      function pushAssistantMessage(project, content, response, options = {}) {
+        project.messages.push({
+          id: makeId(),
+          role: "assistant",
+          content,
+          response,
+          messageType: options.messageType || "text",
+          actions: options.actions || [],
+          attachments: options.attachments || [],
+        });
+        project.updatedAt = new Date().toISOString();
+      }
+
+      function setProjectTitleFromContent(project, content) {
+        if (!project || project.messages.length > 1) return;
+        const normalized = content.replace(/\s+/g, " ").trim();
+        if (normalized) {
+          project.title = normalized.slice(0, 22);
+        }
+      }
+
+      function renameProject(projectId) {
+        const project = state.projects.find((item) => item.id === projectId);
+        if (!project) return;
+        const nextTitle = prompt("请输入新的项目名称", project.title);
+        if (nextTitle == null) return;
+        const normalized = nextTitle.replace(/\s+/g, " ").trim();
+        if (!normalized) return;
+        project.title = normalized.slice(0, 40);
+        project.updatedAt = new Date().toISOString();
+        saveState();
+        render();
+      }
+
+      function deleteProject(projectId) {
+        const project = state.projects.find((item) => item.id === projectId);
+        if (!project) return;
+        const shouldDelete = confirm(`确定删除项目“${project.title}”吗？`);
+        if (!shouldDelete) return;
+        state.projects = state.projects.filter((item) => item.id !== projectId);
+        if (!state.projects.length) {
+          createProject({ title: "默认分析项目" }, true);
+          return;
+        }
+        if (state.currentProjectId === projectId) {
+          state.currentProjectId = state.projects[0].id;
+        }
+        saveState();
+        render();
+      }
+
+      function renderProjects() {
+        els.projectCount.textContent = String(state.projects.length);
+        els.projectList.innerHTML = "";
+        state.projects.forEach((project) => {
+          const card = document.createElement("div");
+          card.className = `project-card${project.id === state.currentProjectId ? " active" : ""}`;
+          const stageShort = (project.stage || "D2").replace(/\s+/g, "");
+          const header = document.createElement("div");
+          header.className = "project-card-header";
+          const openButton = document.createElement("button");
+          openButton.type = "button";
+          openButton.className = "project-open";
+          openButton.innerHTML = `<div class="project-title">${escapeHtml(project.title)}</div>`;
+          openButton.addEventListener("click", () => {
+            state.currentProjectId = project.id;
+            render();
+          });
+          const actions = document.createElement("div");
+          actions.className = "project-actions";
+          const renameButton = document.createElement("button");
+          renameButton.type = "button";
+          renameButton.className = "project-action";
+          renameButton.textContent = "改";
+          renameButton.setAttribute("aria-label", "重命名项目");
+          renameButton.addEventListener("click", () => renameProject(project.id));
+          const deleteButton = document.createElement("button");
+          deleteButton.type = "button";
+          deleteButton.className = "project-action delete";
+          deleteButton.textContent = "删";
+          deleteButton.setAttribute("aria-label", "删除项目");
+          deleteButton.addEventListener("click", () => deleteProject(project.id));
+          actions.appendChild(renameButton);
+          actions.appendChild(deleteButton);
+          header.appendChild(openButton);
+          header.appendChild(actions);
+
+          const meta = document.createElement("div");
+          meta.className = "project-meta";
+          meta.innerHTML = `
+            <span class="stage-pill">${escapeHtml(stageShort)}</span>
+            <span>${formatTime(project.updatedAt)}</span>
+          `;
+          card.appendChild(header);
+          card.appendChild(meta);
+          els.projectList.appendChild(card);
+        });
+      }
+
+      function attachmentKindLabel(kind) {
+        return {
+          image: "图像",
+          docx: "Word",
+          pdf: "PDF",
+          file: "文件",
+        }[kind] || "附件";
+      }
+
+      async function handleMessageAction(action) {
+        if (!action) return;
+        if (action.handler === "preview") {
+          togglePreview(true);
+          return;
+        }
+        if (action.handler === "export-word") {
+          await exportWordReport();
+          return;
+        }
+        if (action.handler === "export-pdf") {
+          exportPdfReport();
+          return;
+        }
+        if (action.command) {
+          await processTurn(action.command, false, false);
+        }
+      }
+
+      function renderMessages(project) {
+        els.chatThread.innerHTML = "";
+        if (!project || !project.messages.length) {
+          const empty = document.createElement("div");
+          empty.className = "empty-state";
+          empty.innerHTML = `
+            <h2>你好，我是失效分析助手</h2>
+            <p>你可以直接输入异常现象、粘贴客户邮件或上传图片/Word/PDF。系统会用对话方式帮你整理事实、推进分析，并按需要输出分析摘要、快速响应版或 8D 报告。</p>
+          `;
+          els.chatThread.appendChild(empty);
+          return;
+        }
+
+        project.messages.forEach((message) => {
+          const bubble = document.createElement("div");
+          const messageTypeClass = String(message.messageType || "text").replace(/_/g, "-");
+          bubble.className = `message-bubble ${message.role} ${messageTypeClass}`;
+          if (message.role === "assistant" && message.messageType && message.messageType !== "text") {
+            const eyebrow = document.createElement("div");
+            eyebrow.className = "message-eyebrow";
+            eyebrow.textContent = MESSAGE_TYPE_LABELS[message.messageType] || "消息";
+            bubble.appendChild(eyebrow);
+          }
+          const body = document.createElement("div");
+          body.className = "message-content";
+          body.textContent = message.content;
+          bubble.appendChild(body);
+          if (message.attachments && message.attachments.length) {
+            const row = document.createElement("div");
+            row.className = "attachment-row";
+            message.attachments.forEach((attachment) => {
+              const chip = document.createElement("div");
+              chip.className = "attachment-chip";
+              chip.innerHTML = `<span>${escapeHtml(attachmentKindLabel(attachment.kind))}</span><span>${escapeHtml(attachment.name)}</span>`;
+              row.appendChild(chip);
+            });
+            bubble.appendChild(row);
+          }
+          if (message.actions && message.actions.length) {
+            const actions = document.createElement("div");
+            actions.className = "message-actions";
+            message.actions.forEach((action) => {
+              const button = document.createElement("button");
+              button.type = "button";
+              button.className = `message-action-button${action.primary ? " primary" : ""}`;
+              button.textContent = action.label;
+              button.addEventListener("click", () => {
+                void handleMessageAction(action);
+              });
+              actions.appendChild(button);
+            });
+            bubble.appendChild(actions);
+          }
+          els.chatThread.appendChild(bubble);
+        });
+        els.chatThread.scrollTop = els.chatThread.scrollHeight;
+      }
+
+      function buildLocalStageRecords(project) {
+        const confirmedStages = project?.localConfirmedStages || {};
+        const impactedStages = project?.localImpactedStages || {};
+        const d1Status = project?.latestState?.d1_status || "missing";
+        const records = [
+          {
+            stage: "D1",
+            working_content: "",
+            confirmed_content: "",
+            locked: d1Status === "complete",
+            impacted: false,
+            impact_summary: "",
+          },
+        ];
+        LOCAL_STAGE_SEQUENCE.forEach((stage) => {
+          records.push({
+            stage,
+            working_content: LOCAL_STAGE_CONTENT[stage],
+            confirmed_content: confirmedStages[stage] || "",
+            locked: Boolean(confirmedStages[stage]),
+            impacted: Boolean(impactedStages[stage]),
+            impact_summary: impactedStages[stage] || "",
+          });
+        });
+        return records;
+      }
+
+      function getStageRecords(project) {
+        if (project?.latestState?.stages?.length) {
+          return project.latestState.stages;
+        }
+        return buildLocalStageRecords(project);
+      }
+
+      function getImpactedFlowStages(project) {
+        return getStageRecords(project)
+          .filter((record) => record.stage !== "D1" && record.impacted)
+          .map((record) => record.stage);
+      }
+
+      function renderReasoning(project) {
+        const latestState = project?.latestState;
+        const currentPhaseText = currentUserPhase(project?.stage || "intake");
+        const impactedStages = getImpactedFlowStages(project);
+        const hasImpactedStages = impactedStages.length > 0;
+        const hasFinalReport = Boolean(project?.draftMarkdown) && (project?.stage === "D8" || project?.closureMode === "d4_final");
+        els.currentStagePill.textContent = currentPhaseText;
+        els.currentStageCopy.textContent = currentPhaseText;
+        els.nextStageCopy.textContent = hasFinalReport ? "已完成" : nextUserPhase(project?.stage || "intake");
+
+        renderList(els.knownFactsList, latestState?.known_facts?.map((fact) => formatKnownFact(fact)), "发送消息后自动整理事实");
+        renderList(
+          els.missingFieldsList,
+          latestState?.missing_fields?.map((gap) => gap.reason),
+          "系统会优先提醒影响交付质量的关键缺口"
+        );
+        const defaultSuggestion = FORCE_LOCAL_FALLBACK
+          ? project?.draftMarkdown
+            ? project?.outputKind === "analysis_summary"
+              ? "离线 mockup 已生成分析摘要。你可以打开预览查看 HTML 结果页并继续决定是否生成 8D。"
+              : "离线 mockup 已生成正式结果。你可以打开预览查看 HTML 报告并继续修改。"
+            : LOCAL_STAGE_SUGGESTIONS[project?.stage || "D2"] || "当前 mockup 会按 D2 到 D8 顺序推进。"
+          : project?.draftMarkdown
+            ? "当前信息已足够进入下一阶段。你也可以继续补充临时措施、验证结果或原因判断。"
+            : "欢迎继续输入异常现象、时间、批次、客户场景、影响范围或任何你已经掌握的现场信息。";
+        els.nextQuestionCopy.textContent = latestState?.next_question || defaultSuggestion;
+
+        if (latestState?.guided_thinking) {
+          els.guidedThinkingCopy.textContent = latestState.guided_thinking.guidance_text;
+          renderList(
+            els.guidedThinkingList,
+            latestState.guided_thinking.suggested_questions,
+            "系统会给出下一步思考引导"
+          );
+        } else {
+          els.guidedThinkingCopy.textContent = "当进入 D2 / D4 / D5-D7 关键阶段时，这里会给出引导问题。";
+          renderList(els.guidedThinkingList, [], "等待推理阶段触发");
+        }
+
+        const hasDraft = Boolean(project?.draftMarkdown);
+        const d1Reminder = latestState?.d1_status && latestState.d1_status !== "complete" ? D1_REMINDER : "";
+        els.draftStatus.textContent = hasDraft
+          ? project?.outputKind === "analysis_summary"
+            ? "已有分析摘要，可预览并导出"
+            : "已有正式结果，可预览并导出"
+          : "推理推进中";
+        if (FORCE_LOCAL_FALLBACK && project?.stage?.startsWith("D")) {
+          const stageStatus = hasFinalReport
+            ? project?.closureMode === "d4_final"
+              ? "离线 mockup 已按 D4 收口，当前处于最终结果阶段。"
+              : "离线 mockup 已完成 D2-D8 汇总，当前处于最终报告阶段。"
+            : project?.draftMarkdown
+              ? "离线 mockup 已生成当前结果，当前可查看 HTML 预览。"
+            : latestState?.confirmed
+              ? "当前阶段已确认，已推进到下一阶段。"
+              : "当前为离线 mockup 阶段内容，点“进入下一步”可确认并推进。";
+          const impactedNote = hasImpactedStages ? `受影响待复审阶段：${impactedStages.join("、")}。` : "";
+          els.progressStatusCopy.textContent = [d1Reminder, impactedNote, stageStatus].filter(Boolean).join(" ");
+        } else if (latestState?.force_advanced) {
+          els.progressStatusCopy.textContent = [d1Reminder, "已按用户要求跳过缺口，继续进入下一步。"].filter(Boolean).join(" ");
+        } else if (hasDraft) {
+          els.progressStatusCopy.textContent = [d1Reminder, "已生成当前结果，可继续校对、导出或切换输出方式。"].filter(Boolean).join(" ");
+        } else if (latestState?.missing_fields?.length) {
+          els.progressStatusCopy.textContent = [d1Reminder, "系统正在累计事实，并根据当前输入给出建议。"].filter(Boolean).join(" ");
+        } else {
+          els.progressStatusCopy.textContent = [d1Reminder, "等待输入以开始接案。"].filter(Boolean).join(" ");
+        }
+        els.advanceButton.disabled = hasFinalReport || hasImpactedStages;
+        els.advanceButton.textContent = hasFinalReport ? "已收口" : hasImpactedStages ? "需复审" : "进入下一步";
+        els.generationMetaBadge.textContent = formatGenerationMeta(getProjectGenerationMeta(project), false);
+      }
+
+      function renderList(container, items, emptyText) {
+        container.innerHTML = "";
+        if (!items || !items.length) {
+          const li = document.createElement("li");
+          li.className = "muted";
+          li.textContent = emptyText;
+          container.appendChild(li);
+          return;
+        }
+        items.forEach((item) => {
+          const li = document.createElement("li");
+          li.textContent = item;
+          container.appendChild(li);
+        });
+      }
+
+      function renderUploads() {
+        els.uploadStrip.innerHTML = "";
+        state.pendingAttachments.forEach((attachment) => {
+          const node = document.createElement("div");
+          node.className = "upload-card";
+          node.innerHTML = attachment.preview
+            ? `<img src="${attachment.preview}" alt="${escapeHtml(attachment.name)}" /><span>${escapeHtml(attachmentKindLabel(attachment.kind))} · ${escapeHtml(attachment.name)}</span>`
+            : `<span class="upload-card-icon">${escapeHtml(attachmentKindLabel(attachment.kind))}</span><span>${escapeHtml(attachment.name)}</span>`;
+          els.uploadStrip.appendChild(node);
+        });
+      }
+
+      function renderPreview(project) {
+        if (!project) return;
+        els.previewDrawer.classList.toggle("open", state.previewOpen);
+        els.previewDrawer.setAttribute("aria-hidden", state.previewOpen ? "false" : "true");
+        const d1Reminder = project?.latestState?.d1_status && project.latestState.d1_status !== "complete"
+          ? " · D1 待补齐"
+          : "";
+        els.previewStageNote.textContent = `当前阶段：${currentUserPhase(project.stage)}${d1Reminder} · 完整结果将在新标签页打开`;
+        els.previewGenerationMeta.textContent = formatGenerationMeta(getProjectGenerationMeta(project), true);
+        const hasDraft = Boolean(project.draftMarkdown);
+        els.previewReportStatus.textContent = hasDraft
+          ? project?.outputKind === "analysis_summary"
+            ? "分析摘要已生成，可以通过下方链接查看完整 HTML 结果页。"
+            : "正式结果已生成，可以通过下方链接查看完整 HTML 渲染页面。"
+          : `${D1_REMINDER} 完成阶段收口后，这里会提供完整结果链接。`;
+        if (hasDraft) {
+          const reportUrl = getOrCreateReportUrl(project);
+          els.openReportLink.setAttribute("href", reportUrl);
+          els.openReportLink.setAttribute("aria-disabled", "false");
+          els.openReportLink.setAttribute(
+            "data-report-outline",
+            parseReportSections(project.draftMarkdown || "")
+              .map((section) => `${section.code} ${section.title}${section.subtitle ? ` (${section.subtitle})` : ""}`)
+              .join(" | ")
+          );
+        } else {
+          els.openReportLink.setAttribute("href", "#");
+          els.openReportLink.setAttribute("aria-disabled", "true");
+          els.openReportLink.setAttribute("data-report-outline", "");
+        }
+        els.exportWordButton.disabled = !hasDraft;
+        els.exportPdfButton.disabled = !hasDraft;
+      }
+
+      function renderStageManager(project) {
+        if (!project) return;
+        els.stageManagerDrawer.classList.toggle("open", state.stageManagerOpen);
+        els.stageManagerDrawer.setAttribute("aria-hidden", state.stageManagerOpen ? "false" : "true");
+
+        const records = getStageRecords(project);
+        const impactedStages = records.filter((record) => record.stage !== "D1" && record.impacted).map((record) => record.stage);
+        els.stageManagerNote.textContent = impactedStages.length
+          ? `以下阶段受新证据影响，需复审：${impactedStages.join("、")}。`
+          : "当前无受影响阶段。已确认阶段可解锁修改。";
+
+        els.stageManagerList.innerHTML = "";
+        records.forEach((record) => {
+          const card = document.createElement("div");
+          card.className = "stage-manager-item";
+
+          const header = document.createElement("div");
+          header.className = "stage-manager-header";
+          const title = document.createElement("strong");
+          title.textContent = `${record.stage} ${USER_PHASES[record.stage]?.current || ""}`.trim();
+          const statusChip = document.createElement("span");
+          if (record.impacted) {
+            statusChip.className = "stage-status-chip impacted";
+            statusChip.textContent = "需复审";
+          } else if (record.locked) {
+            statusChip.className = "stage-status-chip locked";
+            statusChip.textContent = "已确认";
+          } else {
+            statusChip.className = "stage-status-chip working";
+            statusChip.textContent = "编辑中";
+          }
+          header.appendChild(title);
+          header.appendChild(statusChip);
+
+          const summary = document.createElement("p");
+          summary.className = "muted";
+          summary.textContent = record.impacted
+            ? record.impact_summary || "受上游变化影响，建议重新审阅。"
+            : record.locked
+              ? "当前阶段已确认锁定，可解锁后修改。"
+              : "当前阶段为工作稿状态。";
+
+          const actions = document.createElement("div");
+          actions.className = "stage-manager-actions";
+          if (record.stage !== "D1" && record.locked && !record.impacted) {
+            const unlockButton = document.createElement("button");
+            unlockButton.type = "button";
+            unlockButton.className = "ghost-button";
+            unlockButton.textContent = "解锁修改";
+            unlockButton.addEventListener("click", () => handleStageAction(record.stage, "unlock"));
+            actions.appendChild(unlockButton);
+          }
+          if (record.stage !== "D1" && record.impacted) {
+            const revalidateButton = document.createElement("button");
+            revalidateButton.type = "button";
+            revalidateButton.className = "ghost-button";
+            revalidateButton.textContent = "重新复审";
+            revalidateButton.addEventListener("click", () => handleStageAction(record.stage, "revalidate"));
+            actions.appendChild(revalidateButton);
+          }
+          if (!actions.children.length) {
+            const noop = document.createElement("span");
+            noop.className = "muted";
+            noop.textContent = "无需操作";
+            actions.appendChild(noop);
+          }
+
+          card.appendChild(header);
+          card.appendChild(summary);
+          card.appendChild(actions);
+          els.stageManagerList.appendChild(card);
+        });
+      }
+
+      function render() {
+        const project = getCurrentProject();
+        els.workspaceShell.className = `workspace${state.sidebarCollapsed ? " sidebar-collapsed" : " sidebar-expanded"}`;
+        els.sidebarToggle.textContent = state.sidebarCollapsed ? "→" : "←";
+        els.sidebarToggle.setAttribute("aria-label", state.sidebarCollapsed ? "展开项目侧栏" : "折叠项目侧栏");
+        renderProjects();
+        els.workspaceTitle.textContent = project?.title || "新建失效分析项目";
+        els.workspaceSubtitle.textContent = project
+          ? `分阶段推进：${stageLabel(project.stage)} · 保存项目对话、分析结论与输出结果`
+          : "分阶段推进：问题定义 → 根因结论 → 按需输出分析摘要、快速响应版或 8D 报告";
+        els.connectionBadge.textContent = FORCE_LOCAL_FALLBACK
+          ? "后端已断开，使用本地 fallback mockup"
+          : state.backendConnected ? "后端已连接，实时同步中" : "后端未连接，使用本地推理";
+        renderMessages(project);
+        renderReasoning(project);
+        renderUploads();
+        renderPreview(project);
+        renderStageManager(project);
+      }
+
+      function formatTime(value) {
+        return new Date(value).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+      }
+
+      function getProjectGenerationMeta(project) {
+        if (!project) return null;
+        return project.latestState?.draft?.generation_meta || project.latestState?.generation_meta || null;
+      }
+
+      function apiUrl(path) {
+        return `${API_BASE}${path}`;
+      }
+
+      function formatGenerationMeta(meta, includeReviewMode) {
+        if (!meta) return "生成信息：等待生成";
+        if (meta.source === "fallback") {
+          return "当前模式：离线 Mockup 演示";
+        }
+        return "当前模式：实时智能生成";
+      }
+
+      function escapeHtml(value) {
+        return value
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function normalizeInputText(value) {
+        return String(value || "")
+          .replace(/\r\n/g, "\n")
+          .replace(/\s*\n+\s*/g, " ")
+          .replace(/[ \t]{2,}/g, " ")
+          .trim();
+      }
+
+      function normalizedCommand(value) {
+        return normalizeInputText(value).replace(/\s+/g, "");
+      }
+
+      function isCommandMatch(content, commands) {
+        const normalized = normalizedCommand(content);
+        return Array.from(commands).some((item) => normalizedCommand(item) === normalized);
+      }
+
+      function detectAttachmentKind(file) {
+        const name = String(file?.name || "").toLowerCase();
+        const type = String(file?.type || "").toLowerCase();
+        if (type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name)) return "image";
+        if (type.includes("pdf") || /\.pdf$/i.test(name)) return "pdf";
+        if (type.includes("word") || type.includes("officedocument.wordprocessingml") || /\.(docx?|rtf)$/i.test(name)) return "docx";
+        return "file";
+      }
+
+      function readFileAsDataURL(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(new Error("无法读取文件预览。"));
+          reader.readAsDataURL(file);
+        });
+      }
+
+      async function extractPdfTextWithPdfJs(file) {
+        const pdfjsLib = globalThis.pdfjsLib;
+        if (!pdfjsLib || typeof file?.arrayBuffer !== "function") {
+          throw new Error("暂时无法解析 PDF，请粘贴正文或稍后重试。");
+        }
+        if (pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+        }
+        const loadingTask = pdfjsLib.getDocument({ data: await file.arrayBuffer() });
+        const pdf = await loadingTask.promise;
+        const pages = [];
+        for (let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1) {
+          const page = await pdf.getPage(pageNo);
+          const text = await page.getTextContent();
+          pages.push(text.items.map((item) => item.str).join(" "));
+        }
+        return normalizeInputText(pages.join("\n"));
+      }
+
+      async function extractDocxTextWithMammoth(file) {
+        const mammoth = globalThis.mammoth;
+        if (!mammoth || typeof file?.arrayBuffer !== "function") {
+          throw new Error("暂时无法解析 Word，请粘贴正文或稍后重试。");
+        }
+        const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+        return normalizeInputText(result.value || "");
+      }
+
+      async function extractAttachmentText(file, kind) {
+        if (typeof file?.extractedText === "string" && file.extractedText.trim()) {
+          return normalizeInputText(file.extractedText);
+        }
+        if (kind === "docx") {
+          return extractDocxTextWithMammoth(file);
+        }
+        if (kind === "pdf") {
+          return extractPdfTextWithPdfJs(file);
+        }
+        if (typeof file?.text === "function") {
+          return normalizeInputText(await file.text());
+        }
+        return "";
+      }
+
+      async function normalizeAttachment(file) {
+        const kind = detectAttachmentKind(file);
+        const attachment = {
+          id: makeId(),
+          name: file?.name || "未命名附件",
+          kind,
+          type: file?.type || "",
+          preview: "",
+          extractedText: "",
+          extractionError: "",
+        };
+        if (kind === "image") {
+          attachment.preview = await readFileAsDataURL(file).catch(() => "");
+          return attachment;
+        }
+        try {
+          attachment.extractedText = await extractAttachmentText(file, kind);
+        } catch (error) {
+          attachment.extractionError = error?.message || "文件解析失败。";
+        }
+        return attachment;
+      }
+
+      function factLabel(field) {
+        return {
+          problem_symptom: "异常现象",
+          batch: "异常批次",
+          discovery_time: "首次发现时间",
+          impact: "影响范围",
+          scenario: "场景",
+        }[field] || field;
+      }
+
+      function formatKnownFact(fact) {
+        const value = fact.field === "scenario" && fact.value === "customer complaint" ? "客户反馈" : fact.value;
+        return `${factLabel(fact.field)}：${value}`;
+      }
+
+      function buildReportSectionsHtml(markdown) {
+        if (!markdown.trim()) {
+          return '<section class="preview-section"><h3>当前状态</h3><p>离线 mockup 仍处于阶段推进中。</p></section>';
+        }
+        return markdown
+          .split(/\n(?=##\s+)/)
+          .map((block) => block.trim())
+          .filter(Boolean)
+          .map((block) => {
+            const lines = block.split("\n");
+            const title = lines[0].replace(/^##\s+/, "").trim();
+            const body = lines.slice(1).join("\n").trim();
+            const bodyHtml = body
+              .split(/\n\s*\n/)
+              .filter(Boolean)
+              .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br />")}</p>`)
+              .join("");
+            return `
+              <section class="preview-section">
+                <h3>${escapeHtml(title)}</h3>
+                ${bodyHtml}
+              </section>
+            `;
+          })
+          .join("");
+      }
+
+      function parseReportSections(markdown) {
+        return String(markdown || "")
+          .split(/\n(?=##\s+)/)
+          .map((block) => block.trim())
+          .filter(Boolean)
+          .map((block) => {
+            const lines = block.split("\n");
+            const sectionCode = lines[0].replace(/^##\s+/, "").trim();
+            const body = lines.slice(1).join("\n").trim();
+            const firstLine = body.split("\n")[0] || "";
+            const titleMatch = firstLine.match(/^(D\d):\s*([^(\n]+?)(?:\s*\(([^)]+)\))?$/);
+            const fallbackMeta = REPORT_SECTION_TITLES[sectionCode] || { title: sectionCode, subtitle: "" };
+            const sectionTitle = titleMatch ? titleMatch[2].trim() : fallbackMeta.title;
+            const sectionSubtitle = titleMatch?.[3]?.trim() || fallbackMeta.subtitle || "";
+            const content = titleMatch
+              ? body.split("\n").slice(1).join("\n").trim()
+              : body;
+            return {
+              code: sectionCode,
+              title: sectionTitle,
+              subtitle: sectionSubtitle,
+              content,
+            };
+          });
+      }
+
+      function formatD2ContentAsFiveW1H(content) {
+        const labelMap = {
+          "Who & Where": "发生地点与对象",
+          When: "发生时间",
+          "What & How": "异常现象与表现",
+          "How Many": "影响数量与范围",
+        };
+        const rows = String(content || "")
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => {
+            const match = line.match(/^(Who & Where|When|What & How|How Many):\s*(.+)$/);
+            if (!match) return null;
+            return {
+              label: labelMap[match[1]] || match[1],
+              value: match[2],
+            };
+          })
+          .filter(Boolean);
+        if (!rows.length) return "";
+        return `
+          <div class="report-fivew-grid">
+            ${rows
+              .map(
+                (row) => `
+                  <div class="report-fivew-row">
+                    <div class="report-fivew-label">${escapeHtml(row.label)}：</div>
+                    <div class="report-fivew-value">${escapeHtml(row.value)}</div>
+                  </div>
+                `
+              )
+              .join("")}
+          </div>
+        `;
+      }
+
+      function buildFullReportDocument(markdown, title) {
+        const safeTitle = escapeHtml(title || "8D 报告");
+        const sections = parseReportSections(markdown)
+          .map(({ code, title: sectionTitle, subtitle, content }) => {
+            const bodyHtml = code === "D2"
+              ? formatD2ContentAsFiveW1H(content)
+              : String(content || "")
+                  .split(/\n\s*\n/)
+                  .filter(Boolean)
+                  .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br />")}</p>`)
+                  .join("");
+            const subtitleHtml = subtitle ? `<div class="report-section-subtitle">${escapeHtml(subtitle)}</div>` : "";
+            return `
+              <section class="report-section">
+                <div class="report-section-index"><span>${escapeHtml(code)}</span></div>
+                <div class="report-section-body">
+                  <h3>${escapeHtml(code)} ${escapeHtml(sectionTitle)}</h3>
+                  ${subtitleHtml}
+                  ${bodyHtml || "<p>待补充</p>"}
+                </div>
+              </section>
+            `;
+          })
+          .join("");
+        return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${safeTitle}</title>
+    <style>
+      :root {
+        --bg: #eef2f7;
+        --surface: #ffffff;
+        --line: #d6dee9;
+        --line-strong: #b7c5d8;
+        --text: #182230;
+        --muted: #5f6d84;
+        --accent: #335c9f;
+        --accent-soft: #e9f0fb;
+        --ink: #0f1724;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top left, rgba(51, 92, 159, 0.06), transparent 18%),
+          radial-gradient(circle at bottom right, rgba(24, 34, 48, 0.05), transparent 22%),
+          var(--bg);
+        color: var(--ink);
+        font-family: "PingFang SC", "Hiragino Sans GB", "Noto Serif SC", "Source Han Serif SC", "Microsoft YaHei", serif;
+      }
+      .report-page {
+        max-width: 1160px;
+        margin: 0 auto;
+        padding: 44px 24px 64px;
+      }
+      .report-shell {
+        display: grid;
+        gap: 18px;
+      }
+      .report-cover {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 220px;
+        gap: 24px;
+        padding: 32px 36px;
+        border-radius: 28px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.96)),
+          var(--surface);
+        border: 1px solid rgba(183, 197, 216, 0.92);
+        box-shadow: 0 18px 42px rgba(15, 23, 36, 0.08);
+      }
+      .report-kicker {
+        display: inline-block;
+        margin-bottom: 10px;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .report-cover h1 {
+        margin: 0 0 14px;
+        font-size: 42px;
+        letter-spacing: -0.05em;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      }
+      .report-cover p {
+        margin: 0 0 12px;
+        color: var(--muted);
+        line-height: 1.8;
+        font-size: 15px;
+      }
+      .report-meta {
+        display: grid;
+        gap: 12px;
+        align-content: start;
+      }
+      .report-meta-card {
+        padding: 16px 18px;
+        border-radius: 20px;
+        background: var(--accent-soft);
+        border: 1px solid rgba(183, 197, 216, 0.88);
+      }
+      .report-meta-card strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent);
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      }
+      .report-meta-card span {
+        color: var(--text);
+        line-height: 1.7;
+        font-size: 14px;
+      }
+      .report-summary {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .summary-card {
+        padding: 18px 20px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.96);
+        border: 1px solid rgba(214, 222, 233, 0.95);
+      }
+      .summary-card strong {
+        display: block;
+        margin-bottom: 10px;
+        color: var(--accent);
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      }
+      .summary-card p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.8;
+        font-size: 14px;
+      }
+      .report-sections {
+        display: grid;
+        gap: 16px;
+      }
+      .report-section {
+        display: grid;
+        grid-template-columns: 108px minmax(0, 1fr);
+        gap: 18px;
+        padding: 22px 24px;
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.98);
+        border: 1px solid rgba(214, 222, 233, 0.95);
+        box-shadow: 0 12px 28px rgba(15, 23, 36, 0.05);
+      }
+      .report-section-index {
+        padding-top: 4px;
+      }
+      .report-section-index span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 72px;
+        height: 72px;
+        border-radius: 20px;
+        background: linear-gradient(180deg, #eff4fb, #e4ecf8);
+        border: 1px solid rgba(183, 197, 216, 0.92);
+        color: var(--accent);
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      }
+      .report-section-body h3 {
+        margin: 0 0 8px;
+        font-size: 24px;
+        letter-spacing: -0.04em;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      }
+      .report-section-subtitle {
+        margin-bottom: 14px;
+        color: var(--accent);
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      }
+      .report-fivew-grid {
+        display: grid;
+        gap: 14px;
+      }
+      .report-fivew-row {
+        display: grid;
+        grid-template-columns: 180px minmax(0, 1fr);
+        gap: 14px;
+        padding: 14px 16px;
+        border-radius: 16px;
+        background: linear-gradient(180deg, #f7faff, #f0f5fb);
+        border: 1px solid rgba(183, 197, 216, 0.68);
+      }
+      .report-fivew-label {
+        color: var(--ink);
+        font-weight: 800;
+        line-height: 1.8;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      }
+      .report-fivew-value {
+        color: var(--muted);
+        line-height: 1.8;
+        white-space: pre-wrap;
+      }
+      .report-section-body p {
+        margin: 0 0 12px;
+        color: var(--muted);
+        line-height: 1.8;
+        white-space: pre-wrap;
+        font-size: 15px;
+      }
+      .report-section-body p:last-child {
+        margin-bottom: 0;
+      }
+      @media (max-width: 900px) {
+        .report-cover,
+        .report-summary,
+        .report-section {
+          grid-template-columns: 1fr;
+        }
+        .report-fivew-row {
+          grid-template-columns: 1fr;
+          gap: 6px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="report-page">
+      <div class="report-shell">
+        <header class="report-cover">
+          <div>
+            <span class="report-kicker">Failure Analysis Intelligent Agent Platform</span>
+            <h1>${safeTitle}</h1>
+            <p>芯科元析面向电子制造与电子研发体系，提供面向异常围堵、根因分析、纠正措施与验证收口的阶段化失效分析支持。</p>
+            <p>本报告由离线 fallback mockup 汇总生成，内容基于已确认的 D2-D8 阶段输入整理而成。</p>
+          </div>
+          <aside class="report-meta">
+            <div class="report-meta-card">
+              <strong>平台</strong>
+              <span>芯科元析</span>
+            </div>
+            <div class="report-meta-card">
+              <strong>报告类型</strong>
+              <span>8D 客诉关闭报告</span>
+            </div>
+            <div class="report-meta-card">
+              <strong>状态</strong>
+              <span>Mockup Final Render</span>
+            </div>
+          </aside>
+        </header>
+        <section class="report-summary">
+          <article class="summary-card">
+            <strong>覆盖范围</strong>
+            <p>报告覆盖 D1-D8，其中 D1 保持空白，D2-D8 来自离线 fallback 的逐阶段确认内容。</p>
+          </article>
+          <article class="summary-card">
+            <strong>应用场景</strong>
+            <p>适用于电子制造、电子研发、客诉关闭、批次失效分析与整改验证汇报场景。</p>
+          </article>
+          <article class="summary-card">
+            <strong>输出特征</strong>
+            <p>采用正式报告化排版，强化章节层级、长文阅读体验与对外汇报观感。</p>
+          </article>
+        </section>
+        <section class="report-sections">
+          ${sections}
+        </section>
+      </div>
+    </main>
+  </body>
+</html>`;
+      }
+
+      function createReportUrl(html) {
+        if (typeof Blob !== "undefined" && typeof URL !== "undefined" && typeof URL.createObjectURL === "function") {
+          return URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+        }
+        return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+      }
+
+      function sanitizeFilename(value) {
+        return String(value || "8D报告").replace(/[\\/:*?"<>|]+/g, "-").trim() || "8D报告";
+      }
+
+      function downloadBlob(blob, filename) {
+        if (typeof document.createElement !== "function") return;
+        const link = document.createElement("a");
+        const url = typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+          ? URL.createObjectURL(blob)
+          : "";
+        link.href = url;
+        link.download = filename;
+        if (typeof link.click === "function") {
+          link.click();
+        }
+      }
+
+      function getOrCreateReportUrl(project) {
+        const cacheKey = `${project.id}:${project.draftMarkdown || ""}`;
+        if (state.reportUrlCache.has(cacheKey)) return state.reportUrlCache.get(cacheKey);
+        const html = buildFullReportDocument(project.draftMarkdown || "", `${project.title || "8D 报告"} · 完整报告`);
+        const url = createReportUrl(html);
+        state.reportUrlCache.set(cacheKey, url);
+        return url;
+      }
+
+      function buildLocalStageDraft(project) {
+        const sections = [
+          ["D1", `团队成员：${LOCAL_D1_TEAM}`],
+          ...LOCAL_STAGE_SEQUENCE.map((stage) => [stage, project.localConfirmedStages?.[stage] || LOCAL_STAGE_CONTENT[stage]]),
+        ];
+        return {
+          sections: sections.map(([section, content]) => ({ section, content, status: section === "D1" ? "needs_validation" : "confirmed" })),
+          rendered_markdown: sections.map(([section, content]) => `## ${section}\n${content}`).join("\n\n"),
+          generation_meta: LOCAL_GENERATION_META,
+        };
+      }
+
+      async function exportWordReport() {
+        const project = getCurrentProject();
+        if (!project?.draftMarkdown) return;
+        const docxLib = globalThis.docx;
+        if (!docxLib) {
+          alert("Word 导出组件尚未加载完成，请稍后重试。");
+          return;
+        }
+        const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docxLib;
+        const sections = parseReportSections(project.draftMarkdown || "");
+        const children = [
+          new Paragraph({
+            text: `${project.title || "8D报告"} · 8D 报告`,
+            heading: HeadingLevel.TITLE,
+            alignment: AlignmentType.CENTER,
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: "芯科元析", bold: true }), new TextRun("  面向电子制造与电子研发体系的失效分析智能体平台")],
+            alignment: AlignmentType.CENTER,
+          }),
+        ];
+        sections.forEach((section) => {
+          children.push(
+            new Paragraph({
+              spacing: { before: 300, after: 120 },
+              children: [
+                new TextRun({ text: `${section.code} ${section.title}`, bold: true, size: 30 }),
+                ...(section.subtitle ? [new TextRun({ text: `  ${section.subtitle}`, italics: true, color: "335C9F", size: 22 })] : []),
+              ],
+            })
+          );
+          const paragraphs = String(section.content || "待补充")
+            .split(/\n\s*\n/)
+            .filter(Boolean);
+          paragraphs.forEach((paragraph) => {
+            children.push(
+              new Paragraph({
+                spacing: { after: 160 },
+                children: [new TextRun({ text: paragraph.replace(/\n/g, " "), size: 24 })],
+              })
+            );
+          });
+        });
+        const doc = new Document({ sections: [{ children }] });
+        const blob = await Packer.toBlob(doc);
+        downloadBlob(blob, `${sanitizeFilename(project.title)}-8D报告.docx`);
+      }
+
+      function exportPdfReport() {
+        const project = getCurrentProject();
+        if (!project?.draftMarkdown) return;
+        const reportUrl = getOrCreateReportUrl(project);
+        const reportWindow = typeof open === "function" ? open(reportUrl, "_blank", "noopener,noreferrer") : null;
+        if (reportWindow && typeof reportWindow.print === "function") {
+          setTimeout(() => reportWindow.print(), 400);
+        }
+      }
+
+      function buildD4DecisionActions() {
+        return [
+          { label: "继续分析", command: "继续分析", primary: true },
+          { label: "按 D4 收口", command: "先按 D4 收口" },
+          { label: "生成分析摘要", command: "生成分析摘要" },
+          { label: "生成 8D", command: "生成 8D" },
+        ];
+      }
+
+      function buildOutputActions(project) {
+        const actions = [
+          { label: "打开结果预览", handler: "preview", primary: true },
+          { label: "导出 Word", handler: "export-word" },
+          { label: "导出 PDF", handler: "export-pdf" },
+        ];
+        if (project?.closureMode === "d4_final" && project?.outputKind === "analysis_summary") {
+          actions.push({ label: "生成 8D", command: "生成 8D" });
+        }
+        return actions;
+      }
+
+      function buildAssistantMessagePayload(project, response) {
+        const stage = response.current_stage || project?.stage || "D2";
+        const phase = currentUserPhase(stage);
+
+        if (response.output_kind || project?.outputKind) {
+          if ((response.output_kind || project?.outputKind) === "analysis_summary") {
+            return {
+              messageType: "output_card",
+              content: "已按 D4 收口，并生成分析摘要。若后续需要正式客户交付稿，我也可以继续生成 D4 截止版 8D。",
+              actions: buildOutputActions(project),
+            };
+          }
+          return {
+            messageType: "output_card",
+            content: project?.closureMode === "d4_final"
+              ? "已生成 D4 截止版 8D。报告中会保留 D5-D8 标题，并明确标注当前不适用。"
+              : "已生成正式结果，可打开预览继续查看和导出。",
+            actions: buildOutputActions(project),
+          };
+        }
+
+        if (stage === "D4") {
+          const prefix = response.confirmed && response.confirmed_stage_content ? "已确认上一阶段。\n" : "";
+          return {
+            messageType: "decision_prompt",
+            content: `${prefix}当前阶段：${phase}\n${response.working_stage_content || LOCAL_STAGE_CONTENT.D4}\n\n当前已具备形成失效分析结论的基础。若继续推进到措施、验证和预防的收益有限，可以先按 D4 收口；若你确认需要继续做整改闭环，我再继续推进到 D5。`,
+            actions: buildD4DecisionActions(),
+          };
+        }
+
+        if (stage === "D2") {
+          const ingestedNote = response.ingested_context ? `\n\n本轮补充线索：${response.ingested_context}` : "";
+          return {
+            messageType: "fact_summary_card",
+            content: `当前阶段：${phase}\n${response.working_stage_content || LOCAL_STAGE_CONTENT.D2}${ingestedNote}`,
+            actions: [],
+          };
+        }
+
+        if (response.working_stage_content) {
+          const prefix = response.confirmed && response.confirmed_stage_content ? "已确认上一阶段。\n" : "";
+          return {
+            messageType: "stage_result_card",
+            content: `${prefix}当前阶段：${phase}\n${response.working_stage_content}`,
+            actions: [],
+          };
+        }
+
+        return {
+          messageType: "text",
+          content: `当前阶段：${phase}\n已更新当前案件状态。你可以继续补充信息。`,
+          actions: [],
+        };
+      }
+
+      function nextLocalStage(stage) {
+        const index = LOCAL_STAGE_SEQUENCE.indexOf(stage);
+        if (index === -1 || index === LOCAL_STAGE_SEQUENCE.length - 1) return "D8";
+        return LOCAL_STAGE_SEQUENCE[index + 1];
+      }
+
+      function buildAnalysisSummaryDraft(confirmedStages) {
+        const d2 = confirmedStages.D2 || LOCAL_STAGE_CONTENT.D2;
+        const d3 = confirmedStages.D3 || LOCAL_STAGE_CONTENT.D3;
+        const d4 = confirmedStages.D4 || LOCAL_STAGE_CONTENT.D4;
+        const rendered = [
+          "# 分析摘要",
+          "## 案件概览",
+          d2,
+          "## 当前处置与围堵",
+          d3,
+          "## 当前失效分析结论",
+          d4,
+          "## 收口建议",
+          "当前建议先按 D4 收口，保留后续措施、验证与预防动作作为条件性后续项，由负责人根据成本、收益和业务必要性决定是否继续。",
+        ].join("\n\n");
+        return {
+          sections: [
+            { section: "案件概览", content: d2, status: "confirmed" },
+            { section: "当前处置与围堵", content: d3, status: "confirmed" },
+            { section: "当前失效分析结论", content: d4, status: "confirmed" },
+            { section: "收口建议", content: "当前建议先按 D4 收口，保留后续措施、验证与预防动作作为条件性后续项。", status: "confirmed" },
+          ],
+          rendered_markdown: rendered,
+          generation_meta: LOCAL_GENERATION_META,
+        };
+      }
+
+      function buildD4ClosureEightDDraft(confirmedStages) {
+        const sections = [
+          ["D1", `团队成员：${LOCAL_D1_TEAM}`],
+          ["D2", confirmedStages.D2 || LOCAL_STAGE_CONTENT.D2],
+          ["D3", confirmedStages.D3 || LOCAL_STAGE_CONTENT.D3],
+          ["D4", confirmedStages.D4 || LOCAL_STAGE_CONTENT.D4],
+          ["D5", "本案止于 D4，当前未进入永久纠正措施阶段，后续章节不适用。"],
+          ["D6", "本案止于 D4，当前未进入实施与验证阶段，后续章节不适用。"],
+          ["D7", "本案止于 D4，当前未进入预防再发生阶段，后续章节不适用。"],
+          ["D8", "本案止于 D4，当前未进入团队表彰与正式结案确认阶段，后续章节不适用。"],
+        ];
+        return {
+          sections: sections.map(([section, content]) => ({ section, content, status: "confirmed" })),
+          rendered_markdown: sections.map(([section, content]) => `## ${section}\n${content}`).join("\n\n"),
+          generation_meta: LOCAL_GENERATION_META,
+        };
+      }
+
+      function mergeKnownFacts(existing, incoming) {
+        const merged = new Map();
+        (existing || []).forEach((item) => merged.set(item.field, item));
+        (incoming || []).forEach((item) => merged.set(item.field, item));
+        return Array.from(merged.values());
+      }
+
+      function extractLocalFacts(content) {
+        const knownFacts = [];
+        const lowered = content.toLowerCase();
+        const batchMatch = content.match(/(?:batch\s+|批次号?[:：]?\s*)([A-Za-z0-9_-]+)/i);
+        const dateMatch =
+          content.match(/(?:on|at)\s+([A-Z][a-z]+\s+\d{1,2})/i) ||
+          content.match(/\b(\d{4}[-/]\d{1,2}[-/]\d{1,2})\b/) ||
+          content.match(/(\d{1,2}月\d{1,2}日)/);
+        const impactMatch =
+          content.match(/impact(?:ing|ed)?\s+([^.,;]+)/i) ||
+          content.match(/影响(?:范围)?[:：]?\s*([^，。,；;]+)/);
+
+        if (content.trim()) knownFacts.push({ field: "problem_symptom", value: content });
+        if (batchMatch) knownFacts.push({ field: "batch", value: batchMatch[1] });
+        if (dateMatch) knownFacts.push({ field: "discovery_time", value: dateMatch[1] });
+        if (impactMatch) knownFacts.push({ field: "impact", value: impactMatch[1].trim() });
+        if (lowered.includes("customer") || content.includes("客户")) {
+          knownFacts.push({ field: "scenario", value: "customer complaint" });
+        }
+        return {
+          knownFacts,
+          riskFlags: lowered.includes("intermittent") ? ["间歇性问题需要补充复现与验证证据。"] : [],
+        };
+      }
+
+      function recomputeLocalFallbackState(knownFacts, riskFlags, forceAdvance) {
+        const factMap = Object.fromEntries((knownFacts || []).map((item) => [item.field, item.value]));
+        const missingFields = [];
+        if (!factMap.batch) missingFields.push({ field: "batch", reason: "缺少异常批次", priority: "high" });
+        if (!factMap.discovery_time) missingFields.push({ field: "discovery_time", reason: "缺少首次发现时间", priority: "high" });
+        if (!factMap.impact) missingFields.push({ field: "impact", reason: "缺少影响范围", priority: "high" });
+
+        const shouldGenerateDraft = forceAdvance || missingFields.length === 0;
+        const currentStage = shouldGenerateDraft ? "analysis" : "fact_completion";
+        const generationMeta = {
+          source: "fallback",
+          prompt_version: "draft-generator-v2",
+          domain_profile: "electronics_quality_engineer_v1",
+          review_mode: "mvp_pre_expert_review",
+        };
+        return {
+          current_stage: currentStage,
+          known_facts: knownFacts,
+          missing_fields: missingFields,
+          assumptions: shouldGenerateDraft ? [{ statement: "根因仍需进一步验证", needs_validation: true }] : [],
+          risk_flags: riskFlags || [],
+          next_question: shouldGenerateDraft
+            ? null
+            : buildLocalSuggestion(missingFields[0]?.field, factMap),
+          should_generate_draft: shouldGenerateDraft,
+          force_advanced: Boolean(forceAdvance),
+          generation_meta: generationMeta,
+          guided_thinking: currentStage === "fact_completion"
+            ? {
+                focus_area: "D2",
+                guidance_text: "先把问题现象、影响范围和发现条件拆清楚，再进入原因判断。",
+                suggested_questions: [
+                  "实际观察到的异常现象是什么？",
+                  "影响了哪些客户、产品、批次或数量范围？",
+                ],
+              }
+            : {
+                focus_area: "D4",
+                guidance_text: "先列候选原因和证据，再决定下一步验证什么。",
+                suggested_questions: [
+                  "每个候选原因目前有什么证据支持？",
+                  "哪些地方还只是猜测，没有验证？",
+                ],
+              },
+          draft: shouldGenerateDraft
+            ? buildLocalDraft(factMap.problem_symptom || "待补充异常现象", knownFacts, generationMeta)
+            : null,
+        };
+      }
+
+      function buildLocalFallbackResponse(project, content, forceAdvance) {
+        if (FORCE_LOCAL_FALLBACK) {
+          const currentStage = project?.stage || "D2";
+          const confirmedStages = { ...(project?.localConfirmedStages || {}) };
+          const impactedStages = { ...(project?.localImpactedStages || {}) };
+          if (currentStage === "D4") {
+            if (isCommandMatch(content, CONTINUE_ANALYSIS_COMMANDS)) {
+              return buildLocalD4DecisionResponse(project, "continue");
+            }
+            if (isCommandMatch(content, CLOSE_AT_D4_COMMANDS) || isCommandMatch(content, GENERATE_SUMMARY_COMMANDS)) {
+              return buildLocalD4DecisionResponse(project, "summary");
+            }
+            if (isCommandMatch(content, GENERATE_8D_COMMANDS)) {
+              return buildLocalD4DecisionResponse(project, "eightd");
+            }
+          }
+          if (forceAdvance) {
+            const pendingImpacted = Object.keys(impactedStages);
+            if (pendingImpacted.length) {
+              return {
+                current_stage: currentStage,
+                confirmed: false,
+                working_stage_content: LOCAL_STAGE_CONTENT[currentStage],
+                confirmed_stage_content: confirmedStages[currentStage] || null,
+                known_facts: [],
+                missing_fields: [],
+                assumptions: [],
+                risk_flags: [],
+                next_question: `以下阶段需复审后才能继续确认：${pendingImpacted.join("、")}。`,
+                should_generate_draft: false,
+                force_advanced: false,
+                generation_meta: LOCAL_GENERATION_META,
+                guided_thinking: null,
+                draft: null,
+                d1_status: "missing",
+                warnings: [`以下阶段需复审：${pendingImpacted.join("、")}。`],
+                local_confirmed_stages: confirmedStages,
+                local_impacted_stages: impactedStages,
+                closure_mode: project?.closureMode || null,
+                output_kind: project?.outputKind || null,
+                ingested_context: content || "",
+              };
+            }
+            if (currentStage === "D4") {
+              return {
+                current_stage: "D4",
+                confirmed: false,
+                working_stage_content: project?.latestState?.working_stage_content || LOCAL_STAGE_CONTENT.D4,
+                confirmed_stage_content: confirmedStages.D4 || null,
+                known_facts: [],
+                missing_fields: [],
+                assumptions: [],
+                risk_flags: [],
+                next_question: "当前已形成 D4 分析结论。请先决定是否继续推进到 D5，或先按 D4 收口。",
+                should_generate_draft: false,
+                force_advanced: false,
+                generation_meta: LOCAL_GENERATION_META,
+                guided_thinking: null,
+                draft: null,
+                d1_status: "missing",
+                local_confirmed_stages: confirmedStages,
+                local_impacted_stages: impactedStages,
+                closure_mode: null,
+                output_kind: null,
+                ingested_context: content || "",
+              };
+            }
+            confirmedStages[currentStage] = project?.latestState?.working_stage_content || LOCAL_STAGE_CONTENT[currentStage];
+            const finalStage = currentStage === "D8";
+            const nextStage = finalStage ? "D8" : nextLocalStage(currentStage);
+            const draft = finalStage ? buildLocalStageDraft({ localConfirmedStages: confirmedStages }) : null;
+            delete impactedStages[currentStage];
+            return {
+              current_stage: nextStage,
+              confirmed: true,
+              working_stage_content: finalStage ? confirmedStages.D8 : LOCAL_STAGE_CONTENT[nextStage],
+              confirmed_stage_content: confirmedStages[currentStage],
+              known_facts: [],
+              missing_fields: [],
+              assumptions: [],
+              risk_flags: [],
+              next_question: null,
+              should_generate_draft: finalStage,
+              force_advanced: false,
+              generation_meta: LOCAL_GENERATION_META,
+              guided_thinking: null,
+              draft,
+              d1_status: "missing",
+              local_confirmed_stages: confirmedStages,
+              local_impacted_stages: impactedStages,
+              closure_mode: finalStage ? "d8_final" : null,
+              output_kind: finalStage ? "8d_report" : null,
+              ingested_context: content || "",
+            };
+          }
+          return {
+            current_stage: currentStage,
+            confirmed: false,
+            working_stage_content: LOCAL_STAGE_CONTENT[currentStage],
+            confirmed_stage_content: null,
+            known_facts: [],
+            missing_fields: [],
+            assumptions: [],
+            risk_flags: [],
+            next_question: null,
+            should_generate_draft: false,
+            force_advanced: false,
+            generation_meta: LOCAL_GENERATION_META,
+            guided_thinking: null,
+            draft: null,
+            d1_status: "missing",
+            local_confirmed_stages: confirmedStages,
+            local_impacted_stages: impactedStages,
+            closure_mode: project?.closureMode || null,
+            output_kind: project?.outputKind || null,
+            ingested_context: content || "",
+          };
+        }
+        const normalizedContent = forceAdvance && isAdvanceCommand(content) ? "" : content;
+        const extracted = extractLocalFacts(normalizedContent);
+        const existingKnownFacts = project?.latestState?.known_facts || [];
+        const existingRiskFlags = project?.latestState?.risk_flags || [];
+        const mergedKnownFacts = mergeKnownFacts(existingKnownFacts, extracted.knownFacts);
+        const mergedRiskFlags = Array.from(new Set([...(existingRiskFlags || []), ...(extracted.riskFlags || [])]));
+        return recomputeLocalFallbackState(mergedKnownFacts, mergedRiskFlags, forceAdvance);
+      }
+
+      function buildLocalSuggestion(field, factMap) {
+        if (field === "batch") {
+          return "目前已收到异常现象。如果方便，可以继续补充批次信息；也可以继续描述现场表现、临时措施或验证观察。";
+        }
+        if (field === "discovery_time") {
+          return "目前已收到异常现象和批次。如果方便，可以继续补充首次发现时间；也可以继续描述异常经过或现场判断。";
+        }
+        if (field === "impact") {
+          return "目前已收到异常现象、批次和时间。如果方便，可以继续补充影响范围；也可以继续补充客户反馈、库存影响或验证结果。";
+        }
+        return `目前事实已在累计中。如果方便，可以继续补充${field || "相关"}信息，或继续描述你观察到的现象和判断。`;
+      }
+
+      function buildLocalDraft(content, knownFacts, generationMeta) {
+        const factMap = Object.fromEntries(knownFacts.map((item) => [item.field, item.value]));
+        const sections = [
+          ["D1", "当前负责人待补充，建议补充质量、测试、工艺相关角色。"],
+          ["D2", `异常现象：${factMap.problem_symptom || content}。发现时间：${factMap.discovery_time || "待确认"}。批次：${factMap.batch || "待确认"}。影响范围：${factMap.impact || "待确认"}。`],
+          ["D3", "建议先明确隔离、暂停出货、加严筛选等临时遏制动作。"],
+          ["D4", "当前根因分析需继续基于现象、候选原因和验证证据推进。"],
+          ["D5", "永久纠正措施需基于已确认根因制定，当前建议保留待确认。"],
+          ["D6", "建议补充验证方法、样本范围、时间窗口和通过标准。"],
+          ["D7", "建议考虑横向排查、流程更新、检查项优化及培训预防。"],
+          ["D8", "当前为初步 8D 草稿，待验证完成后形成正式总结。"],
+        ];
+        return {
+          sections: sections.map(([section, contentText]) => ({ section, content: contentText, status: "needs_validation" })),
+          rendered_markdown: sections.map(([section, contentText]) => `## ${section}\n${contentText}`).join("\n\n"),
+          generation_meta: generationMeta,
+        };
+      }
+
+      function buildLocalD4DecisionResponse(project, decision) {
+        const confirmedStages = { ...(project?.localConfirmedStages || {}) };
+        const impactedStages = { ...(project?.localImpactedStages || {}) };
+        confirmedStages.D4 = project?.latestState?.working_stage_content || LOCAL_STAGE_CONTENT.D4;
+        delete impactedStages.D4;
+
+        if (decision === "continue") {
+          return {
+            current_stage: "D5",
+            confirmed: true,
+            working_stage_content: LOCAL_STAGE_CONTENT.D5,
+            confirmed_stage_content: confirmedStages.D4,
+            known_facts: [],
+            missing_fields: [],
+            assumptions: [],
+            risk_flags: [],
+            next_question: null,
+            should_generate_draft: false,
+            force_advanced: false,
+            generation_meta: LOCAL_GENERATION_META,
+            guided_thinking: null,
+            draft: null,
+            d1_status: "missing",
+          local_confirmed_stages: confirmedStages,
+          local_impacted_stages: impactedStages,
+          closure_mode: null,
+          output_kind: null,
+          ingested_context: "",
+        };
+        }
+
+        const draft = decision === "eightd"
+          ? buildD4ClosureEightDDraft(confirmedStages)
+          : buildAnalysisSummaryDraft(confirmedStages);
+
+        return {
+          current_stage: "D4",
+          confirmed: true,
+          working_stage_content: confirmedStages.D4,
+          confirmed_stage_content: confirmedStages.D4,
+          known_facts: [],
+          missing_fields: [],
+          assumptions: [],
+          risk_flags: [],
+          next_question: null,
+          should_generate_draft: true,
+          force_advanced: false,
+          generation_meta: LOCAL_GENERATION_META,
+          guided_thinking: null,
+          draft,
+          d1_status: "missing",
+          local_confirmed_stages: confirmedStages,
+          local_impacted_stages: impactedStages,
+          closure_mode: "d4_final",
+          output_kind: decision === "eightd" ? "8d_report" : "analysis_summary",
+          ingested_context: "",
+        };
+      }
+
+      async function ensureBackendCase(project) {
+        if (FORCE_LOCAL_FALLBACK) throw new Error("local fallback forced");
+        if (project.backendCaseId) return project.backendCaseId;
+        const response = await fetch(apiUrl("/cases"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: project.title, mode: "normal" }),
+        });
+        if (!response.ok) throw new Error("backend case create failed");
+        const payload = await response.json();
+        project.backendCaseId = payload.id;
+        state.backendConnected = true;
+        return project.backendCaseId;
+      }
+
+      async function sendToBackend(project, content, forceAdvance, confirmCurrent) {
+        const caseId = await ensureBackendCase(project);
+        const currentStage = project.stage || "D2";
+        const endpoint = confirmCurrent
+          ? apiUrl(`/cases/${caseId}/stages/${currentStage}/confirm`)
+          : apiUrl(`/cases/${caseId}/evidence`);
+        const requestPayload = confirmCurrent
+          ? { content: content || undefined }
+          : { content, context_stage: currentStage };
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestPayload),
+        });
+        if (!response.ok) throw new Error("backend message failed");
+        state.backendConnected = true;
+        const responsePayload = await response.json();
+        if (!responsePayload.draft_preview) {
+          const preview = await fetchDraftPreview(caseId);
+          responsePayload.draft_preview = preview;
+        }
+        return responsePayload;
+      }
+
+      async function fetchDraftPreview(caseId) {
+        const response = await fetch(apiUrl(`/cases/${caseId}/draft-preview`), {
+          method: "GET",
+        });
+        if (!response.ok) throw new Error("backend draft preview failed");
+        return response.json();
+      }
+
+      async function sendStageActionToBackend(project, stage, action) {
+        const caseId = await ensureBackendCase(project);
+        const response = await fetch(apiUrl(`/cases/${caseId}/stages/${stage}/${action}`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!response.ok) throw new Error(`backend stage ${action} failed`);
+        const payload = await response.json();
+        if (!payload.draft_preview) {
+          const preview = await fetchDraftPreview(caseId);
+          payload.draft_preview = preview;
+        }
+        state.backendConnected = true;
+        return payload;
+      }
+
+      function buildLocalStageActionResponse(project, stage, action) {
+        const confirmedStages = { ...(project?.localConfirmedStages || {}) };
+        const impactedStages = { ...(project?.localImpactedStages || {}) };
+        const stageIndex = LOCAL_STAGE_SEQUENCE.indexOf(stage);
+        const warnings = [];
+
+        if (action === "unlock") {
+          delete confirmedStages[stage];
+          if (stageIndex !== -1) {
+            for (const laterStage of LOCAL_STAGE_SEQUENCE.slice(stageIndex + 1)) {
+              if (confirmedStages[laterStage]) {
+                impactedStages[laterStage] = "上游阶段已解锁修改，后续阶段需复审。";
+              }
+            }
+          }
+          warnings.push(`已解锁 ${stage}，请更新后重新确认。`);
+          return {
+            current_stage: stage,
+            confirmed: false,
+            working_stage_content: LOCAL_STAGE_CONTENT[stage],
+            confirmed_stage_content: null,
+            known_facts: project?.latestState?.known_facts || [],
+            missing_fields: project?.latestState?.missing_fields || [],
+            assumptions: project?.latestState?.assumptions || [],
+            risk_flags: project?.latestState?.risk_flags || [],
+            next_question: warnings[0],
+            should_generate_draft: false,
+            force_advanced: false,
+            generation_meta: LOCAL_GENERATION_META,
+            guided_thinking: null,
+            draft: null,
+            d1_status: "missing",
+            warnings,
+            local_confirmed_stages: confirmedStages,
+            local_impacted_stages: impactedStages,
+          };
+        }
+
+        if (action === "revalidate") {
+          delete confirmedStages[stage];
+          delete impactedStages[stage];
+          warnings.push(`已将 ${stage} 置为复审状态，请更新后重新确认。`);
+          return {
+            current_stage: stage,
+            confirmed: false,
+            working_stage_content: LOCAL_STAGE_CONTENT[stage],
+            confirmed_stage_content: null,
+            known_facts: project?.latestState?.known_facts || [],
+            missing_fields: project?.latestState?.missing_fields || [],
+            assumptions: project?.latestState?.assumptions || [],
+            risk_flags: project?.latestState?.risk_flags || [],
+            next_question: warnings[0],
+            should_generate_draft: false,
+            force_advanced: false,
+            generation_meta: LOCAL_GENERATION_META,
+            guided_thinking: null,
+            draft: null,
+            d1_status: "missing",
+            warnings,
+            local_confirmed_stages: confirmedStages,
+            local_impacted_stages: impactedStages,
+          };
+        }
+
+        return buildLocalFallbackResponse(project, "", false);
+      }
+
+      function normalizeResponse(payload) {
+        const stageRecords = payload.stages || [];
+        const currentStageRecord = stageRecords.find((item) => item.stage === payload.current_stage) || null;
+        return {
+          current_stage: payload.current_stage || payload.stage || "D2",
+          confirmed: Boolean(payload.confirmed) || Boolean(currentStageRecord?.locked),
+          working_stage_content: payload.working_stage_content || currentStageRecord?.working_content || null,
+          confirmed_stage_content: payload.confirmed_stage_content || currentStageRecord?.confirmed_content || null,
+          known_facts: payload.known_facts || [],
+          missing_fields: payload.missing_fields || [],
+          assumptions: payload.assumptions || [],
+          risk_flags: payload.risk_flags || [],
+          next_question: payload.next_question || payload.warnings?.[0] || null,
+          guided_thinking: payload.guided_thinking || null,
+          should_generate_draft: Boolean(payload.should_generate_draft) || Boolean(payload.draft_preview?.draft),
+          force_advanced: Boolean(payload.force_advanced),
+          generation_meta: payload.generation_meta || payload.draft?.generation_meta || payload.draft_preview?.draft?.generation_meta || null,
+          draft: payload.draft || payload.draft_preview?.draft || null,
+          d1_status: payload.d1_status || "missing",
+          warnings: payload.warnings || [],
+          stages: stageRecords,
+          local_confirmed_stages: payload.local_confirmed_stages || null,
+          local_impacted_stages: payload.local_impacted_stages || null,
+          closure_mode: payload.closure_mode || null,
+          output_kind: payload.output_kind || null,
+          ingested_context: payload.ingested_context || "",
+        };
+      }
+
+      async function processTurn(rawContent, forceAdvance, confirmCurrent = false) {
+        const project = getCurrentProject();
+        const content = normalizeInputText(rawContent);
+        if (!project || (!content && !state.pendingAttachments.length)) return;
+
+        const attachments = state.pendingAttachments.map((item) => ({
+          name: item.name,
+          preview: item.preview,
+          kind: item.kind,
+          extractedText: item.extractedText,
+        }));
+        const extractedAttachmentText = state.pendingAttachments
+          .map((item) => item.extractedText)
+          .filter(Boolean)
+          .join(" ");
+        const extractionWarnings = state.pendingAttachments
+          .map((item) => item.extractionError)
+          .filter(Boolean);
+        const composedContent = normalizeInputText([content, extractedAttachmentText].filter(Boolean).join(" "));
+        const userContent = content || (attachments.length ? `[上传了${attachments.length}个附件]` : "");
+        project.messages.push({ id: makeId(), role: "user", content: userContent, attachments, messageType: attachments.length ? "attachment_received" : "text" });
+        project.updatedAt = new Date().toISOString();
+        setProjectTitleFromContent(project, content || "文件输入");
+
+        let rawResponse;
+        try {
+          rawResponse = await sendToBackend(project, composedContent || "用户上传了文件并补充了说明。", forceAdvance, confirmCurrent);
+        } catch (error) {
+          state.backendConnected = false;
+          rawResponse = buildLocalFallbackResponse(project, composedContent || "用户上传了文件并补充了说明。", forceAdvance);
+        }
+
+        const response = normalizeResponse(rawResponse);
+        project.stage = response.current_stage;
+        project.latestState = response;
+        project.closureMode = response.closure_mode || null;
+        project.outputKind = response.output_kind || null;
+        if (response.local_confirmed_stages) {
+          project.localConfirmedStages = response.local_confirmed_stages;
+        }
+        if (response.local_impacted_stages) {
+          project.localImpactedStages = response.local_impacted_stages;
+        }
+        if (response.draft?.rendered_markdown) {
+          project.draftMarkdown = response.draft.rendered_markdown;
+        }
+
+        const assistantPayload = buildAssistantMessagePayload(project, response);
+        const assistantContent = extractionWarnings.length
+          ? `${assistantPayload.content}\n\n附件提醒：${extractionWarnings.join(" ")}`
+          : assistantPayload.content;
+        pushAssistantMessage(project, assistantContent, response, assistantPayload);
+
+        state.pendingAttachments = [];
+        els.composerInput.value = "";
+        els.imageInput.value = "";
+        els.connectionBadge.textContent = FORCE_LOCAL_FALLBACK
+          ? "后端已断开，使用本地 fallback mockup"
+          : state.backendConnected ? "后端已连接，实时同步中" : "后端未连接，使用本地推理";
+        saveState();
+        render();
+      }
+
+      async function handleSend(event) {
+        event.preventDefault();
+        const content = normalizeInputText(els.composerInput.value);
+        await processTurn(content, isAdvanceCommand(content), false);
+      }
+
+      async function handleAdvance() {
+        const project = getCurrentProject();
+        if ((project?.stage === "D8" || project?.closureMode === "d4_final") && project?.draftMarkdown) {
+          render();
+          return;
+        }
+        const content = normalizeInputText(els.composerInput.value) || "确认进入下一阶段";
+        if (FORCE_LOCAL_FALLBACK) {
+          await processTurn(content, true, true);
+          return;
+        }
+        if (project?.stage?.startsWith("D")) {
+          await processTurn(content, false, true);
+          return;
+        }
+        await processTurn("进入下一步", true, false);
+      }
+
+      async function handleStageAction(stage, action) {
+        const project = getCurrentProject();
+        if (!project || !stage) return;
+
+        let rawResponse;
+        try {
+          rawResponse = FORCE_LOCAL_FALLBACK
+            ? buildLocalStageActionResponse(project, stage, action)
+            : await sendStageActionToBackend(project, stage, action);
+        } catch (error) {
+          state.backendConnected = false;
+          rawResponse = buildLocalStageActionResponse(project, stage, action);
+        }
+
+        const response = normalizeResponse(rawResponse);
+        project.stage = response.current_stage;
+        project.latestState = response;
+        project.closureMode = response.closure_mode || null;
+        project.outputKind = response.output_kind || null;
+        if (response.local_confirmed_stages) {
+          project.localConfirmedStages = response.local_confirmed_stages;
+        }
+        if (response.local_impacted_stages) {
+          project.localImpactedStages = response.local_impacted_stages;
+        }
+        if (response.draft?.rendered_markdown) {
+          project.draftMarkdown = response.draft.rendered_markdown;
+        } else {
+          project.draftMarkdown = "";
+        }
+
+        const actionText = action === "unlock" ? `已解锁 ${stage}，请修改并重新确认。` : `已将 ${stage} 置为复审状态。`;
+        const followup = response.next_question ? `\n${response.next_question}` : "";
+        pushAssistantMessage(project, `${actionText}\n当前阶段：${currentUserPhase(project.stage)}${followup}`, response);
+
+        saveState();
+        render();
+      }
+
+      async function handleFileSelect(event) {
+        const files = Array.from(event.target.files || []);
+        const attachments = await Promise.all(files.map((file) => normalizeAttachment(file)));
+        state.pendingAttachments.push(...attachments);
+        renderUploads();
+      }
+
+      function togglePreview(forceOpen) {
+        state.previewOpen = typeof forceOpen === "boolean" ? forceOpen : !state.previewOpen;
+        if (state.previewOpen) {
+          state.stageManagerOpen = false;
+        }
+        renderPreview(getCurrentProject());
+        renderStageManager(getCurrentProject());
+      }
+
+      function toggleStageManager(forceOpen) {
+        state.stageManagerOpen = typeof forceOpen === "boolean" ? forceOpen : !state.stageManagerOpen;
+        if (state.stageManagerOpen) {
+          state.previewOpen = false;
+        }
+        renderStageManager(getCurrentProject());
+        renderPreview(getCurrentProject());
+      }
+
+      function toggleSidebar() {
+        state.sidebarCollapsed = !state.sidebarCollapsed;
+        saveSidebarState();
+        render();
+      }
+
+      els.newProjectButton.addEventListener("click", () => createProject());
+      els.sidebarToggle.addEventListener("click", toggleSidebar);
+      els.composerForm.addEventListener("submit", handleSend);
+      els.imageInput.addEventListener("change", handleFileSelect);
+      els.previewToggle.addEventListener("click", () => togglePreview(true));
+      els.stageManagerToggle.addEventListener("click", () => toggleStageManager(true));
+      els.advanceButton.addEventListener("click", handleAdvance);
+      els.closePreview.addEventListener("click", () => togglePreview(false));
+      els.closeStageManager.addEventListener("click", () => toggleStageManager(false));
+      els.exportWordButton.addEventListener("click", exportWordReport);
+      els.exportPdfButton.addEventListener("click", exportPdfReport);
+
+      loadState();
+      render();
+    </script>
+  </body>
+</html>
