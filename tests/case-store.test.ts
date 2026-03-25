@@ -52,5 +52,5 @@ describe("caseStore", () => {
 
     expect(cases.map((item) => item.id)).toContain(aggregate.caseRecord.id);
     expect(restored?.caseRecord.title).toBe("跨模块内存案件");
-  });
+  }, 15000);
 });

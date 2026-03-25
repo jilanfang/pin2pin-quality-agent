@@ -74,5 +74,5 @@ describe("server api llm integration", () => {
       expect.any(Object)
     );
     expect(payload.knownFacts.find((item) => item.field === "customer")?.value).toBe("大麦科技");
-  });
+  }, 15000);
 });

@@ -3,6 +3,12 @@ import type { EvidenceExtraction, EvidencePayload, FactItem } from "@/lib/domain
 type SupportedProvider = "qwen" | "deepseek" | "ark";
 type LlmCapability = "extract" | "copilot" | "report";
 type CapabilityRouteSlot = "primary" | "fallback";
+type LlmFailureCode =
+  | "provider_unconfigured"
+  | "request_failed"
+  | "non_json_response"
+  | "fallback_exhausted"
+  | "recovered_via_fallback";
 
 const DEFAULT_EXTRACT_MODEL = "qwen3.5-122b-a10b";
 const DEFAULT_ANALYSIS_MODEL = "deepseek-v3.2-exp";
@@ -22,6 +28,23 @@ type OpenAiCompatibleResponse = {
     };
   }>;
 };
+
+type ProviderRoute = {
+  provider: SupportedProvider;
+  slot: CapabilityRouteSlot;
+  baseUrl: string;
+  apiKey?: string;
+  model: string;
+};
+
+class LlmRouteError extends Error {
+  code: LlmFailureCode;
+
+  constructor(code: LlmFailureCode, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
 
 function isEnabled() {
   return process.env.AI_QUALITY_LLM_ENABLED === "true";
@@ -135,7 +158,7 @@ function getProviderConfig(
   };
 }
 
-function getProviderConfigs(capability: LlmCapability) {
+function getProviderRoutes(capability: LlmCapability): ProviderRoute[] {
   const primaryProvider = getCapabilityProvider(capability, "primary");
   if (!primaryProvider) return [];
 
@@ -155,18 +178,7 @@ function getProviderConfigs(capability: LlmCapability) {
       provider,
       slot,
       ...getProviderConfig(capability, provider, slot),
-    }))
-    .filter(
-      (
-        config
-      ): config is {
-        provider: SupportedProvider;
-        slot: CapabilityRouteSlot;
-        baseUrl: string;
-        apiKey: string;
-        model: string;
-      } => typeof config.apiKey === "string" && config.apiKey.length > 0
-    );
+    }));
 }
 
 function buildExtractionPrompt(payload: EvidencePayload) {
@@ -264,11 +276,16 @@ function sanitizeRiskFlags(input: unknown) {
 function parseExtraction(content: string): EvidenceExtraction | null {
   const trimmed = content.trim();
   if (!trimmed) return null;
-  const parsed = JSON.parse(trimmed) as {
-    knownFacts?: unknown;
-    assumptions?: unknown;
-    riskFlags?: unknown;
-  };
+  let parsed;
+  try {
+    parsed = JSON.parse(trimmed) as {
+      knownFacts?: unknown;
+      assumptions?: unknown;
+      riskFlags?: unknown;
+    };
+  } catch {
+    throw new LlmRouteError("non_json_response", "assistant content is not valid JSON");
+  }
 
   return {
     knownFacts: sanitizeFacts(parsed.knownFacts),
@@ -283,26 +300,61 @@ async function callOpenAiCompatible(
   model: string,
   messages: ChatMessage[]
 ) {
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-      messages,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`LLM request failed with status ${response.status}`);
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+        messages,
+      }),
+    });
+  } catch (error) {
+    throw new LlmRouteError(
+      "request_failed",
+      error instanceof Error ? error.message : "fetch failed"
+    );
   }
 
-  const payload = (await response.json()) as OpenAiCompatibleResponse;
+  if (!response.ok) {
+    throw new LlmRouteError("request_failed", `status ${response.status}`);
+  }
+
+  let payload: OpenAiCompatibleResponse;
+  try {
+    payload = (await response.json()) as OpenAiCompatibleResponse;
+  } catch {
+    throw new LlmRouteError("non_json_response", "provider payload is not valid JSON");
+  }
   return payload.choices?.[0]?.message?.content?.trim() ?? "";
+}
+
+function warnRoute(
+  capability: LlmCapability,
+  route: Pick<ProviderRoute, "slot" | "provider">,
+  code: Exclude<LlmFailureCode, "fallback_exhausted">,
+  detail?: string
+) {
+  const suffix = detail ? `: ${detail}` : "";
+  console.warn(`[llm][${capability}][${route.slot}][${route.provider}] ${code}${suffix}`);
+}
+
+function errorCapability(capability: LlmCapability, code: "fallback_exhausted", detail?: string) {
+  const suffix = detail ? `: ${detail}` : "";
+  console.error(`[llm][${capability}] ${code}${suffix}`);
+}
+
+function toRouteFailureCode(error: unknown): Exclude<LlmFailureCode, "fallback_exhausted"> {
+  if (error instanceof LlmRouteError && error.code !== "fallback_exhausted") {
+    return error.code;
+  }
+  return "request_failed";
 }
 
 export async function extractEvidenceWithLlm(
@@ -310,23 +362,46 @@ export async function extractEvidenceWithLlm(
 ): Promise<EvidenceExtraction | null> {
   if (!isEnabled()) return null;
 
-  const configs = getProviderConfigs("extract");
-  if (configs.length === 0) return null;
+  const routes = getProviderRoutes("extract");
+  if (routes.length === 0) return null;
 
-  for (const config of configs) {
+  const failures: string[] = [];
+
+  for (const route of routes) {
+    if (!route.apiKey) {
+      warnRoute("extract", route, "provider_unconfigured", "missing api key");
+      failures.push(`${route.slot}/${route.provider}:provider_unconfigured`);
+      continue;
+    }
+
     try {
       const content = await callOpenAiCompatible(
-        config.baseUrl,
-        config.apiKey,
-        config.model,
+        route.baseUrl,
+        route.apiKey,
+        route.model,
         buildExtractionPrompt(payload)
       );
       const extraction = parseExtraction(content);
-      if (extraction) return extraction;
-    } catch {
+      if (!extraction) {
+        warnRoute("extract", route, "non_json_response", "empty extraction content");
+        failures.push(`${route.slot}/${route.provider}:non_json_response`);
+        continue;
+      }
+      if (route.slot === "fallback") {
+        warnRoute("extract", route, "recovered_via_fallback");
+      }
+      return extraction;
+    } catch (error) {
+      const code = toRouteFailureCode(error);
+      const detail = error instanceof Error ? error.message : "unexpected llm error";
+      warnRoute("extract", route, code, detail);
+      failures.push(`${route.slot}/${route.provider}:${code}`);
       continue;
     }
   }
 
+  if (failures.length) {
+    errorCapability("extract", "fallback_exhausted", failures.join(" | "));
+  }
   return null;
 }

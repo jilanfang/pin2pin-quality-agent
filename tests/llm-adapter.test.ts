@@ -491,4 +491,124 @@ describe("llm adapter", () => {
     );
     expect(result?.knownFacts.find((item) => item.field === "model")?.value).toBe("MCU-800");
   });
+
+  it("logs provider failure and fallback success when the primary provider request fails", async () => {
+    process.env.AI_QUALITY_LLM_ENABLED = "true";
+    process.env.AI_QUALITY_LLM_PROVIDER = "qwen";
+    process.env.AI_QUALITY_LLM_BASE_URL = "https://api.vectorengine.ai/v1";
+    process.env.AI_QUALITY_LLM_API_KEY = "generic-key";
+    process.env.AI_QUALITY_ARK_API_KEY = "ark-key";
+    process.env.AI_QUALITY_ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/coding/v3";
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("upstream error", { status: 500 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    knownFacts: [{ field: "customer", value: "大麦科技", confidence: 0.96 }],
+                    assumptions: [],
+                    riskFlags: [],
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200 }
+        )
+      );
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { extractEvidenceWithLlm } = await import("@/lib/server/llm");
+    const result = await extractEvidenceWithLlm({
+      content: "客户大麦科技反馈 MCU-800 产线停线。",
+      contextStage: "D2",
+    });
+
+    expect(result?.knownFacts.find((item) => item.field === "customer")?.value).toBe("大麦科技");
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[llm][extract][primary][qwen] request_failed")
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[llm][extract][fallback][ark] recovered_via_fallback")
+    );
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it("logs provider_unconfigured and fallback_exhausted when no configured route can run", async () => {
+    process.env.AI_QUALITY_LLM_ENABLED = "true";
+    process.env.AI_QUALITY_LLM_PROVIDER = "ark";
+    process.env.AI_QUALITY_LLM_EXTRACT_FALLBACK_PROVIDER = "qwen";
+
+    const fetchMock = vi.fn();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { extractEvidenceWithLlm } = await import("@/lib/server/llm");
+    const result = await extractEvidenceWithLlm({
+      content: "客户大麦科技反馈 MCU-800 产线停线。",
+      contextStage: "D2",
+    });
+
+    expect(result).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[llm][extract][primary][ark] provider_unconfigured")
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[llm][extract][fallback][qwen] provider_unconfigured")
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[llm][extract] fallback_exhausted")
+    );
+  });
+
+  it("logs non_json_response when the provider returns invalid extraction content", async () => {
+    process.env.AI_QUALITY_LLM_ENABLED = "true";
+    process.env.AI_QUALITY_LLM_PROVIDER = "qwen";
+    process.env.AI_QUALITY_LLM_API_KEY = "generic-key";
+    process.env.AI_QUALITY_LLM_BASE_URL = "https://api.vectorengine.ai/v1";
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: "not-json",
+              },
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    );
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { extractEvidenceWithLlm } = await import("@/lib/server/llm");
+    const result = await extractEvidenceWithLlm({
+      content: "客户大麦科技反馈 MCU-800 产线停线。",
+      contextStage: "D2",
+    });
+
+    expect(result).toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[llm][extract][primary][qwen] non_json_response")
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[llm][extract] fallback_exhausted")
+    );
+  });
 });
