@@ -15,6 +15,7 @@
 
 - 当前 backlog 只看 [MVP Hardening Checklist](./mvp-hardening-checklist.md)
 - mockup / 主线差异只看 [Mockup Migration Ledger](./index-html-to-nextjs-migration-ledger.md)
+- 部署、环境变量和运行边界只看 [Deployment and Demo](./deployment-and-demo.md)
 - 不要再为同一批待办额外新建任务文档
 
 1. [Current Handoff](./current-handoff.md)
@@ -29,10 +30,12 @@
    当前最适合直接执行的工程清单。回答“这套架构对 MVP 还行不行”“现在必须补什么”“哪些先不要做”。
 4. [Mockup Migration Ledger](./index-html-to-nextjs-migration-ledger.md)
    当前 `index.html -> Next.js` 差异账本。回答“mockup 里还有什么没回灌”“哪些该迁、哪些不该迁”。
-5. [`../DESIGN.md`](/Users/jilanfang/ai-quality/DESIGN.md)
+5. [Deployment and Demo](./deployment-and-demo.md)
+   当前运行、部署、环境变量与外部试用边界。外部预览 / 试用必须使用 Postgres；本地文件存储只用于本机 demo。
+6. [`../DESIGN.md`](/Users/jilanfang/ai-quality/DESIGN.md)
    当前设计基线。做报告页、工作台、品牌、阶段语义前先读。
-6. [`../AGENTS.md`](/Users/jilanfang/ai-quality/AGENTS.md)
-   当前协作约束文件。注意其中“权威实现”表述可能滞后于本线程最新事实。
+7. [`../AGENTS.md`](/Users/jilanfang/ai-quality/AGENTS.md)
+   当前协作约束文件。包含 localhost 端口、运行态污染、LLM provider 和 backlog 规则。
 
 ## 按场景阅读
 
@@ -62,7 +65,8 @@
 3. [`../app/page.tsx`](/Users/jilanfang/ai-quality/app/page.tsx)
 4. [`../lib/domain/workflow-engine.ts`](/Users/jilanfang/ai-quality/lib/domain/workflow-engine.ts)
 5. [`../lib/domain/report-builder.ts`](/Users/jilanfang/ai-quality/lib/domain/report-builder.ts)
-6. [`../lib/server/api.ts`](/Users/jilanfang/ai-quality/lib/server/api.ts)
+6. [`../lib/server/llm.ts`](/Users/jilanfang/ai-quality/lib/server/llm.ts)
+7. [`../lib/server/api.ts`](/Users/jilanfang/ai-quality/lib/server/api.ts)
 
 适合的任务：
 
@@ -86,6 +90,8 @@
 - 当前代码库不是单一文件单一路线
 - `Next.js` 是当前权威产品主线，`index.html` 是仍在维护的离线 mockup / demo 线
 - 近期新增功能默认优先落在 `Next.js`，除非明确是在做离线 demo 试验
+- 外部预览 / 试用必须使用 Postgres；本地文件存储只用于本机 demo
+- 在线模型接入边界在 `lib/server/llm.ts`，不要把 provider 逻辑散进 domain 或 workspace
 
 如果文档之间有冲突，以：
 

@@ -115,8 +115,18 @@
 - 当前实测结论要记住：
   - `deepseek-v3.2` 更适合主 Copilot
   - `qwen3.5-122b-a10b` 更适合最终正式成稿
-  - `ark-code-latest` 是非常有价值的跨 provider 快速备用
-  - `MiniMax-M2.7` 这轮在严格 JSON 协议下不稳定，暂不适合进主链路
+- `ark-code-latest` 是非常有价值的跨 provider 快速备用
+- `MiniMax-M2.7` 这轮在严格 JSON 协议下不稳定，暂不适合进主链路
+
+### 9. 在线模型接入边界必须收敛到 `lib/server/llm.ts`
+
+- 后续所有在线模型调用只能经由 `lib/server/llm.ts`
+- 不要在以下文件里直接写 provider / model / endpoint 逻辑：
+  - `lib/domain/workflow-engine.ts`
+  - `lib/domain/guided-thinking.ts`
+  - `lib/domain/report-builder.ts`
+  - `components/workspace.tsx`
+- 如果要给 `copilot`、`report` 等能力接在线模型，先扩 `lib/server/llm.ts` 的 facade / router，再落具体接入
 
 ## 默认验证清单
 

@@ -26,24 +26,24 @@
 
 ### 2.1 明确部署边界
 
-- [ ] 在部署说明、README、环境配置说明里明确写死：
+- [x] 在部署说明、README、环境配置说明里明确写死：
   - 本地 demo 可用本地文件存储
   - 外部试用 / 预览部署必须使用 Postgres
-- [ ] 不再把 `/tmp/ai-quality-demo-store.json` 描述成可对外试用方案
-- [ ] 为部署环境准备一份最小 env 清单：
+- [x] 不再把 `/tmp/ai-quality-demo-store.json` 描述成可对外试用方案
+- [x] 为部署环境准备一份最小 env 清单：
   - `DATABASE_URL`
   - 可选的 `AI_QUALITY_LLM_*` 配置
 
 ### 2.2 固定 LLM 接入边界
 
-- [ ] 约定后续所有在线模型调用只能经由 `lib/server/llm.ts`
-- [ ] 不允许在：
+- [x] 约定后续所有在线模型调用只能经由 `lib/server/llm.ts`
+- [x] 不允许在：
   - `workflow-engine.ts`
   - `guided-thinking.ts`
   - `report-builder.ts`
   - `components/workspace.tsx`
   里直接写 provider / model / endpoint 逻辑
-- [ ] 如果后续要接 `copilot` 或 `report` 级 LLM，优先先补 facade/router 边界，再补能力
+- [x] 如果后续要接 `copilot` 或 `report` 级 LLM，优先先补 facade/router 边界，再补能力
 
 ### 2.3 建立 mockup 回灌账本
 
@@ -55,15 +55,15 @@
   - D1 固定团队成员
   - D2 中文 5W1H 样式
   - 品牌呈现差异
-- [ ] 迁移账本已落在 [`index-html-to-nextjs-migration-ledger.md`](./index-html-to-nextjs-migration-ledger.md)，后续按账本持续更新
-- [ ] 没进账本的 mockup 新功能，默认不再新增
+- [x] 迁移账本已落在 [`index-html-to-nextjs-migration-ledger.md`](./index-html-to-nextjs-migration-ledger.md)，后续按账本持续更新
+- [x] 没进账本的 mockup 新功能，默认不再新增
 
 ### 2.4 把运行态污染写入团队操作常识
 
-- [ ] 保持 `npm run dev` 使用 polling，不随手改回裸 `next dev`
-- [ ] 不在同一工作目录混跑 `next dev` 和 `next start`
-- [ ] 如果需要生产验证，先 `npm run build`，再单独起 `next start`
-- [ ] 先查端口再起服务：
+- [x] 保持 `npm run dev` 使用 polling，不随手改回裸 `next dev`
+- [x] 不在同一工作目录混跑 `next dev` 和 `next start`
+- [x] 如果需要生产验证，先 `npm run build`，再单独起 `next start`
+- [x] 先查端口再起服务：
   - `3001` 作为默认应用端口
   - 并行实例顺延到 `3002+`
 

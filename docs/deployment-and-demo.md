@@ -1,6 +1,6 @@
-# 8D Demo 运行与部署说明
+# 芯科元析工作台运行与部署说明
 
-本文档描述当前 `8D Copilot` demo 的实际技术形态、运行方式和部署路径。当前权威实现是 `Next.js App Router + TypeScript` 单项目；根目录 `index.html` 仍保留为可运行的离线 mockup / demo 参考线，但不是上线目标架构。
+本文档描述当前 `芯科元析失效分析工作台` 的实际技术形态、运行方式和部署路径。当前权威实现是 `Next.js App Router + TypeScript` 单项目；根目录 `index.html` 仍保留为可运行的离线 mockup / demo 参考线，但不是上线目标架构。
 
 ## 1. 当前实现状态
 
@@ -43,6 +43,12 @@ npm install
 npm run dev
 ```
 
+说明：
+
+- 当前开发脚本已固定为 `WATCHPACK_POLLING=true next dev --hostname 127.0.0.1 --port 3001`
+- 在这台机器上不要随手改回裸 `next dev`
+- 默认开发端口是 `127.0.0.1:3001`
+
 默认访问：
 
 - 页面：[http://localhost:3001](http://localhost:3001)
@@ -61,13 +67,14 @@ npm run build
 
 ### 模式 A：本地文件存储（无数据库）
 
-适合本地 demo、临时演示、无数据库时快速启动。
+只适合本机 demo、自测、无数据库时快速启动。
 
 - 不设置 `DATABASE_URL`
 - 案件数据保存在本地文件
 - 默认路径是 `AI_QUALITY_STORE_PATH`，未设置时回落到 `/tmp/ai-quality-demo-store.json`
 - 同一台机器上重启服务后可继续读到之前的案件
-- 不适合 Vercel 等 serverless 正式演示环境，因为实例切换后本地文件不可靠
+- 不适合任何外部试用、Vercel 预览部署或 serverless demo，因为实例切换后本地文件不可靠
+- `/tmp/ai-quality-demo-store.json` 只用于本机临时 demo，不应被描述成对外试用方案
 
 `.env.example` 当前内容：
 
@@ -77,11 +84,12 @@ DATABASE_URL=
 
 ### 模式 B：Postgres
 
-适合 Vercel demo、多人试用、需要跨重启保留数据的环境。
+适合 Vercel 预览、外部试用、多人试用、需要跨重启保留数据的环境。
 
 - 设置 `DATABASE_URL`
 - 应用自动切换到 Postgres store
 - 推荐接 Neon 或 Supabase
+- 外部试用 / 预览部署必须使用 Postgres，不再允许以本地文件模式对外演示
 
 示例：
 
@@ -95,7 +103,30 @@ DATABASE_URL=postgres://user:password@host:5432/dbname
 npm run db:push
 ```
 
-## 4. 推荐部署路径：Vercel
+## 4. 最小环境变量清单
+
+对外预览 / 试用至少准备：
+
+```env
+DATABASE_URL=postgres://user:password@host:5432/dbname
+AI_QUALITY_LLM_ENABLED=false
+```
+
+可选的在线模型配置统一使用 `AI_QUALITY_LLM_*`：
+
+```env
+AI_QUALITY_LLM_ENABLED=true
+AI_QUALITY_LLM_BASE_URL=https://api.vectorengine.ai/v1
+AI_QUALITY_LLM_API_KEY=your_api_key
+AI_QUALITY_LLM_EXTRACT_PRIMARY_PROVIDER=deepseek
+AI_QUALITY_LLM_EXTRACT_PRIMARY_MODEL=deepseek-v3.2
+AI_QUALITY_LLM_EXTRACT_FALLBACK_PROVIDER=ark
+AI_QUALITY_LLM_EXTRACT_FALLBACK_MODEL=ark-code-latest
+```
+
+当前默认只要求把 `extract` 能力配通；`copilot` / `report` 仍可继续走规则主链路。
+
+## 5. 推荐部署路径：Vercel
 
 当前目标是“单仓库、单体系、完整前后端 + API、可直接打开演示”，所以推荐 Vercel，而不是 GitHub Pages。
 
@@ -107,17 +138,9 @@ npm run db:push
 4. 首次建库后执行一次 `npm run db:push`
 5. 触发部署
 
-### 如果暂时没有数据库
-
-也可以直接部署：
-
-- 不设置 `DATABASE_URL`
-- 服务会退回本地文件模式
-- 适合单人短时演示
-- 不适合正式对外测试，因为 serverless 实例切换后数据无法保证保留
-
 ### 本地联调注意事项
 
+- 保持 `npm run dev` 使用 polling，不要随手改脚本
 - 不要在同一个工作目录里同时运行 `next dev` 和 `next start`
 - 两者会共用 `.next` 目录，开发产物可能覆盖生产产物，导致生产页静态资源 404
 - 当前全局端口约定下，这个项目默认使用 `127.0.0.1:3001`
@@ -133,7 +156,18 @@ npm run db:push
 - 生产前阶段先不开登录、不做多租户
 - 用种子案例直接展示完整路径，再补真实碎片输入
 
-## 5. Demo 当前能力
+## 6. LLM 接入边界
+
+- 后续所有在线模型调用只能经由 [`lib/server/llm.ts`](/Users/jilanfang/ai-quality/lib/server/llm.ts)
+- 不要在以下位置直接写 provider / model / endpoint 逻辑：
+  - `lib/domain/workflow-engine.ts`
+  - `lib/domain/guided-thinking.ts`
+  - `lib/domain/report-builder.ts`
+  - `components/workspace.tsx`
+- 当前已具备 provider / capability / fallback 路由，但默认只把这层能力接在 `extract` 上
+- `copilot` / `report` 如果后续要接在线模型，先扩 `lib/server/llm.ts` 的 facade / router，再落具体能力
+
+## 7. Demo 当前能力
 
 ### 已具备
 
@@ -160,30 +194,27 @@ npm run db:push
 - 真正的 LLM 在线推理
 - 与 MES / ERP / QMS 集成
 
-## 6. 当前已知限制
+## 8. 当前已知限制
 
-- 未接入真实 LLM provider，当前抽取与阶段草稿仍以规则和模板为主。
-- 尚未实现 `多模型 / 多供应商` 的 LLM adapter 层。
+- 当前在线模型路由主要接在 `extract`，`copilot` / `report` 仍默认以规则和模板为主。
 - PDF 仍建议先用浏览器打印正式 HTML。
 - Postgres schema 当前通过 `drizzle-kit push` 直接同步，尚未沉淀正式 migration 流程。
 - 旧目录 `backend/` 仍保留作迁移参考，不是当前上线主链路。
 - 根目录 `index.html` 仍可运行，适合作离线 demo、交互试验和报告展示对照，但不应替代当前产品主线。
 
-## 7. 建议的下一步
+## 9. 建议的下一步
 
 按 demo 上线优先级，建议顺序如下：
 
-1. 先按 `docs/llm-usage-strategy.md` 设计 `LLM Task Facade + Model Router + Provider Adapters`，再接入真实 LLM provider；默认让所有用户输入先经过低成本模型抽取，再用规则校验与归一化。
+1. 先继续把 `lib/server/llm.ts` 这层 facade / router 用到更多能力，再决定是否给 `copilot` / `report` 接真实 provider。
 2. 增加 benchmark case 的 API/页面级回归测试。
 3. 接通真实 Postgres 并完成一次 Vercel 预览部署。
 4. 优化正式报告页面，补 `打印为 PDF` 的演示路径。
 5. 再考虑登录、案例库、经验库、暗知识沉淀。
 
-## 8. 相关文档
+## 10. 相关文档
 
-- [技术评估](./tech-evaluation.md)
-- [LLM 使用策略](./llm-usage-strategy.md)
-- [8D 输出格式与文风设计](./output-format-design.md)
-- [8D 输出层契约与渲染规则](./output-layer-contract.md)
-- [8D 出稿门槛与版本规则](./report-readiness-rules.md)
-- [8D 工具上市准备检查](./launch-readiness.md)
+- [MVP Hardening Checklist](./mvp-hardening-checklist.md)
+- [Mockup Migration Ledger](./index-html-to-nextjs-migration-ledger.md)
+- [Current Handoff](./current-handoff.md)
+- [`../AGENTS.md`](/Users/jilanfang/ai-quality/AGENTS.md)
