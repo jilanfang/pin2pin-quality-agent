@@ -813,6 +813,14 @@ export function Workspace() {
           </div>
           <div className="hero-actions">
             <button
+              className="secondary-button quick-preview-button"
+              type="button"
+              onClick={openPreview}
+              disabled={!currentCaseId || loading}
+            >
+              快速预览报告
+            </button>
+            <button
               className="ghost-button toolbar-toggle"
               type="button"
               onClick={() => setIsReportToolsOpen((value) => !value)}
@@ -1394,9 +1402,13 @@ export function Workspace() {
         }
 
         .toolbar-toggle {
-          min-height: 34px;
-          padding: 0 12px;
+          min-height: 42px;
+          padding: 0 14px;
           border-radius: 999px;
+        }
+
+        .quick-preview-button {
+          min-width: 132px;
         }
 
         .report-tooltray {
@@ -1556,8 +1568,8 @@ export function Workspace() {
         }
 
         .sidebar-mini-button {
-          min-height: 34px;
-          padding: 0 12px;
+          min-height: 42px;
+          padding: 0 14px;
           border-radius: 999px;
         }
 
@@ -1829,8 +1841,8 @@ export function Workspace() {
 
         .stage-toggle {
           justify-self: flex-start;
-          min-height: 34px;
-          padding: 0 12px;
+          min-height: 42px;
+          padding: 0 14px;
           border-radius: 999px;
         }
 
@@ -1839,7 +1851,8 @@ export function Workspace() {
           border: 1px solid var(--line);
           border-radius: 16px;
           background: #f8fafe;
-          padding: 12px 14px;
+          padding: 14px 16px;
+          min-height: 72px;
           display: grid;
           gap: 4px;
           cursor: pointer;

@@ -425,6 +425,41 @@ describe("Workspace", () => {
     expect(screen.getByText("文风")).toBeInTheDocument();
   });
 
+  it("keeps a quick preview action visible even before advanced report tools are expanded", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "case-1",
+              title: "钽电容反向贴装客诉",
+              status: "open",
+              currentStage: "D3",
+              mode: "normal",
+              d1Status: "partial",
+              updatedAt: "2026-03-22T12:00:00.000Z",
+            },
+          ]),
+          { status: 200 }
+        );
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+
+    expect(screen.getByRole("button", { name: "快速预览报告" })).toBeInTheDocument();
+    expect(screen.queryByText("报告版本")).not.toBeInTheDocument();
+  });
+
   it("keeps the stage rail focused on the current task until expanded", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
