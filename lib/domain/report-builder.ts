@@ -247,7 +247,6 @@ export function buildResultRecommendation(aggregate: CaseAggregate): ResultRecom
       rationale: "当前关键阶段已闭环，可以整理成正式 8D。",
       primaryActionLabel: "生成 8D",
       secondaryActionLabel: "预览 8D",
-      deferActionLabel: "继续检查",
     };
   }
 
@@ -258,7 +257,6 @@ export function buildResultRecommendation(aggregate: CaseAggregate): ResultRecom
       rationale: "当前围堵和纠正方向已经成形，先把行动方案收口，再决定何时进入 8D。",
       primaryActionLabel: "整理行动方案",
       secondaryActionLabel: "继续补信息",
-      deferActionLabel: "稍后再说",
     };
   }
 
@@ -268,7 +266,6 @@ export function buildResultRecommendation(aggregate: CaseAggregate): ResultRecom
     rationale: "当前已具备稳定事实，可以先沉淀分析结论；根因仍待验证，不建议直接生成 8D。",
     primaryActionLabel: "整理分析结论",
     secondaryActionLabel: "继续补信息",
-    deferActionLabel: "稍后再说",
   };
 }
 

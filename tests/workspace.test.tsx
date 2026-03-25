@@ -379,9 +379,24 @@ describe("Workspace", () => {
     expect(within(actionCard).getByText("建议先整理分析结论")).toBeInTheDocument();
     expect(within(actionCard).getByRole("button", { name: "整理分析结论" })).toBeInTheDocument();
     expect(within(actionCard).getByRole("button", { name: "继续补信息" })).toBeInTheDocument();
-    expect(within(actionCard).getByRole("button", { name: "稍后再说" })).toBeInTheDocument();
+    expect(within(actionCard).queryByRole("button", { name: "稍后再说" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("报告版本")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("文风")).not.toBeInTheDocument();
+  });
+
+  it("keeps the secondary recommendation action in conversation mode instead of opening preview", async () => {
+    workspaceWithSingleCase();
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+
+    const input = screen.getByLabelText("证据输入框");
+    expect(input).toHaveAttribute("rows", "1");
+    expect(screen.queryByTestId("preview-drawer")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "继续补信息" }));
+
+    expect(screen.queryByTestId("preview-drawer")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("证据输入框")).toHaveAttribute("rows", "4");
   });
 
   it("removes unlock and revalidate buttons from the main stage view", async () => {

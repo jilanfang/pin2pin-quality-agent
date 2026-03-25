@@ -446,7 +446,6 @@ function AssistantStageCard({
   onConfirmStage,
   onPrimaryRecommendation,
   onSecondaryRecommendation,
-  currentCaseId,
 }: {
   currentCase: CaseWorkflow | null;
   selectedStage: StageRecord | null;
@@ -469,7 +468,6 @@ function AssistantStageCard({
   onConfirmStage: (stage: string) => void;
   onPrimaryRecommendation: () => void;
   onSecondaryRecommendation: () => void;
-  currentCaseId: string | null;
 }) {
   return (
     <article className="message-card message-assistant stage-focus-card" aria-label="AI 主分析卡">
@@ -701,7 +699,7 @@ function AssistantStageCard({
               className="primary-button"
               type="button"
               onClick={onPrimaryRecommendation}
-              disabled={!currentCaseId || loading}
+              disabled={loading}
             >
               {resultRecommendation.primaryActionLabel}
             </button>
@@ -710,14 +708,9 @@ function AssistantStageCard({
                 className="secondary-button"
                 type="button"
                 onClick={onSecondaryRecommendation}
-                disabled={!currentCaseId || loading}
+                disabled={loading}
               >
                 {resultRecommendation.secondaryActionLabel}
-              </button>
-            ) : null}
-            {resultRecommendation.deferActionLabel ? (
-              <button className="ghost-button" type="button" disabled>
-                {resultRecommendation.deferActionLabel}
               </button>
             ) : null}
           </div>
@@ -1099,6 +1092,11 @@ export function Workspace() {
     }
   }
 
+  function keepCollectingEvidence() {
+    setPreview(null);
+    setIsComposerExpanded(true);
+  }
+
   async function submitFeedback() {
     setIsFeedbackSubmitting(true);
     setFeedbackStatus(null);
@@ -1344,12 +1342,7 @@ export function Workspace() {
                     }
                     void openPreview(artifactForRecommendation(resultRecommendation?.kind));
                   }}
-                  onSecondaryRecommendation={() =>
-                    void openPreview(
-                      resultRecommendation?.kind === "eight_d" ? "eight_d" : artifactForRecommendation(resultRecommendation?.kind)
-                    )
-                  }
-                  currentCaseId={currentCaseId}
+                  onSecondaryRecommendation={keepCollectingEvidence}
                 />
               </>
             )}
