@@ -1190,4 +1190,86 @@ describe("Workspace", () => {
 
     expect(screen.getAllByText("已结案").length).toBeGreaterThan(0);
   });
+
+  it("shows a fixed feedback entry and submits categorized feedback", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      if (url === "/api/feedback") {
+        expect(init?.method).toBe("POST");
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Workspace />);
+
+    await screen.findByRole("button", { name: "反馈" });
+    fireEvent.click(screen.getByRole("button", { name: "反馈" }));
+    fireEvent.change(screen.getByLabelText("问题分类"), {
+      target: { value: "hard_to_understand" },
+    });
+    fireEvent.change(screen.getByLabelText("补充说明"), {
+      target: { value: "不知道下一步该补什么。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "提交反馈" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/feedback",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining("\"category\":\"hard_to_understand\""),
+        })
+      );
+    });
+
+    expect(screen.getByText("已收到反馈")).toBeInTheDocument();
+  });
+
+  it("emits a workspace-open event when client telemetry is enabled for tests", async () => {
+    (
+      window as Window & {
+        __AI_QUALITY_ENABLE_TEST_TELEMETRY__?: boolean;
+      }
+    ).__AI_QUALITY_ENABLE_TEST_TELEMETRY__ = true;
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      if (url === "/api/telemetry") {
+        expect(init?.method).toBe("POST");
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Workspace />);
+
+    await screen.findByText("先跑通第一单，再继续补证据和出稿。");
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/telemetry",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining("\"name\":\"workspace_opened\""),
+        })
+      );
+    });
+
+    delete (
+      window as Window & {
+        __AI_QUALITY_ENABLE_TEST_TELEMETRY__?: boolean;
+      }
+    ).__AI_QUALITY_ENABLE_TEST_TELEMETRY__;
+  });
 });

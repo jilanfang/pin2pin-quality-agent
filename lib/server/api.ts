@@ -16,6 +16,7 @@ import {
   serializeCaseWorkflow,
   serializeReportPreview,
 } from "@/lib/server/serializers";
+import { safeRecordEvent, safeRecordFeedback } from "@/lib/server/telemetry";
 
 const createCaseSchema = z.object({
   title: z.string().trim().min(1),
@@ -42,6 +43,26 @@ const reportQuerySchema = z.object({
     .default("professional_neutral") as z.ZodType<StyleMode>,
 });
 
+const telemetryEventSchema = z.object({
+  name: z.enum([
+    "workspace_opened",
+    "case_created",
+    "seed_case_loaded",
+    "evidence_sent",
+    "report_preview_generated",
+    "final_report_generated",
+    "app_error",
+  ]),
+  caseId: z.string().trim().optional(),
+  metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+});
+
+const feedbackSchema = z.object({
+  category: z.enum(["hard_to_understand", "not_professional_enough", "bug", "other"]),
+  caseId: z.string().trim().optional(),
+  note: z.string().trim().max(1000).optional(),
+});
+
 export async function listCasesHandler() {
   const store = getCaseStore();
   const cases = await store.listCases();
@@ -60,6 +81,11 @@ export async function createCaseHandler(payload: unknown) {
   const parsed = createCaseSchema.parse(payload);
   const store = getCaseStore();
   const aggregate = await store.createCase(parsed.title, parsed.seedCase);
+  await safeRecordEvent({
+    name: parsed.seedCase ? "seed_case_loaded" : "case_created",
+    caseId: aggregate.caseRecord.id,
+    metadata: parsed.seedCase ? { seedCase: parsed.seedCase } : { source: "blank_case" },
+  });
   return serializeCaseSummary(aggregate);
 }
 
@@ -82,6 +108,11 @@ export async function postEvidenceHandler(caseId: string, payload: unknown) {
   const llmExtraction = await extractEvidenceWithLlm(parsed);
   const next = applyEvidence(aggregate, parsed, { llmExtraction });
   await store.saveCase(next);
+  await safeRecordEvent({
+    name: "evidence_sent",
+    caseId,
+    metadata: { contextStage: parsed.contextStage ?? "D2" },
+  });
   return serializeCaseWorkflow(next);
 }
 
@@ -118,6 +149,14 @@ export async function reportPreviewHandler(caseId: string, searchParams: URLSear
   if (!aggregate) {
     throw new Error("Case not found");
   }
+  await safeRecordEvent({
+    name: "report_preview_generated",
+    caseId,
+    metadata: {
+      reportStage: parsed.reportStage,
+      styleMode: parsed.styleMode,
+    },
+  });
   return serializeReportPreview(aggregate, parsed as ReportBuildOptions);
 }
 
@@ -158,5 +197,23 @@ export async function closeCaseForFinalReport(caseId: string, searchParams: URLS
   }
   await store.saveCase(aggregate);
   await store.saveReport(document);
+  await safeRecordEvent({
+    name: "final_report_generated",
+    caseId,
+    metadata: {
+      reportStage: parsed.reportStage,
+      styleMode: parsed.styleMode,
+    },
+  });
   return serializeCaseWorkflow(aggregate);
+}
+
+export async function postTelemetryHandler(payload: unknown) {
+  const parsed = telemetryEventSchema.parse(payload);
+  await safeRecordEvent(parsed);
+}
+
+export async function postFeedbackHandler(payload: unknown) {
+  const parsed = feedbackSchema.parse(payload);
+  await safeRecordFeedback(parsed);
 }

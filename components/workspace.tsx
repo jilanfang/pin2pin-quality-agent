@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type CaseSummary = {
   id: string;
@@ -113,6 +113,15 @@ type RebuildReviewCard = {
   unstableConclusions: string;
 };
 
+type FeedbackCategory = "hard_to_understand" | "not_professional_enough" | "bug" | "other";
+type TelemetryMetadata = Record<string, string | number | boolean | null>;
+
+declare global {
+  interface Window {
+    __AI_QUALITY_ENABLE_TEST_TELEMETRY__?: boolean;
+  }
+}
+
 const seedCases = [
   {
     key: "tantalum_reverse_polarity",
@@ -137,6 +146,13 @@ const styleModeOptions = [
   { value: "customer_formal", label: "对客正式" },
   { value: "internal_direct", label: "内部直给" },
 ] as const;
+
+const feedbackCategoryOptions: Array<{ value: FeedbackCategory; label: string }> = [
+  { value: "hard_to_understand", label: "看不懂" },
+  { value: "not_professional_enough", label: "结果不专业" },
+  { value: "bug", label: "报错" },
+  { value: "other", label: "其他" },
+];
 
 function formatTime(value: string) {
   return new Date(value).toLocaleString("zh-CN", {
@@ -416,6 +432,13 @@ export function Workspace() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isReportToolsOpen, setIsReportToolsOpen] = useState(false);
   const [isStageRailExpanded, setIsStageRailExpanded] = useState(false);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [feedbackCategory, setFeedbackCategory] = useState<FeedbackCategory>("hard_to_understand");
+  const [feedbackNote, setFeedbackNote] = useState("");
+  const [feedbackStatus, setFeedbackStatus] = useState<string | null>(null);
+  const [isFeedbackSubmitting, setIsFeedbackSubmitting] = useState(false);
+  const hasTrackedOpenRef = useRef(false);
+  const lastTrackedErrorRef = useRef<string | null>(null);
 
   const currentStageRecord = useMemo(() => {
     if (!currentCase) return null;
@@ -554,6 +577,30 @@ export function Workspace() {
     setCurrentCase(payload);
   }
 
+  function shouldTrackClientTelemetry() {
+    if (typeof window === "undefined") return false;
+    if (process.env.NODE_ENV !== "test") return true;
+    return window.__AI_QUALITY_ENABLE_TEST_TELEMETRY__ === true;
+  }
+
+  async function postClientTelemetry(name: string, metadata?: TelemetryMetadata) {
+    if (!shouldTrackClientTelemetry()) return;
+
+    try {
+      await fetch("/api/telemetry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          caseId: currentCaseId,
+          metadata,
+        }),
+      });
+    } catch {
+      // Telemetry should not interrupt the user flow.
+    }
+  }
+
   useEffect(() => {
     void refreshCases();
   }, []);
@@ -562,6 +609,21 @@ export function Workspace() {
     if (!currentCaseId) return;
     void refreshCurrentCase(currentCaseId);
   }, [currentCaseId]);
+
+  useEffect(() => {
+    if (hasTrackedOpenRef.current) return;
+    hasTrackedOpenRef.current = true;
+    void postClientTelemetry("workspace_opened", { source: "workspace" });
+  }, []);
+
+  useEffect(() => {
+    if (!error || lastTrackedErrorRef.current === error) return;
+    lastTrackedErrorRef.current = error;
+    void postClientTelemetry("app_error", {
+      message: error,
+      hasCase: Boolean(currentCaseId),
+    });
+  }, [currentCaseId, error]);
 
   async function createCase() {
     setLoading(true);
@@ -673,6 +735,29 @@ export function Workspace() {
       setError(nextError instanceof Error ? nextError.message : "生成完整 8D 失败");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function submitFeedback() {
+    setIsFeedbackSubmitting(true);
+    setFeedbackStatus(null);
+    try {
+      await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: feedbackCategory,
+          caseId: currentCaseId,
+          note: feedbackNote.trim() || undefined,
+        }),
+      });
+      setFeedbackStatus("已收到反馈");
+      setFeedbackNote("");
+      setIsFeedbackOpen(false);
+    } catch {
+      setFeedbackStatus("反馈提交失败，请稍后重试");
+    } finally {
+      setIsFeedbackSubmitting(false);
     }
   }
 
@@ -1217,6 +1302,70 @@ export function Workspace() {
         ) : null}
       </main>
 
+      <div className="feedback-dock">
+        <button
+          className="secondary-button feedback-trigger"
+          type="button"
+          onClick={() => {
+            setFeedbackStatus(null);
+            setIsFeedbackOpen((value) => !value);
+          }}
+        >
+          反馈
+        </button>
+        {isFeedbackOpen ? (
+          <section className="feedback-panel panel" aria-label="试用反馈">
+            <div className="panel-head">
+              <strong>试用反馈</strong>
+              <span>1 分钟说清问题</span>
+            </div>
+            <label className="field">
+              <span>问题分类</span>
+              <select
+                aria-label="问题分类"
+                value={feedbackCategory}
+                onChange={(event) => setFeedbackCategory(event.target.value as FeedbackCategory)}
+              >
+                {feedbackCategoryOptions.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>补充说明</span>
+              <textarea
+                aria-label="补充说明"
+                rows={4}
+                placeholder="哪一步让你卡住了，或者哪里不够专业？"
+                value={feedbackNote}
+                onChange={(event) => setFeedbackNote(event.target.value)}
+              />
+            </label>
+            <div className="feedback-actions">
+              <button
+                className="primary-button"
+                type="button"
+                onClick={submitFeedback}
+                disabled={isFeedbackSubmitting}
+              >
+                提交反馈
+              </button>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => setIsFeedbackOpen(false)}
+                disabled={isFeedbackSubmitting}
+              >
+                收起
+              </button>
+            </div>
+          </section>
+        ) : null}
+        {feedbackStatus ? <div className="feedback-status">{feedbackStatus}</div> : null}
+      </div>
+
       <style>{`
         .workspace-shell {
           display: grid;
@@ -1496,6 +1645,7 @@ export function Workspace() {
 
         .field input,
         .field select,
+        .field textarea,
         .composer {
           width: 100%;
           border: 1px solid var(--line);
@@ -1510,6 +1660,13 @@ export function Workspace() {
           min-height: 180px;
           resize: vertical;
           line-height: 1.6;
+        }
+
+        .field textarea {
+          min-height: 108px;
+          resize: vertical;
+          line-height: 1.6;
+          font: inherit;
         }
 
         .primary-button,
@@ -1563,6 +1720,50 @@ export function Workspace() {
         .stage-grid {
           display: grid;
           gap: 10px;
+        }
+
+        .feedback-dock {
+          position: fixed;
+          right: 18px;
+          bottom: 18px;
+          display: grid;
+          justify-items: end;
+          gap: 10px;
+          z-index: 20;
+        }
+
+        .feedback-trigger {
+          min-width: 88px;
+          border-radius: 999px;
+          box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
+        }
+
+        .feedback-panel {
+          width: min(340px, calc(100vw - 36px));
+          gap: 12px;
+          padding: 14px;
+          box-shadow: 0 24px 44px rgba(15, 23, 42, 0.16);
+        }
+
+        .feedback-actions {
+          display: flex;
+          gap: 10px;
+          justify-content: flex-end;
+          flex-wrap: wrap;
+        }
+
+        .feedback-status {
+          display: inline-flex;
+          align-items: center;
+          min-height: 36px;
+          padding: 0 12px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.96);
+          border: 1px solid rgba(215, 221, 234, 0.95);
+          color: var(--text);
+          font-size: 12px;
+          font-weight: 700;
+          box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
         }
 
         .sidebar-actions {
@@ -2086,6 +2287,11 @@ export function Workspace() {
 
           .onboarding-grid {
             grid-template-columns: 1fr;
+          }
+
+          .feedback-dock {
+            right: 14px;
+            bottom: 14px;
           }
         }
       `}</style>
