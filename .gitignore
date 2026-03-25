@@ -13,6 +13,7 @@ node_modules/
 .next/
 tsconfig.tsbuildinfo
 output/
+.playwright-cli/
 
 # local tooling
 .venv-pdf/

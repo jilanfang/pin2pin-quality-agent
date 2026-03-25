@@ -91,17 +91,22 @@
 
 ### 3.1 真实浏览器 smoke
 
-- [ ] 增加一条最小真实浏览器 smoke 流程
-- [ ] 覆盖路径：
+- [x] 增加一条最小真实浏览器 smoke 流程
+- [x] 覆盖路径：
   - 打开首页
   - 新建空白案件或载入种子案例
   - 输入一条证据
   - 生成报告预览
-- [ ] 验证项：
+- [x] 验证项：
   - 页面可加载
   - API 返回正常
   - `_next/static` 资源正常
   - 浏览器控制台无报错
+- 现有入口：`npm run smoke:browser`
+- 使用方式：
+  - 先执行 `npm run build && npm start`
+  - 再执行 `npm run smoke:browser`
+  - 如需验证其他环境，设置 `SMOKE_BASE_URL`
 
 ### 3.2 错误路径可观测性
 

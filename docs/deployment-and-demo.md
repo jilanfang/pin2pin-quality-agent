@@ -59,7 +59,19 @@ npm run dev
 ```bash
 npm test
 npm run build
+npm start
+npm run smoke:browser
 ```
+
+- `npm run smoke:browser` 会用真实浏览器跑最小主链路：
+  - 打开首页
+  - 新建空白案件
+  - 输入一条证据
+  - 打开报告预览
+- 这条 smoke 还会额外检查：
+  - `/_next/static` 返回正常
+  - 页面无控制台报错
+  - 关键接口没有 `4xx/5xx`
 
 ## 3. 数据存储模式
 
