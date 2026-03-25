@@ -432,10 +432,11 @@ export function Workspace() {
 
   const summaryFacts = useMemo(() => {
     if (!currentCase) return [];
-    return orderedFacts(currentCase.knownFacts).slice(0, 3);
+    return orderedFacts(currentCase.knownFacts)
+      .filter((item) => item.field !== "mode" && item.field !== "severity")
+      .slice(0, 2);
   }, [currentCase]);
 
-  const summaryGaps = useMemo(() => currentCase?.missingFields.slice(0, 1) ?? [], [currentCase]);
   const guidanceFactsList = useMemo(() => (currentCase ? guidanceFacts(currentCase.knownFacts) : []), [currentCase]);
   const guidanceAssumptions = useMemo(
     () => currentCase?.assumptions.filter((item) => item.needsValidation).slice(0, 2) ?? [],
@@ -464,9 +465,6 @@ export function Workspace() {
       ? "完整 8D（需先复审）"
       : `${reportStageOptions.find((item) => item.value === reportStage)?.label ?? "当前版本"}（含待复审）`
     : null;
-  const currentGoalCopy = isUrgentComplaint
-    ? "先止血、锁失效位置、补齐四类对象围堵状态"
-    : currentCase?.guidedThinking?.thinkingGoal ?? "先补事实，再进入分析";
   const actionFacts = [
     ["客户现场", factValue(currentCase?.knownFacts ?? [], "containment_customer_site")],
     ["已发货", factValue(currentCase?.knownFacts ?? [], "containment_shipped")],
@@ -478,76 +476,53 @@ export function Workspace() {
     if (!currentCase) return [];
 
     return [
-      ...(isUrgentComplaint
+      ...(impactedStageNames.length
         ? [
             {
-              key: "severity",
-              label: "严重度",
-              value: "高压客诉",
+              key: "revisit",
+              label: "待复审",
+              value: impactedStageNames.join(" / "),
               tone: "warning" as const,
-            },
-            {
-              key: "goal",
-              label: "当前目标",
-              value: currentGoalCopy,
-              tone: "signal" as const,
-            },
-            {
-              key: "initial_24h",
-              label: "快速响应版",
-              value: initialReadinessCopy,
-              tone: currentCase.reportCapabilities.formalHtml.allowed ? ("signal" as const) : ("warning" as const),
             },
           ]
         : []),
-      {
-        key: "status",
-        label: "案件状态",
-        value: caseStatusLabel(currentCase.status),
-        tone: "signal",
-      },
-      {
-        key: "stage",
-        label: "当前阶段",
-        value: currentCase.currentStage,
-        tone: "signal",
-      },
-      {
-        key: "d1",
-        label: "D1",
-        value: d1StatusLabel(currentCase.d1Status),
-        tone: "signal",
-      },
-      {
-        key: "formal-report",
-        label: "正式报告",
-        value: currentCase.reportCapabilities.formalHtml.allowed
-          ? "可用"
-          : capabilityLabel(currentCase.reportCapabilities.formalHtml),
-        tone: "signal",
-      },
-      {
-        key: "final-report",
-        label: "完整 8D",
-        value: currentCase.reportCapabilities.finalReport.allowed
-          ? "可生成并结案"
-          : capabilityLabel(currentCase.reportCapabilities.finalReport),
-        tone: currentCase.reportCapabilities.finalReport.allowed ? "default" : "warning",
-      },
+      ...(outputGuidance
+        ? [
+            {
+              key: "output",
+              label: "输出快览",
+              value: outputGuidance.recommendedLabel,
+              tone: "signal" as const,
+            },
+          ]
+        : []),
+      ...(!currentCase.reportCapabilities.formalHtml.allowed
+        ? [
+            {
+              key: "formal-gap",
+              label: "出稿前还差",
+              value: initialReadinessCopy,
+              tone: "warning" as const,
+            },
+          ]
+        : !currentCase.reportCapabilities.finalReport.allowed
+          ? [
+              {
+                key: "final-gap",
+                label: "结案前还差",
+                value: capabilityLabel(currentCase.reportCapabilities.finalReport),
+                tone: "warning" as const,
+              },
+            ]
+          : []),
       ...summaryFacts.map((item) => ({
         key: `fact-${item.field}`,
         label: factLabel(item.field),
         value: item.value,
         tone: "default" as const,
       })),
-      ...summaryGaps.map((item) => ({
-        key: `gap-${item.field}`,
-        label: "待补信息",
-        value: item.reason,
-        tone: "warning" as const,
-      })),
     ];
-  }, [currentCase, currentGoalCopy, initialReadinessCopy, isUrgentComplaint, summaryFacts, summaryGaps]);
+  }, [currentCase, impactedStageNames, initialReadinessCopy, outputGuidance, summaryFacts]);
 
   const visibleStages = useMemo(() => {
     if (!currentCase) return [];
@@ -1018,8 +993,12 @@ export function Workspace() {
                       </div>
                     </div>
                   ) : null}
-                  <h3>{currentCase?.guidedThinking?.thinkingGoal ?? "发送第一条证据后，我会在这里持续推进。"} </h3>
-                  <p>{currentCase?.guidedThinking?.guidanceText ?? "先补事实，再进入分析。"} </p>
+                  {!copilotBrief ? (
+                    <>
+                      <h3>{currentCase?.guidedThinking?.thinkingGoal ?? "发送第一条证据后，我会在这里持续推进。"} </h3>
+                      <p>{currentCase?.guidedThinking?.guidanceText ?? "先补事实，再进入分析。"} </p>
+                    </>
+                  ) : null}
                   <div className="copilot-grid">
                     <section className="copilot-panel">
                       <span className="copilot-label">已知事实</span>
@@ -1186,25 +1165,27 @@ export function Workspace() {
           </div>
         </section>
 
-        <section className="summary-strip" data-testid="summary-strip" aria-label="关键摘要">
-          <div className="summary-grid">
-            {summaryItems.map((item) => (
-              <div
-                key={item.key}
-                className={`summary-card${
-                  item.tone === "signal"
-                    ? " summary-card-signal"
-                    : item.tone === "warning"
-                      ? " summary-card-gap"
-                      : ""
-                }`}
-              >
-                <span>{item.label}</span>
-                <strong>{item.value}</strong>
-              </div>
-            ))}
-          </div>
-        </section>
+        {summaryItems.length ? (
+          <section className="summary-strip" data-testid="summary-strip" aria-label="关键摘要">
+            <div className="summary-grid">
+              {summaryItems.map((item) => (
+                <div
+                  key={item.key}
+                  className={`summary-card${
+                    item.tone === "signal"
+                      ? " summary-card-signal"
+                      : item.tone === "warning"
+                        ? " summary-card-gap"
+                        : ""
+                  }`}
+                >
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         {preview ? (
           <section className="preview-shell panel">

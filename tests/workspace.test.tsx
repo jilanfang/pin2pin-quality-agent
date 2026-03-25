@@ -339,8 +339,10 @@ describe("Workspace", () => {
     expect(screen.getAllByText(/先把风险控住，再继续追因/).length).toBeGreaterThan(0);
     expect(screen.getByText("批次")).toBeInTheDocument();
     expect(screen.getByText("B12")).toBeInTheDocument();
-    expect(screen.getByText("正式报告")).toBeInTheDocument();
-    expect(screen.getByText("可用")).toBeInTheDocument();
+    const summaryStrip = screen.getByTestId("summary-strip");
+    expect(within(summaryStrip).getByText("输出快览")).toBeInTheDocument();
+    expect(within(summaryStrip).getByText("快速响应版（可流转）")).toBeInTheDocument();
+    expect(within(summaryStrip).getByText("结案前还差")).toBeInTheDocument();
   });
 
   it("uses a compact codex-like chrome so the conversation stays primary", async () => {
@@ -627,12 +629,17 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
-    expect(screen.getByText("严重度")).toBeInTheDocument();
-    expect(screen.getByText("高压客诉")).toBeInTheDocument();
-    expect(screen.getByText("当前目标")).toBeInTheDocument();
-    expect(screen.getByText("先止血、锁失效位置、补齐四类对象围堵状态")).toBeInTheDocument();
-    expect(screen.getByText("快速响应版")).toBeInTheDocument();
-    expect(screen.getByText("还差问题描述未确认；围堵状态未具备；失效位置未明确")).toBeInTheDocument();
+    const summaryStrip = screen.getByTestId("summary-strip");
+    expect(within(summaryStrip).getByText("输出快览")).toBeInTheDocument();
+    expect(within(summaryStrip).getByText("分析摘要（建议）")).toBeInTheDocument();
+    expect(within(summaryStrip).getByText("出稿前还差")).toBeInTheDocument();
+    expect(within(summaryStrip).getByText("还差问题描述未确认；围堵状态未具备；失效位置未明确")).toBeInTheDocument();
+    expect(within(summaryStrip).getByText("客户")).toBeInTheDocument();
+    expect(within(summaryStrip).getByText("大麦科技")).toBeInTheDocument();
+    expect(within(summaryStrip).queryByText("案件状态")).not.toBeInTheDocument();
+    expect(within(summaryStrip).queryByText("当前阶段")).not.toBeInTheDocument();
+    expect(within(summaryStrip).queryByText("D1")).not.toBeInTheDocument();
+    expect(within(summaryStrip).queryByText("当前目标")).not.toBeInTheDocument();
     expect(
       screen.getByText("还不能交快速响应版，先确认失效位置，再逐项补齐客户现场、已发货、成品库存、在制品的围堵状态。")
     ).toBeInTheDocument();
@@ -686,6 +693,8 @@ describe("Workspace", () => {
 
     const summaryStrip = screen.getByTestId("summary-strip");
     expect(brief.compareDocumentPosition(summaryStrip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText("先把现场止血，再决定快速响应版怎么写。")).not.toBeInTheDocument();
+    expect(screen.queryByText("当前是客户停线级异常，优先补失效位置与围堵状态，不要抢跑根因结论。")).not.toBeInTheDocument();
   });
 
   it("shows output guidance and expert review snapshot for urgent complaint cases", async () => {
@@ -719,8 +728,11 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
-    expect(screen.getByText("当前最适合输出")).toBeInTheDocument();
-    expect(screen.getByText("分析摘要（建议）")).toBeInTheDocument();
+    const outputPanel = screen.getByText("当前最适合输出").closest("section");
+    if (!outputPanel) {
+      throw new Error("Expected 当前最适合输出 panel");
+    }
+    expect(within(outputPanel).getByText("分析摘要（建议）")).toBeInTheDocument();
     expect(
       screen.getByText("还不能交快速响应版，先确认失效位置，再逐项补齐客户现场、已发货、成品库存、在制品的围堵状态。")
     ).toBeInTheDocument();
@@ -781,8 +793,11 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
-    expect(screen.getByText("当前最适合输出")).toBeInTheDocument();
-    expect(screen.getByText("完整 8D（可结案）")).toBeInTheDocument();
+    const outputPanel = screen.getByText("当前最适合输出").closest("section");
+    if (!outputPanel) {
+      throw new Error("Expected 当前最适合输出 panel");
+    }
+    expect(within(outputPanel).getByText("完整 8D（可结案）")).toBeInTheDocument();
     expect(screen.getByText("所有关键阶段已确认，可直接生成完整 8D。")).toBeInTheDocument();
     expect(screen.getByText("原因链已成形")).toBeInTheDocument();
     expect(screen.getByText("措施层次已成形")).toBeInTheDocument();
@@ -1082,7 +1097,7 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
-    expect(screen.getAllByText("完整 8D").length).toBeGreaterThan(0);
+    expect(screen.getByText("结案前还差")).toBeInTheDocument();
     expect(screen.getByText(/待补齐 D1 团队与职责信息/)).toBeInTheDocument();
     expect(screen.queryByText(/d1_incomplete/)).not.toBeInTheDocument();
   });

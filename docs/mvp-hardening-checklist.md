@@ -71,7 +71,7 @@
 
 - [x] 调整 mobile 信息顺序
   - 确保“当前案件 / 当前阶段 / 当前目标”优先于案件列表
-- [ ] 去重重复状态层
+- [x] 去重重复状态层
   - 收敛顶部 chips、summary strip、stage card、`copilot brief` 的重复表达
 - [x] 抬高 `copilot brief` 与下一步动作的视觉优先级
   - 让页面先回答“现在先补什么”，再展示次级状态信息
