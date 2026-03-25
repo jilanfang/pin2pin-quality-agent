@@ -257,6 +257,13 @@ npm run build
 - 重写 `task_plan.md`
 - 明确写出双线现状、验证结果、功能分叉和推荐下一步
 
+### 当前待办 source of truth
+
+- 当前 `eng review + design review` 的所有后续动作，统一收口在 [MVP Hardening Checklist](./mvp-hardening-checklist.md)
+- `task_plan.md`、`progress.md`、`findings.md` 现在只承担恢复上下文与阶段判断，不再各自维护平行待办
+- 如果后续新增评审动作，先更新 `mvp-hardening-checklist.md`
+- mockup 与主应用的差异账本见 [index-html-to-nextjs-migration-ledger.md](./index-html-to-nextjs-migration-ledger.md)
+
 ### Phase 2：当前默认方向
 
 当前默认方向已经可以收口为：

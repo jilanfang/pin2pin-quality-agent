@@ -11,6 +11,12 @@
 
 ## 先看这些文件
 
+任务管理约定：
+
+- 当前 backlog 只看 [MVP Hardening Checklist](./mvp-hardening-checklist.md)
+- mockup / 主线差异只看 [Mockup Migration Ledger](./index-html-to-nextjs-migration-ledger.md)
+- 不要再为同一批待办额外新建任务文档
+
 1. [Current Handoff](./current-handoff.md)
    当前最重要的恢复文件。已明确说明：
    - 哪些是当前真实实现
@@ -21,9 +27,11 @@
    当前最新工作计划，记录的是 `Next.js` 主链路的 journey hardening，不再是旧的 routing 任务描述。
 3. [MVP Hardening Checklist](./mvp-hardening-checklist.md)
    当前最适合直接执行的工程清单。回答“这套架构对 MVP 还行不行”“现在必须补什么”“哪些先不要做”。
-4. [`../DESIGN.md`](/Users/jilanfang/ai-quality/DESIGN.md)
+4. [Mockup Migration Ledger](./index-html-to-nextjs-migration-ledger.md)
+   当前 `index.html -> Next.js` 差异账本。回答“mockup 里还有什么没回灌”“哪些该迁、哪些不该迁”。
+5. [`../DESIGN.md`](/Users/jilanfang/ai-quality/DESIGN.md)
    当前设计基线。做报告页、工作台、品牌、阶段语义前先读。
-5. [`../AGENTS.md`](/Users/jilanfang/ai-quality/AGENTS.md)
+6. [`../AGENTS.md`](/Users/jilanfang/ai-quality/AGENTS.md)
    当前协作约束文件。注意其中“权威实现”表述可能滞后于本线程最新事实。
 
 ## 按场景阅读
@@ -67,17 +75,11 @@
 ## 当前推荐阅读顺序
 
 1. [Current Handoff](./current-handoff.md)
-2. [`../task_plan.md`](/Users/jilanfang/ai-quality/task_plan.md)
-3. [MVP Hardening Checklist](./mvp-hardening-checklist.md)
+2. [MVP Hardening Checklist](./mvp-hardening-checklist.md)
+3. [Mockup Migration Ledger](./index-html-to-nextjs-migration-ledger.md)
 4. [Deployment and Demo](./deployment-and-demo.md)
-5. [LLM Usage Strategy](./llm-usage-strategy.md)
-6. [LLM Adapter Architecture](./llm-adapter-architecture.md)
-7. [Journey 1-4 Execution Plan](./journey-1-4-execution-plan.md)
-8. [Output Format Design](./output-format-design.md)
-9. [Output Layer Contract](./output-layer-contract.md)
-10. [Report Readiness Rules](./report-readiness-rules.md)
-11. [Launch Readiness](./launch-readiness.md)
-12. [Roadmap](./roadmap.md)
+5. [`../DESIGN.md`](/Users/jilanfang/ai-quality/DESIGN.md)
+6. [`../AGENTS.md`](/Users/jilanfang/ai-quality/AGENTS.md)
 
 ## 当前最重要的文档结论
 

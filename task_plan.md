@@ -41,23 +41,23 @@
 - 新增 `/Users/jilanfang/ai-quality/docs/mvp-hardening-checklist.md`，作为合并后的后续动作清单
 
 ## Remaining Work
-- 补一份 `index.html -> Next.js` 的迁移账本，明确哪些是参考链路、哪些仍有迁移债
-- 在 `/Users/jilanfang/ai-quality/components/workspace.tsx` 做第一轮 UI / UX 收口
-- 做一轮浏览器 smoke test，确认关键交互链路和控制台继续干净
-- 给 LLM 错误路径补更好的可观测性
-- 验证 Postgres 预览部署链路，把“本地文件存储”和“外部 MVP 存储”边界彻底讲清
-- 在继续加功能前，准备 `workspace.tsx` 的最小拆分切口
+- 按 `/Users/jilanfang/ai-quality/docs/mvp-hardening-checklist.md` 推进当前所有未完成动作
+- 其中 P0 优先覆盖：
+  - 部署边界写死
+  - LLM 接入边界写死
+  - `index.html -> Next.js` 迁移账本
+  - 运行态污染规则固化
+  - 第一轮工作台 UI / UX 收口
+- P1 再覆盖：
+  - 浏览器 smoke
+  - LLM observability
+  - Postgres preview 验证
+  - `workspace.tsx` 最小拆分准备
 
 ## Next Actions
-- 先做 `/Users/jilanfang/ai-quality/docs/mvp-hardening-checklist.md` 里的 P0
-- 先补 `index.html -> Next.js` 迁移账本，收清参考链路与真实主链路
-- 然后在 `/Users/jilanfang/ai-quality/components/workspace.tsx` 做第一轮 UI / UX 收口：
-  - mobile 顺序调整
-  - 状态层去重
-  - 抬高 `copilot brief` 优先级
-  - 统一品牌与文案
-  - 修正过小触控目标
-- 再进入 P1：浏览器 smoke、LLM observability、Postgres preview 验证、`workspace.tsx` 最小拆分准备
+- 当前唯一待办 source of truth 是 `/Users/jilanfang/ai-quality/docs/mvp-hardening-checklist.md`
+- 先完成 checklist 的 `2.x`
+- 再进入 checklist 的 `3.x`
 
 ## Blockers
 - 当前目录不是 git repo / worktree root，无法直接使用完整的 git clean-tree 审查流程

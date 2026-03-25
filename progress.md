@@ -27,15 +27,9 @@
 - 新增 `/Users/jilanfang/ai-quality/docs/mvp-hardening-checklist.md`，作为合并后的后续动作清单
 
 ## Next Actions
-- 先做 `/Users/jilanfang/ai-quality/docs/mvp-hardening-checklist.md` 里的 P0
-- 先补 `index.html -> Next.js` 迁移账本，收清参考链路与真实主链路
-- 然后在 `/Users/jilanfang/ai-quality/components/workspace.tsx` 做第一轮 UI / UX 收口：
-  - mobile 顺序调整
-  - 状态层去重
-  - 抬高 `copilot brief` 优先级
-  - 统一品牌与文案
-  - 修正过小触控目标
-- 再进入 P1：浏览器 smoke、LLM observability、Postgres preview 验证、`workspace.tsx` 最小拆分准备
+- 当前唯一待办 source of truth 是 `/Users/jilanfang/ai-quality/docs/mvp-hardening-checklist.md`
+- 先完成 checklist 的 `2.x`
+- 再进入 checklist 的 `3.x`
 
 ## Files Created/Modified
 - /Users/jilanfang/ai-quality/AGENTS.md
@@ -67,7 +61,7 @@
 | Question | Answer |
 |----------|--------|
 | Where am I? | 当前已经完成主链路、代码、文档、架构、设计的对齐评审，下一步进入 MVP hardening 与第一轮 UI 收口。 |
-| Where am I going? | 先做 P0：迁移账本 + `workspace.tsx` 第一轮 UI / UX 收口；再进入 P1：浏览器 smoke、LLM observability、Postgres preview 验证、最小拆分准备。 |
+| Where am I going? | 当前所有后续动作以 `docs/mvp-hardening-checklist.md` 为唯一待办清单；先做 `2.x`，再做 `3.x`。 |
 | What's the goal? | 核对当前 ai-quality 的最新代码与文档状态，完成 MVP 架构/设计评审，并锁定下一步硬化动作。 |
 | What have I learned? | 当前最大的风险不在“能不能跑”，而在信息层级、部署边界、文档口径和专家信任感是否收口。 |
 | What have I done? | 已完成 fresh verification、本地 Next 实例验证、eng review、design review、关键文档同步，以及 MVP hardening checklist 的建立。 |

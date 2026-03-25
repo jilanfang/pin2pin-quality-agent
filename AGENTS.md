@@ -148,6 +148,23 @@ curl http://127.0.0.1:3001/api/health
 - 不要为了“更优雅”回退已经验证可用的方案
 - 如果文档描述与代码行为冲突，以当前代码和 fresh verification 为准
 
+## Backlog 管理
+
+- 当前任务 backlog 的唯一 source of truth 是 `docs/mvp-hardening-checklist.md`
+- `index.html -> Next.js` 差异与迁移决策的唯一账本是 `docs/index-html-to-nextjs-migration-ledger.md`
+- 不要再为同一批待办并行维护多个任务文档
+- `task_plan.md`、`progress.md`、`findings.md` 只用于：
+  - 当前线程恢复
+  - 阶段判断
+  - 关键决策与验证记录
+- 这三个文件不再扩展成新的长期 backlog 容器
+- 如果出现新的实现待办，先写进 `docs/mvp-hardening-checklist.md`
+- 如果出现新的 mockup / 主线差异，先写进 `docs/index-html-to-nextjs-migration-ledger.md`
+- 除非是新的架构设计、对外说明或长期产品文档，否则不要为了记录任务再新增 docs 文件
+- 如果旧文档只是重复 backlog，而不是提供独立价值，优先删减、合并或改成指向唯一清单
+- 所有新需求只收口到主 backlog，按优先级排序执行
+- `hotfix bug` 永远优先于其它需求
+
 ## Design System
 
 - 做任何视觉、UI、报告样式相关决策前，先读 `DESIGN.md`。

@@ -44,7 +44,6 @@
 - Postgres preview deployment 这轮还没做 fresh re-verify
 
 ## Next Actions
-- 先做 `/Users/jilanfang/ai-quality/docs/mvp-hardening-checklist.md` 里的 P0
-- 先补 `index.html -> Next.js` 迁移账本，收清参考链路与真实主链路
-- 然后在 `/Users/jilanfang/ai-quality/components/workspace.tsx` 做第一轮 UI / UX 收口
-- 再进入 P1：浏览器 smoke、LLM observability、Postgres preview 验证、`workspace.tsx` 最小拆分准备
+- 当前唯一待办 source of truth 是 `/Users/jilanfang/ai-quality/docs/mvp-hardening-checklist.md`
+- 先完成 checklist 的 `2.x`
+- 再进入 checklist 的 `3.x`
