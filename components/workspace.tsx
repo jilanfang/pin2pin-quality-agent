@@ -804,86 +804,109 @@ export function Workspace() {
       <main className="main-panel">
         <header className="topbar">
           <div className="topbar-title">
-            <h2>{currentCase?.title ?? "选择一个案件开始"}</h2>
+            <h2>{currentCase?.title ?? "先跑通第一单"}</h2>
             <p>
-              <span>阶段 {currentCase?.currentStage ?? "D2"}</span>
-              <span>D1 {d1StatusLabel(currentCase?.d1Status)}</span>
-              <span>{caseStatusLabel(currentCase?.status)}</span>
+              {currentCaseId ? (
+                <>
+                  <span>阶段 {currentCase?.currentStage ?? "D2"}</span>
+                  <span>D1 {d1StatusLabel(currentCase?.d1Status)}</span>
+                  <span>{caseStatusLabel(currentCase?.status)}</span>
+                </>
+              ) : (
+                <>
+                  <span>未开始</span>
+                  <span>先创建或载入案件</span>
+                  <span>3 分钟看到第一版结果</span>
+                </>
+              )}
             </p>
           </div>
           <div className="hero-actions">
-            <button
-              className="secondary-button quick-preview-button"
-              type="button"
-              onClick={openPreview}
-              disabled={!currentCaseId || loading}
-            >
-              快速预览报告
-            </button>
-            <button
-              className="ghost-button toolbar-toggle"
-              type="button"
-              onClick={() => setIsReportToolsOpen((value) => !value)}
-            >
-              {isReportToolsOpen ? "收起报告工具" : "打开报告工具"}
-            </button>
-            {isReportToolsOpen ? (
-              <div className="report-tooltray">
-                {impactedStageNames.length ? (
-                  <div className="tooltray-warning" role="status">
-                    <strong>当前报告含待复审章节</strong>
-                    <span>{`建议先回看 ${impactedStageNames.join(" / ")}，再决定是否导出正式稿。`}</span>
-                    {reportStageRiskCopy ? <em>{reportStageRiskCopy}</em> : null}
+            {currentCaseId ? (
+              <>
+                <button
+                  className="secondary-button quick-preview-button"
+                  type="button"
+                  onClick={openPreview}
+                  disabled={!currentCaseId || loading}
+                >
+                  快速预览报告
+                </button>
+                <button
+                  className="ghost-button toolbar-toggle"
+                  type="button"
+                  onClick={() => setIsReportToolsOpen((value) => !value)}
+                >
+                  {isReportToolsOpen ? "收起报告工具" : "打开报告工具"}
+                </button>
+                {isReportToolsOpen ? (
+                  <div className="report-tooltray">
+                    {impactedStageNames.length ? (
+                      <div className="tooltray-warning" role="status">
+                        <strong>当前报告含待复审章节</strong>
+                        <span>{`建议先回看 ${impactedStageNames.join(" / ")}，再决定是否导出正式稿。`}</span>
+                        {reportStageRiskCopy ? <em>{reportStageRiskCopy}</em> : null}
+                      </div>
+                    ) : null}
+                    <label className="field compact">
+                      <span>报告版本</span>
+                      <select value={reportStage} onChange={(event) => setReportStage(event.target.value as typeof reportStage)}>
+                        {reportStageOptions.map((item) => (
+                          <option key={item.value} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field compact">
+                      <span>文风</span>
+                      <select value={styleMode} onChange={(event) => setStyleMode(event.target.value as typeof styleMode)}>
+                        {styleModeOptions.map((item) => (
+                          <option key={item.value} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="preview-action-group">
+                      <button className="secondary-button" type="button" onClick={openPreview} disabled={!currentCaseId || loading}>
+                        生成预览
+                      </button>
+                      {previewActionStatus ? <span className="preview-action-status">{previewActionStatus}</span> : null}
+                    </div>
+                    {reportStage === "final" ? (
+                      <button
+                        className="primary-button"
+                        type="button"
+                        onClick={closeCaseWithFinalReport}
+                        disabled={!currentCaseId || loading || !currentCase?.reportCapabilities.finalReport.allowed}
+                        title={
+                          currentCase?.reportCapabilities.finalReport.allowed
+                            ? "生成完整 8D 并将案件状态切换为已结案"
+                            : capabilityLabel(
+                                currentCase?.reportCapabilities.finalReport ?? {
+                                  allowed: false,
+                                  reasonCodes: [],
+                                }
+                              )
+                        }
+                      >
+                        生成完整 8D 并结案
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
-                <label className="field compact">
-                  <span>报告版本</span>
-                  <select value={reportStage} onChange={(event) => setReportStage(event.target.value as typeof reportStage)}>
-                    {reportStageOptions.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field compact">
-                  <span>文风</span>
-                  <select value={styleMode} onChange={(event) => setStyleMode(event.target.value as typeof styleMode)}>
-                    {styleModeOptions.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="preview-action-group">
-                  <button className="secondary-button" type="button" onClick={openPreview} disabled={!currentCaseId || loading}>
-                    生成预览
-                  </button>
-                  {previewActionStatus ? <span className="preview-action-status">{previewActionStatus}</span> : null}
-                </div>
-                {reportStage === "final" ? (
-                  <button
-                    className="primary-button"
-                    type="button"
-                    onClick={closeCaseWithFinalReport}
-                    disabled={!currentCaseId || loading || !currentCase?.reportCapabilities.finalReport.allowed}
-                    title={
-                      currentCase?.reportCapabilities.finalReport.allowed
-                        ? "生成完整 8D 并将案件状态切换为已结案"
-                        : capabilityLabel(
-                            currentCase?.reportCapabilities.finalReport ?? {
-                              allowed: false,
-                              reasonCodes: [],
-                            }
-                          )
-                    }
-                  >
-                    生成完整 8D 并结案
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
+              </>
+            ) : (
+              <>
+                <button className="primary-button" type="button" onClick={() => startWithSeedCase(seedCases[0].key)}>
+                  加载演示案件
+                </button>
+                <button className="ghost-button toolbar-toggle" type="button" onClick={startWithBlankCase}>
+                  录入真实异常
+                </button>
+              </>
+            )}
           </div>
         </header>
 
@@ -897,14 +920,14 @@ export function Workspace() {
             </div>
             <div className="onboarding-grid">
               <article className="onboarding-card">
-                <span className="eyebrow">推荐路径</span>
-                <h3>先选择一个案件，或从上方直接开始第一单。</h3>
-                <p>推荐路径：先加载种子案例，看完整流程；再用真实案件验证。</p>
+                <span className="eyebrow">下一步</span>
+                <h3>先从一个可跑通的案件开始，再决定补证据还是出稿。</h3>
+                <p>推荐先加载种子案例，3 分钟内看见第一版摘要和报告预览。</p>
               </article>
               <article className="onboarding-card">
-                <span className="eyebrow">你会得到什么</span>
-                <h3>先整理事实，再识别缺口，再看到第一版结果。</h3>
-                <p>还没有案件时，报告区会在你创建或载入案件后自动准备。</p>
+                <span className="eyebrow">真实录入</span>
+                <h3>如果你已经有现场信息，现在就可以直接开一个空白案件。</h3>
+                <p>如果你手头已经有真实异常，也可以直接新建空白案件，先录入客户投诉或测试结论。</p>
               </article>
             </div>
           </section>
@@ -913,16 +936,16 @@ export function Workspace() {
         <section className="conversation-shell panel">
           <div className="conversation-head">
             <strong>AI 协作区</strong>
-            <span>{loading ? "处理中…" : currentCaseId ? "对话驱动推进" : "先创建或选择一个案件"}</span>
+            <span>{loading ? "处理中…" : currentCaseId ? "对话驱动推进" : "先选开始方式，再录入第一条证据"}</span>
           </div>
 
           <div className="conversation-feed">
             {!currentCaseId ? (
               <article className="message-card message-assistant message-empty">
                 <span className="message-role">AI 协作</span>
-                <h3>先创建或载入一个案件，我再带着你把第一单跑通。</h3>
+                <h3>先选一个开始方式，我再带着你把第一单跑通。</h3>
                 <p>
-                  先从左侧加载种子案例，或者新建空白案件。案件建立后，再输入客户投诉、测试结论、批次工单或现场观察，我会先帮你识别事实、指出缺口，再给出下一步最值得补的证据。
+                  先从上方加载演示案件，或者直接录入真实异常。案件建立后，再输入客户投诉、测试结论、批次工单或现场观察，我会先帮你识别事实、指出缺口，再给出下一步最值得补的证据。
                 </p>
               </article>
             ) : (
@@ -2054,6 +2077,14 @@ export function Workspace() {
             grid-template-columns: 1fr;
             height: auto;
             overflow: visible;
+          }
+
+          .main-panel {
+            order: 1;
+          }
+
+          .sidebar {
+            order: 2;
           }
 
           .topbar {

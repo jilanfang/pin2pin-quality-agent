@@ -248,9 +248,58 @@ describe("Workspace", () => {
 
     render(<Workspace />);
 
-    await screen.findByText("先选择一个案件，或从上方直接开始第一单。");
-    expect(screen.getByText("推荐路径：先加载种子案例，看完整流程；再用真实案件验证。")).toBeInTheDocument();
-    expect(screen.getByText("还没有案件时，报告区会在你创建或载入案件后自动准备。")).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "先跑通第一单" });
+    expect(screen.getByText("未开始")).toBeInTheDocument();
+    expect(screen.getByText("先创建或载入案件")).toBeInTheDocument();
+    expect(screen.queryByText("阶段 D2")).not.toBeInTheDocument();
+    expect(screen.getByText("推荐先加载种子案例，3 分钟内看见第一版摘要和报告预览。")).toBeInTheDocument();
+    expect(screen.getByText("如果你手头已经有真实异常，也可以直接新建空白案件，先录入客户投诉或测试结论。")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "加载演示案件" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "录入真实异常" })).toBeInTheDocument();
+  });
+
+  it("starts the create flow from empty-state actions", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Workspace />);
+
+    await screen.findByRole("button", { name: "加载演示案件" });
+
+    fireEvent.click(screen.getByRole("button", { name: "加载演示案件" }));
+    expect(screen.getByText("案件标题")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("钽电容反向贴装客诉案例")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "录入真实异常" }));
+    expect(screen.getByDisplayValue("空白案件")).toBeInTheDocument();
+  });
+
+  it("puts the main task area before the sidebar on mobile", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "先跑通第一单" });
+
+    const styles = container.querySelector("style")?.textContent ?? "";
+    expect(styles).toContain("@media (max-width: 960px)");
+    expect(styles).toContain(".main-panel {\n            order: 1;");
+    expect(styles).toContain(".sidebar {\n            order: 2;");
   });
 
   it("loads cases and shows the current workflow data", async () => {
@@ -348,7 +397,7 @@ describe("Workspace", () => {
     expect(screen.getByText("Pin2Pin 出品的失效分析工作台")).toBeInTheDocument();
     expect(screen.getByText(/把零碎异常整理成可推进、可复审、可交付的分析工作流/)).toBeInTheDocument();
     expect(screen.getByText(/先跑通第一单，再继续补证据和出稿/)).toBeInTheDocument();
-    expect(screen.getByText(/先创建或载入一个案件，我再带着你把第一单跑通/)).toBeInTheDocument();
+    expect(screen.getByText(/先选一个开始方式，我再带着你把第一单跑通/)).toBeInTheDocument();
     expect(screen.queryByText("Pin2Pin / 芯科元析")).not.toBeInTheDocument();
   });
 
