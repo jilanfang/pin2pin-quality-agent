@@ -10,6 +10,7 @@ export const casesTable = pgTable("cases", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
   status: text("status").notNull(),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
   currentStage: text("current_stage").notNull(),
   mode: text("mode").notNull(),
   d1Status: text("d1_status").notNull(),

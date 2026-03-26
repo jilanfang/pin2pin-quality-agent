@@ -25,6 +25,15 @@ const createCaseSchema = z.object({
     .optional() as z.ZodType<SeedCaseKey | undefined>,
 });
 
+const updateCaseSchema = z
+  .object({
+    title: z.string().trim().min(1).optional(),
+    archived: z.boolean().optional(),
+  })
+  .refine((value) => value.title !== undefined || value.archived !== undefined, {
+    message: "至少提供一个更新字段",
+  });
+
 const evidenceSchema = z.object({
   content: z.string().trim().min(1),
   contextStage: z
@@ -98,6 +107,7 @@ export async function listCasesHandler() {
     id: item.id,
     title: item.title,
     status: item.status,
+    archivedAt: item.archivedAt,
     currentStage: item.currentStage,
     mode: item.mode,
     d1Status: item.d1Status,
@@ -124,6 +134,25 @@ export async function getCaseHandler(caseId: string) {
     throw new Error("Case not found");
   }
   return serializeCaseWorkflow(aggregate);
+}
+
+export async function updateCaseHandler(caseId: string, payload: unknown) {
+  const parsed = updateCaseSchema.parse(payload);
+  const store = getCaseStore();
+  const aggregate = await store.updateCase(caseId, parsed);
+  if (!aggregate) {
+    throw new Error("Case not found");
+  }
+  return serializeCaseSummary(aggregate);
+}
+
+export async function deleteCaseHandler(caseId: string) {
+  const store = getCaseStore();
+  const deleted = await store.deleteCase(caseId);
+  if (!deleted) {
+    throw new Error("Case not found");
+  }
+  return { ok: true as const };
 }
 
 export async function postEvidenceHandler(caseId: string, payload: unknown) {

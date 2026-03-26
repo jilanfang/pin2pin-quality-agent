@@ -2,11 +2,13 @@
 
 import React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 type CaseSummary = {
   id: string;
   title: string;
   status: string;
+  archivedAt: string | null;
   currentStage: string;
   mode: string;
   d1Status: string;
@@ -73,6 +75,7 @@ type CaseWorkflow = {
   caseId: string;
   title: string;
   status: string;
+  archivedAt: string | null;
   currentStage: string;
   mode: string;
   d1Status: string;
@@ -137,7 +140,6 @@ type RebuildReviewCard = {
   unstableConclusions: string;
 };
 
-type FeedbackCategory = "hard_to_understand" | "not_professional_enough" | "bug" | "other";
 type TelemetryMetadata = Record<string, string | number | boolean | null>;
 
 declare global {
@@ -159,13 +161,6 @@ const seedCases = [
   },
 ] as const;
 
-const feedbackCategoryOptions: Array<{ value: FeedbackCategory; label: string }> = [
-  { value: "hard_to_understand", label: "看不懂" },
-  { value: "not_professional_enough", label: "结果不专业" },
-  { value: "bug", label: "报错" },
-  { value: "other", label: "其他" },
-];
-
 function formatTime(value: string) {
   return new Date(value).toLocaleString("zh-CN", {
     month: "2-digit",
@@ -173,6 +168,11 @@ function formatTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function writeHasCasesCookie(hasCases: boolean) {
+  if (typeof document === "undefined") return;
+  document.cookie = `fireline-has-cases=${hasCases ? "1" : "0"}; path=/; SameSite=Lax`;
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -201,6 +201,49 @@ function stageLabel(stage?: string) {
 
 function caseStatusLabel(status?: string) {
   return status === "closed" ? "已结案" : "处理中";
+}
+
+function isArchivedCase(item?: { archivedAt?: string | null }) {
+  return Boolean(item?.archivedAt);
+}
+
+function pickPreferredCaseId(cases: CaseSummary[], preferredCaseId?: string | null) {
+  const preferred = preferredCaseId
+    ? cases.find((item) => item.id === preferredCaseId) ?? null
+    : null;
+  const firstActive = cases.find((item) => !isArchivedCase(item)) ?? null;
+
+  if (preferred) {
+    if (isArchivedCase(preferred) && firstActive) {
+      return firstActive.id;
+    }
+    return preferred.id;
+  }
+
+  return firstActive?.id ?? cases[0]?.id ?? null;
+}
+
+function mergeCaseSummaries(options: {
+  serverCases: CaseSummary[];
+  preferredCaseId?: string | null;
+  fallbackSummary?: CaseSummary | null;
+  existingCases: CaseSummary[];
+}) {
+  const { serverCases, preferredCaseId, fallbackSummary, existingCases } = options;
+  if (!preferredCaseId || serverCases.some((item) => item.id === preferredCaseId)) {
+    return serverCases;
+  }
+
+  const preservedSummary =
+    fallbackSummary ??
+    existingCases.find((item) => item.id === preferredCaseId) ??
+    null;
+
+  if (!preservedSummary) {
+    return serverCases;
+  }
+
+  return [preservedSummary, ...serverCases.filter((item) => item.id !== preferredCaseId)];
 }
 
 function d1StatusLabel(status?: string) {
@@ -444,7 +487,6 @@ function AssistantStageCard({
   onToggleStageRail,
   onSelectStage,
   onPrimaryRecommendation,
-  onSecondaryRecommendation,
 }: {
   currentCase: CaseWorkflow | null;
   selectedStage: StageRecord | null;
@@ -465,7 +507,6 @@ function AssistantStageCard({
   onToggleStageRail: () => void;
   onSelectStage: (stage: string) => void;
   onPrimaryRecommendation: () => void;
-  onSecondaryRecommendation: () => void;
 }) {
   return (
     <article className="message-card message-assistant stage-focus-card" aria-label="AI 主分析卡">
@@ -693,16 +734,6 @@ function AssistantStageCard({
             >
               {resultRecommendation.primaryActionLabel}
             </button>
-            {resultRecommendation.secondaryActionLabel ? (
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={onSecondaryRecommendation}
-                disabled={loading}
-              >
-                {resultRecommendation.secondaryActionLabel}
-              </button>
-            ) : null}
           </div>
         </div>
       ) : null}
@@ -729,10 +760,11 @@ function ComposerDock({
   onToggleExpanded: () => void;
   onSend: () => void;
 }) {
-  return (
+  const dock = (
     <div
       className={`composer-dock${isExpanded ? " expanded" : ""}`}
       data-testid="composer-dock"
+      data-dock-position="viewport-fixed"
       aria-label="证据输入停靠区"
     >
       <span className="helper-inline">
@@ -746,18 +778,25 @@ function ComposerDock({
           placeholder="输入客户投诉、测试结论、批次、工单、现场观察，系统会按当前阶段推进。"
           value={composer}
           onChange={(event) => onChange(event.target.value)}
+          onInput={(event) => onChange((event.target as HTMLTextAreaElement).value)}
         />
         <div className="composer-actions">
           <button className="ghost-button ghost-button-tight" type="button" onClick={onToggleExpanded}>
             {isExpanded ? "收起输入框" : "展开输入框"}
           </button>
-          <button className="primary-button" type="button" onClick={onSend} disabled={!composer.trim() || loading || !currentCaseId}>
+          <button className="primary-button" type="button" onClick={onSend} disabled={!composer.trim() || loading}>
             发送证据
           </button>
         </div>
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") {
+    return dock;
+  }
+
+  return createPortal(dock, document.body);
 }
 
 export function Workspace() {
@@ -773,15 +812,21 @@ export function Workspace() {
   const [focusedStage, setFocusedStage] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCaseDrawerOpen, setIsCaseDrawerOpen] = useState(false);
+  const [caseSearch, setCaseSearch] = useState("");
   const [isStageRailExpanded, setIsStageRailExpanded] = useState(false);
   const [isComposerExpanded, setIsComposerExpanded] = useState(false);
-  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
-  const [feedbackCategory, setFeedbackCategory] = useState<FeedbackCategory>("hard_to_understand");
-  const [feedbackNote, setFeedbackNote] = useState("");
-  const [feedbackStatus, setFeedbackStatus] = useState<string | null>(null);
-  const [isFeedbackSubmitting, setIsFeedbackSubmitting] = useState(false);
   const hasTrackedOpenRef = useRef(false);
   const lastTrackedErrorRef = useRef<string | null>(null);
+  const casesRef = useRef<CaseSummary[]>([]);
+  const currentCaseIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    casesRef.current = cases;
+  }, [cases]);
+
+  useEffect(() => {
+    currentCaseIdRef.current = currentCaseId;
+  }, [currentCaseId]);
 
   const currentStageRecord = useMemo(() => {
     if (!currentCase) return null;
@@ -795,6 +840,19 @@ export function Workspace() {
       currentStageRecord
     );
   }, [currentCase, currentStageRecord, focusedStage]);
+
+  const currentCaseSummary = useMemo(
+    () => cases.find((item) => item.id === currentCaseId) ?? null,
+    [cases, currentCaseId]
+  );
+  const visibleCases = useMemo(() => {
+    const normalizedSearch = caseSearch.trim().toLowerCase();
+    return cases.filter((item) => {
+      if (isArchivedCase(item)) return false;
+      if (!normalizedSearch) return true;
+      return item.title.toLowerCase().includes(normalizedSearch);
+    });
+  }, [caseSearch, cases]);
 
   const summaryFacts = useMemo(() => {
     if (!currentCase) return [];
@@ -901,16 +959,28 @@ export function Workspace() {
     setIsStageRailExpanded(false);
   }, [currentCase?.caseId, currentCase?.currentStage]);
 
-  async function refreshCases(nextCaseId?: string) {
+  async function refreshCases(options?: {
+    preferredCaseId?: string | null;
+    fallbackSummary?: CaseSummary | null;
+  }) {
     const payload = (await readJson(await fetch("/api/cases"))) as CaseSummary[];
-    setCases(payload);
-    if (nextCaseId) {
-      setCurrentCaseId(nextCaseId);
-    } else if (!currentCaseId && payload[0]) {
-      setCurrentCaseId(payload[0].id);
-    } else if (currentCaseId && !payload.some((item) => item.id === currentCaseId)) {
-      setCurrentCaseId(payload[0]?.id ?? null);
+    const requestedCaseId = options?.preferredCaseId ?? currentCaseIdRef.current;
+    const mergedCases = mergeCaseSummaries({
+      serverCases: payload,
+      preferredCaseId: requestedCaseId,
+      fallbackSummary: options?.fallbackSummary,
+      existingCases: casesRef.current,
+    });
+
+    casesRef.current = mergedCases;
+    setCases(mergedCases);
+    const preferredCaseId = pickPreferredCaseId(mergedCases, requestedCaseId);
+    currentCaseIdRef.current = preferredCaseId;
+    setCurrentCaseId(preferredCaseId);
+    if (!preferredCaseId && !requestedCaseId) {
+      setCurrentCase(null);
     }
+    return { payload: mergedCases, preferredCaseId };
   }
 
   async function refreshCurrentCase(caseId: string) {
@@ -967,52 +1037,60 @@ export function Workspace() {
   }, [currentCaseId, error]);
 
   async function createCase() {
-    setLoading(true);
-    setError(null);
-    try {
-      const payload = (await readJson(
-        await fetch("/api/cases", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: titleInput.trim() || "新的 8D 案件",
-            seedCase: seedCase || undefined,
-          }),
-        })
-      )) as CaseSummary;
+    await createCaseFromTemplate({
+      title: titleInput.trim() || "新的 8D 案件",
+      seedCase: seedCase || undefined,
+      openDrawer: false,
+    });
+  }
 
-      await refreshCases(payload.id);
-      await refreshCurrentCase(payload.id);
-      setComposer("");
-      setSeedCase("");
-      setIsCreateOpen(false);
-      setIsCaseDrawerOpen(false);
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "创建案件失败");
-    } finally {
-      setLoading(false);
-    }
+  async function createBlankCaseForConversation() {
+    const payload = (await readJson(
+      await fetch("/api/cases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "新的 8D 案件",
+        }),
+      })
+    )) as CaseSummary;
+
+    currentCaseIdRef.current = payload.id;
+    setCurrentCaseId(payload.id);
+    setCases((items) => {
+      const nextCases = [payload, ...items.filter((item) => item.id !== payload.id)];
+      casesRef.current = nextCases;
+      return nextCases;
+    });
+    await refreshCurrentCase(payload.id);
+    await refreshCases({ preferredCaseId: payload.id, fallbackSummary: payload });
+    setSeedCase("");
+    setTitleInput("新的 8D 案件");
+    setIsCreateOpen(false);
+    setIsCaseDrawerOpen(false);
+    return payload.id;
   }
 
   async function sendEvidence() {
-    if (!currentCaseId || !composer.trim()) return;
+    if (!composer.trim()) return;
     setLoading(true);
     setError(null);
     try {
+      const targetCaseId = currentCaseId ?? (await createBlankCaseForConversation());
       const payload = (await readJson(
-        await fetch(`/api/cases/${currentCaseId}/evidence`, {
+        await fetch(`/api/cases/${targetCaseId}/evidence`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             content: composer,
-            contextStage: currentCase?.currentStage,
+            contextStage: currentCaseId ? currentCase?.currentStage : undefined,
           }),
         })
       )) as CaseWorkflow;
       setCurrentCase(payload);
       setComposer("");
       setIsComposerExpanded(false);
-      await refreshCases(currentCaseId);
+      await refreshCases({ preferredCaseId: targetCaseId });
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "提交证据失败");
     } finally {
@@ -1033,7 +1111,7 @@ export function Workspace() {
         })
       )) as CaseWorkflow;
       setCurrentCase(payload);
-      await refreshCases(currentCaseId);
+      await refreshCases({ preferredCaseId: currentCaseId });
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "阶段操作失败");
     } finally {
@@ -1055,7 +1133,6 @@ export function Workspace() {
       const payload = (await readJson(
         await fetch(`/api/cases/${currentCaseId}/report-preview?artifact=${artifact ?? "analysis_summary"}`)
       )) as ReportPreview;
-      setIsFeedbackOpen(false);
       setPreview(payload);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "预览生成失败");
@@ -1075,7 +1152,7 @@ export function Workspace() {
         })
       )) as CaseWorkflow;
       setCurrentCase(payload);
-      await refreshCases(currentCaseId);
+      await refreshCases({ preferredCaseId: currentCaseId });
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "生成完整 8D 失败");
     } finally {
@@ -1083,47 +1160,67 @@ export function Workspace() {
     }
   }
 
-  function keepCollectingEvidence() {
-    setPreview(null);
-    setIsComposerExpanded(true);
-  }
-
-  async function submitFeedback() {
-    setIsFeedbackSubmitting(true);
-    setFeedbackStatus(null);
-    try {
-      await fetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          category: feedbackCategory,
-          caseId: currentCaseId,
-          note: feedbackNote.trim() || undefined,
-        }),
-      });
-      setFeedbackStatus("已收到反馈");
-      setFeedbackNote("");
-      setIsFeedbackOpen(false);
-    } catch {
-      setFeedbackStatus("反馈提交失败，请稍后重试");
-    } finally {
-      setIsFeedbackSubmitting(false);
-    }
-  }
-
   const currentSeedDescription = seedCases.find((item) => item.key === seedCase)?.description;
   const hasCases = cases.length > 0;
 
+  useEffect(() => {
+    writeHasCasesCookie(hasCases);
+  }, [hasCases]);
+
+  async function createCaseFromTemplate(options: {
+    title: string;
+    seedCase?: (typeof seedCases)[number]["key"];
+    openDrawer?: boolean;
+  }) {
+    setLoading(true);
+    setError(null);
+    try {
+      const payload = (await readJson(
+        await fetch("/api/cases", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: options.title,
+            seedCase: options.seedCase,
+          }),
+        })
+      )) as CaseSummary;
+
+      currentCaseIdRef.current = payload.id;
+      setCurrentCaseId(payload.id);
+      setCases((items) => {
+        const nextCases = [payload, ...items.filter((item) => item.id !== payload.id)];
+        casesRef.current = nextCases;
+        return nextCases;
+      });
+      await refreshCurrentCase(payload.id);
+      await refreshCases({ preferredCaseId: payload.id, fallbackSummary: payload });
+      setComposer("");
+      setSeedCase("");
+      setTitleInput("新的 8D 案件");
+      setIsCreateOpen(false);
+      setIsCaseDrawerOpen(Boolean(options.openDrawer));
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "创建案件失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function startWithSeedCase(defaultSeedCase: (typeof seedCases)[number]["key"]) {
-    setSeedCase(defaultSeedCase);
-    setIsCreateOpen(true);
-    setIsCaseDrawerOpen(true);
+    const seed = seedCases.find((item) => item.key === defaultSeedCase);
+    void createCaseFromTemplate({
+      title: seed?.title ?? "新的 8D 案件",
+      seedCase: defaultSeedCase,
+      openDrawer: false,
+    });
   }
 
   function startWithBlankCase() {
-    setSeedCase("");
-    setIsCreateOpen(true);
-    setIsCaseDrawerOpen(true);
+    void createCaseFromTemplate({
+      title: "新的 8D 案件",
+      openDrawer: false,
+    });
   }
 
   useEffect(() => {
@@ -1133,26 +1230,12 @@ export function Workspace() {
       setIsCaseDrawerOpen((value) => !value);
     }
 
-    function handleStartBlankCase() {
-      startWithBlankCase();
-    }
-
-    function handleOpenReportDrawer() {
-      if (!preview && !loading && currentCaseId) {
-        void openPreview();
-      }
-    }
-
     window.addEventListener("fireline:toggle-case-drawer", handleToggleCaseDrawer);
-    window.addEventListener("fireline:start-blank-case", handleStartBlankCase);
-    window.addEventListener("fireline:open-report-drawer", handleOpenReportDrawer);
 
     return () => {
       window.removeEventListener("fireline:toggle-case-drawer", handleToggleCaseDrawer);
-      window.removeEventListener("fireline:start-blank-case", handleStartBlankCase);
-      window.removeEventListener("fireline:open-report-drawer", handleOpenReportDrawer);
     };
-  }, [currentCaseId, loading, preview]);
+  }, []);
 
   return (
     <div className="workspace-shell">
@@ -1182,10 +1265,10 @@ export function Workspace() {
                   type="button"
                   onClick={() => startWithSeedCase(seedCases[0].key)}
                 >
-                  从种子案例开始
+                  开始第一单
                 </button>
                 <button className="ghost-button" type="button" onClick={startWithBlankCase}>
-                  新建空白案件
+                  直接新建空白案件
                 </button>
               </div>
             </div>
@@ -1194,19 +1277,31 @@ export function Workspace() {
           <div className="drawer-tools">
             <div className="drawer-tools-copy">
               <strong>案件列表</strong>
-              <span>{`${cases.length} 个案件`}</span>
+              <span>{currentCaseSummary ? `当前：${currentCaseSummary.title}` : `${visibleCases.length} 个案件`}</span>
             </div>
-            <button
-              className="ghost-button ghost-button-tight"
-              type="button"
-              onClick={() => {
-                setSeedCase("");
-                setIsCreateOpen((value) => !value);
-              }}
-            >
-              {isCreateOpen ? "收起新建" : "新建案件"}
-            </button>
+            <div className="case-list-actions">
+              <button
+                className="ghost-button ghost-button-tight"
+                type="button"
+                onClick={() => {
+                  setSeedCase("");
+                  setIsCreateOpen((value) => !value);
+                }}
+              >
+                {isCreateOpen ? "收起新建" : "新建案件"}
+              </button>
+            </div>
           </div>
+
+          <label className="field case-search-field">
+            <span>搜索案件</span>
+            <input
+              aria-label="搜索案件"
+              placeholder="搜索进行中案件"
+              value={caseSearch}
+              onChange={(event) => setCaseSearch(event.target.value)}
+            />
+          </label>
 
           {isCreateOpen ? (
             <div className="create-drawer">
@@ -1233,7 +1328,7 @@ export function Workspace() {
           ) : null}
 
           <div className="case-list">
-            {cases.map((item) => (
+            {visibleCases.map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -1245,11 +1340,16 @@ export function Workspace() {
               >
                 <div className="case-title">{item.title}</div>
                 <div className="case-meta">
-                  <span>{item.currentStage}</span>
+                  <span>{stageLabel(item.currentStage)}</span>
                   <span>{formatTime(item.updatedAt)}</span>
                 </div>
               </button>
             ))}
+            {!visibleCases.length ? (
+              <div className="empty-inline-hint">
+                没有匹配的案件，试试换个关键词。
+              </div>
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -1269,23 +1369,21 @@ export function Workspace() {
             <span>{loading ? "处理中…" : currentCaseId ? "会话主舞台" : "先选开始方式，再录入第一条证据"}</span>
           </div>
 
-          <div className="conversation-feed">
+          <div className="conversation-feed" data-testid="conversation-feed" data-has-floating-dock="true">
             {!currentCaseId ? (
               <article className="message-card message-assistant message-empty">
                 <span className="message-role">AI 协作</span>
-                <h3>先跑通第一单，再继续补证据和出稿。</h3>
-                <p>
-                  先选一个开始方式，我再带着你把第一单跑通。
-                </p>
-                <p>
+              <h3>先跑通第一单，再继续补证据和出稿。</h3>
+              <p>先按开始第一单，我会直接带你进入分析。</p>
+              <p>
                   推荐先加载一个种子案例，3 分钟内看到第一版结果。也可以直接录入真实异常，随后把客户投诉、测试结论、批次工单或现场观察发进来，我会继续往前推进。
                 </p>
                 <div className="empty-actions">
                   <button className="primary-button" type="button" onClick={() => startWithSeedCase(seedCases[0].key)}>
-                    从种子案例开始
+                    开始第一单
                   </button>
                   <button className="ghost-button" type="button" onClick={startWithBlankCase}>
-                    新建空白案件
+                    直接新建空白案件
                   </button>
                 </div>
               </article>
@@ -1332,7 +1430,6 @@ export function Workspace() {
                     }
                     void openPreview(artifactForRecommendation(resultRecommendation?.kind));
                   }}
-                  onSecondaryRecommendation={keepCollectingEvidence}
                 />
               </>
             )}
@@ -1382,76 +1479,6 @@ export function Workspace() {
           </aside>
         ) : null}
       </main>
-
-      <div className="feedback-dock">
-        <button
-          className="secondary-button feedback-trigger"
-          type="button"
-          onClick={() => {
-            setFeedbackStatus(null);
-            setIsFeedbackOpen((value) => {
-              const next = !value;
-              if (next) {
-                setPreview(null);
-              }
-              return next;
-            });
-          }}
-        >
-          反馈
-        </button>
-        {isFeedbackOpen ? (
-          <section className="feedback-panel panel" aria-label="试用反馈">
-            <div className="panel-head">
-              <strong>试用反馈</strong>
-              <span>1 分钟说清问题</span>
-            </div>
-            <label className="field">
-              <span>问题分类</span>
-              <select
-                aria-label="问题分类"
-                value={feedbackCategory}
-                onChange={(event) => setFeedbackCategory(event.target.value as FeedbackCategory)}
-              >
-                {feedbackCategoryOptions.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>补充说明</span>
-              <textarea
-                aria-label="补充说明"
-                rows={4}
-                placeholder="哪一步让你卡住了，或者哪里不够专业？"
-                value={feedbackNote}
-                onChange={(event) => setFeedbackNote(event.target.value)}
-              />
-            </label>
-            <div className="feedback-actions">
-              <button
-                className="primary-button"
-                type="button"
-                onClick={submitFeedback}
-                disabled={isFeedbackSubmitting}
-              >
-                提交反馈
-              </button>
-              <button
-                className="ghost-button"
-                type="button"
-                onClick={() => setIsFeedbackOpen(false)}
-                disabled={isFeedbackSubmitting}
-              >
-                收起
-              </button>
-            </div>
-          </section>
-        ) : null}
-        {feedbackStatus ? <div className="feedback-status">{feedbackStatus}</div> : null}
-      </div>
 
       <style>{`
         .workspace-shell {
@@ -1868,6 +1895,17 @@ export function Workspace() {
           gap: 8px;
         }
 
+        .case-list-actions {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+          gap: 8px;
+        }
+
+        .case-search-field input {
+          width: 100%;
+        }
+
         .drawer-tools-copy {
           display: grid;
           gap: 2px;
@@ -1942,6 +1980,15 @@ export function Workspace() {
           gap: 8px;
         }
 
+        .empty-inline-hint {
+          padding: 12px;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.58);
+          border: 1px dashed rgba(215, 221, 234, 0.92);
+          color: var(--muted);
+          font-size: 12px;
+        }
+
         .case-card {
           text-align: left;
           background: rgba(255, 255, 255, 0.72);
@@ -1966,7 +2013,7 @@ export function Workspace() {
           min-height: 0;
           flex: 1;
           overflow: auto;
-          padding: 8px 0 104px;
+          padding: 8px 0 168px;
           max-width: 760px;
           width: min(100%, 760px);
           margin: 0 auto;
@@ -2329,12 +2376,12 @@ export function Workspace() {
         .composer-dock {
           display: grid;
           gap: 6px;
-          position: absolute;
-          right: 0;
-          bottom: 0;
-          left: 0;
-          z-index: 3;
-          padding: 0 12px 12px;
+          position: fixed;
+          right: max(12px, env(safe-area-inset-right));
+          bottom: max(12px, env(safe-area-inset-bottom));
+          left: max(62px, calc(env(safe-area-inset-left) + 62px));
+          z-index: 40;
+          padding: 0 12px 0 0;
           pointer-events: none;
         }
 
@@ -2462,6 +2509,10 @@ export function Workspace() {
             max-width: 100%;
           }
 
+          .conversation-feed {
+            padding-bottom: 196px;
+          }
+
           .case-drawer,
           .preview-drawer {
             left: 12px;
@@ -2471,9 +2522,11 @@ export function Workspace() {
             bottom: 12px;
           }
 
-          .feedback-dock {
-            right: 12px;
-            bottom: 12px;
+          .composer-dock {
+            left: max(12px, env(safe-area-inset-left));
+            right: max(12px, env(safe-area-inset-right));
+            bottom: max(12px, env(safe-area-inset-bottom));
+            padding-right: 0;
           }
         }
       `}</style>

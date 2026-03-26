@@ -4,6 +4,7 @@ import React from "react";
 
 type SovereignShellProps = {
   activeSection?: "Workspace";
+  hasCases?: boolean;
   children: React.ReactNode;
 };
 
@@ -87,34 +88,12 @@ export function SovereignShell({
                 </div>
               )
             ))}
-
-            <button
-              className="shell-rail-button"
-              type="button"
-              aria-label="快速新建案件"
-              onClick={() => dispatchShellEvent("fireline:start-blank-case")}
-            >
-              <span className="shell-rail-icon" aria-hidden="true">
-                新
-              </span>
-              <span>NEW</span>
-            </button>
           </nav>
         </aside>
 
         <section className="sovereign-stage">{children}</section>
 
-        <aside className="sovereign-report-rail" aria-label="报告侧栏">
-          <button
-            className="report-rail-trigger"
-            type="button"
-            aria-label="打开报告面板"
-            onClick={() => dispatchShellEvent("fireline:open-report-drawer")}
-          >
-            报
-          </button>
-          <span className="report-rail-label">REPORT RAIL</span>
-        </aside>
+        <aside className="sovereign-report-rail shell-rail-empty" aria-hidden="true" />
       </div>
 
       <style>{`

@@ -57,6 +57,7 @@ export interface CaseRecord {
   id: string;
   title: string;
   status: CaseStatus;
+  archivedAt: string | null;
   currentStage: ActiveWorkflowStage;
   mode: WorkflowMode;
   d1Status: D1Status;

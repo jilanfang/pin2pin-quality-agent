@@ -23,6 +23,7 @@ export function serializeCaseSummary(aggregate: CaseAggregate) {
     id: aggregate.caseRecord.id,
     title: aggregate.caseRecord.title,
     status: aggregate.caseRecord.status,
+    archivedAt: aggregate.caseRecord.archivedAt,
     currentStage: aggregate.caseRecord.currentStage,
     mode: aggregate.caseRecord.mode,
     d1Status: aggregate.caseRecord.d1Status,

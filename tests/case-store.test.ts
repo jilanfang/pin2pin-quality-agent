@@ -53,4 +53,30 @@ describe("caseStore", () => {
     expect(cases.map((item) => item.id)).toContain(aggregate.caseRecord.id);
     expect(restored?.caseRecord.title).toBe("跨模块内存案件");
   }, 15000);
+
+  it("supports renaming, archiving, restoring, and deleting a case in no-db mode", async () => {
+    const module = await import("@/lib/server/case-store");
+    const store = module.getCaseStore();
+
+    const created = await store.createCase("待管理案件");
+
+    const renamed = await store.updateCase(created.caseRecord.id, {
+      title: "已重命名案件",
+    });
+    expect(renamed?.caseRecord.title).toBe("已重命名案件");
+    expect(renamed?.caseRecord.archivedAt).toBeNull();
+
+    const archived = await store.updateCase(created.caseRecord.id, {
+      archived: true,
+    });
+    expect(archived?.caseRecord.archivedAt).toEqual(expect.any(String));
+
+    const restored = await store.updateCase(created.caseRecord.id, {
+      archived: false,
+    });
+    expect(restored?.caseRecord.archivedAt).toBeNull();
+
+    await expect(store.deleteCase(created.caseRecord.id)).resolves.toBe(true);
+    await expect(store.getCase(created.caseRecord.id)).resolves.toBeNull();
+  }, 15000);
 });

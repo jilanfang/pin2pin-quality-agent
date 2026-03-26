@@ -31,6 +31,11 @@ import type {
 import { WORKFLOW_STAGES } from "@/lib/domain/types";
 import { createCaseAggregate } from "@/lib/domain/workflow-engine";
 
+type CaseUpdateInput = {
+  title?: string;
+  archived?: boolean;
+};
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -122,6 +127,33 @@ class MemoryCaseStore {
     return aggregate ? cloneAggregate(aggregate) : null;
   }
 
+  async updateCase(id: string, updates: CaseUpdateInput) {
+    const state = await readLocalStoreState();
+    const aggregate = state.cases[id];
+    if (!aggregate) return null;
+
+    if (typeof updates.title === "string") {
+      aggregate.caseRecord.title = updates.title;
+    }
+
+    if (typeof updates.archived === "boolean") {
+      aggregate.caseRecord.archivedAt = updates.archived ? nowIso() : null;
+    }
+
+    aggregate.caseRecord.updatedAt = nowIso();
+    state.cases[id] = cloneAggregate(aggregate);
+    await writeLocalStoreState(state);
+    return cloneAggregate(aggregate);
+  }
+
+  async deleteCase(id: string) {
+    const state = await readLocalStoreState();
+    if (!state.cases[id]) return false;
+    delete state.cases[id];
+    await writeLocalStoreState(state);
+    return true;
+  }
+
   async saveCase(aggregate: CaseAggregate) {
     const state = await readLocalStoreState();
     state.cases[aggregate.caseRecord.id] = cloneAggregate(aggregate);
@@ -158,6 +190,7 @@ class PostgresCaseStore {
           id: row.id,
           title: row.title,
           status: row.status as CaseStatus,
+          archivedAt: parseDate(row.archivedAt),
           currentStage: row.currentStage as CaseRecord["currentStage"],
           mode: row.mode as WorkflowMode,
           d1Status: row.d1Status as D1Status,
@@ -230,6 +263,7 @@ class PostgresCaseStore {
         id: caseRow.id,
         title: caseRow.title,
         status: caseRow.status as CaseStatus,
+        archivedAt: parseDate(caseRow.archivedAt),
         currentStage: caseRow.currentStage as CaseRecord["currentStage"],
         mode: caseRow.mode as WorkflowMode,
         d1Status: caseRow.d1Status as D1Status,
@@ -268,6 +302,7 @@ class PostgresCaseStore {
         id: aggregate.caseRecord.id,
         title: aggregate.caseRecord.title,
         status: aggregate.caseRecord.status,
+        archivedAt: aggregate.caseRecord.archivedAt ? new Date(aggregate.caseRecord.archivedAt) : null,
         currentStage: aggregate.caseRecord.currentStage,
         mode: aggregate.caseRecord.mode,
         d1Status: aggregate.caseRecord.d1Status,
@@ -279,6 +314,7 @@ class PostgresCaseStore {
         set: {
           title: aggregate.caseRecord.title,
           status: aggregate.caseRecord.status,
+          archivedAt: aggregate.caseRecord.archivedAt ? new Date(aggregate.caseRecord.archivedAt) : null,
           currentStage: aggregate.caseRecord.currentStage,
           mode: aggregate.caseRecord.mode,
           d1Status: aggregate.caseRecord.d1Status,
@@ -351,12 +387,47 @@ class PostgresCaseStore {
       createdAt: new Date(),
     });
   }
+
+  async updateCase(id: string, updates: CaseUpdateInput) {
+    const aggregate = await this.getCase(id);
+    if (!aggregate) return null;
+
+    if (typeof updates.title === "string") {
+      aggregate.caseRecord.title = updates.title;
+    }
+
+    if (typeof updates.archived === "boolean") {
+      aggregate.caseRecord.archivedAt = updates.archived ? nowIso() : null;
+    }
+
+    aggregate.caseRecord.updatedAt = nowIso();
+    await this.saveCase(aggregate);
+    return aggregate;
+  }
+
+  async deleteCase(id: string) {
+    const db = getDb();
+    if (!db) throw new Error("DATABASE_URL is required");
+
+    const [existing] = await db.select({ id: casesTable.id }).from(casesTable).where(eq(casesTable.id, id)).limit(1);
+    if (!existing) return false;
+
+    await db.delete(caseMessagesTable).where(eq(caseMessagesTable.caseId, id));
+    await db.delete(caseStagesTable).where(eq(caseStagesTable.caseId, id));
+    await db.delete(factSnapshotsTable).where(eq(factSnapshotsTable.caseId, id));
+    await db.delete(reportVersionsTable).where(eq(reportVersionsTable.caseId, id));
+    await db.delete(artifactsTable).where(eq(artifactsTable.caseId, id));
+    await db.delete(casesTable).where(eq(casesTable.id, id));
+    return true;
+  }
 }
 
 export interface CaseStore {
   listCases(): Promise<CaseRecord[]>;
   createCase(title: string, seedCase?: SeedCaseKey): Promise<CaseAggregate>;
   getCase(id: string): Promise<CaseAggregate | null>;
+  updateCase(id: string, updates: CaseUpdateInput): Promise<CaseAggregate | null>;
+  deleteCase(id: string): Promise<boolean>;
   saveCase(aggregate: CaseAggregate): Promise<void>;
   saveReport(document: OutputDocument): Promise<void>;
 }
