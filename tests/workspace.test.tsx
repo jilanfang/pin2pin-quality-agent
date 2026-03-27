@@ -695,6 +695,122 @@ describe("Workspace", () => {
     expect(screen.queryByLabelText("案件抽屉")).not.toBeInTheDocument();
   });
 
+  it("clears an open preview drawer when creating a new case from the drawer", async () => {
+    const preview = buildPreview();
+    const originalSummary = buildCaseSummary();
+    const blankSummary = buildCaseSummary({
+      id: "case-2",
+      title: "新的空白案件",
+      currentStage: "D2",
+      d1Status: "not_started",
+      updatedAt: "2026-03-23T10:00:00.000Z",
+    });
+    const blankWorkflow = {
+      ...buildCaseWorkflow(),
+      caseId: "case-2",
+      title: "新的空白案件",
+      currentStage: "D2",
+      d1Status: "not_started",
+      messages: [],
+      knownFacts: [],
+      assumptions: [],
+      riskFlags: [],
+      resultReadiness: {
+        analysisSummary: false,
+        actionPlan: false,
+        eightD: false,
+      },
+      resultRecommendation: {
+        kind: "analysis_summary" as const,
+        title: "先继续补关键信息",
+        rationale: "当前还没有稳定事实，先补现象、时间、批次和影响范围，再整理分析结论。",
+        primaryActionLabel: "继续补信息",
+        secondaryActionLabel: "稍后整理",
+      },
+    };
+
+    const fetchMock = stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/cases" && !init?.method) {
+        return new Response(JSON.stringify([originalSummary]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 });
+      }
+      if (url === "/api/cases/case-1/report-preview?artifact=analysis_summary") {
+        return new Response(JSON.stringify(preview), { status: 200 });
+      }
+      if (url === "/api/cases" && init?.method === "POST") {
+        return new Response(JSON.stringify(blankSummary), { status: 200 });
+      }
+      if (url === "/api/cases/case-2") {
+        return new Response(JSON.stringify(blankWorkflow), { status: 200 });
+      }
+      if (url === "/api/cases?refresh=created") {
+        return new Response(JSON.stringify([blankSummary, originalSummary]), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    let caseListReadCount = 0;
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/cases" && !init?.method) {
+        caseListReadCount += 1;
+        const payload = caseListReadCount >= 2 ? [blankSummary, originalSummary] : [originalSummary];
+        return new Response(JSON.stringify(payload), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 });
+      }
+      if (url === "/api/cases/case-1/report-preview?artifact=analysis_summary") {
+        return new Response(JSON.stringify(preview), { status: 200 });
+      }
+      if (url === "/api/cases" && init?.method === "POST") {
+        return new Response(JSON.stringify(blankSummary), { status: 200 });
+      }
+      if (url === "/api/cases/case-2") {
+        return new Response(JSON.stringify(blankWorkflow), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+    fireEvent.click(screen.getByRole("button", { name: "整理分析结论" }));
+    await screen.findByTestId("preview-drawer");
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("fireline:toggle-case-drawer"));
+    });
+
+    const drawer = await screen.findByLabelText("案件抽屉");
+    fireEvent.click(within(drawer).getByRole("button", { name: "新建案件" }));
+    fireEvent.change(within(drawer).getByLabelText("案件标题"), {
+      target: { value: "新的空白案件" },
+    });
+    fireEvent.click(within(drawer).getByRole("button", { name: "创建案件" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/cases",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            title: "新的空白案件",
+            seedCase: undefined,
+          }),
+        })
+      );
+    });
+
+    await screen.findByRole("heading", { name: "新的空白案件" });
+    expect(screen.queryByTestId("preview-drawer")).not.toBeInTheDocument();
+    expect(screen.getByText("先继续补关键信息")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "继续补信息" })).toBeInTheDocument();
+  });
+
   it("keeps the preview drawer hidden by default and opens it from the conversation action card", async () => {
     const preview = buildPreview();
     const { fetchMock } = workspaceWithSingleCase(async (input: RequestInfo | URL) => {
@@ -719,6 +835,22 @@ describe("Workspace", () => {
     const drawer = await screen.findByTestId("preview-drawer");
     expect(within(drawer).getAllByText("结果预览").length).toBeGreaterThan(0);
     expect(within(drawer).getByTitle("分析结论预览")).toBeInTheDocument();
+  });
+
+  it("anchors the case drawer as a viewport overlay so it does not depend on workspace layout flow", async () => {
+    workspaceWithSingleCase();
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("fireline:toggle-case-drawer"));
+    });
+
+    const drawer = await screen.findByLabelText("案件抽屉");
+    const scrim = screen.getByRole("button", { name: "关闭抽屉遮罩" });
+
+    expect(scrim).toHaveStyle({ position: "fixed" });
+    expect(drawer).toHaveStyle({ position: "fixed" });
   });
 
   it("shows AI result recommendation actions in the assistant area instead of topbar controls", async () => {

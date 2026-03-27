@@ -1188,6 +1188,7 @@ export function Workspace() {
 
       currentCaseIdRef.current = payload.id;
       setCurrentCaseId(payload.id);
+      setPreview(null);
       setCases((items) => {
         const nextCases = [payload, ...items.filter((item) => item.id !== payload.id)];
         casesRef.current = nextCases;
@@ -1335,6 +1336,7 @@ export function Workspace() {
                 className={`case-card${item.id === currentCaseId ? " active" : ""}`}
                 onClick={() => {
                   setCurrentCaseId(item.id);
+                  setPreview(null);
                   setIsCaseDrawerOpen(false);
                 }}
               >
@@ -1547,7 +1549,7 @@ export function Workspace() {
         }
 
         .drawer-scrim {
-          position: absolute;
+          position: fixed;
           inset: 0;
           border: 0;
           padding: 0;
@@ -1558,7 +1560,7 @@ export function Workspace() {
 
         .case-drawer,
         .preview-drawer {
-          position: absolute;
+          position: fixed;
           top: 8px;
           bottom: 8px;
           z-index: 20;

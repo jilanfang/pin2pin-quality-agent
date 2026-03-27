@@ -37,6 +37,8 @@ type ProviderRoute = {
   model: string;
 };
 
+const DEFAULT_TIMEOUT_MS = 4000;
+
 class LlmRouteError extends Error {
   code: LlmFailureCode;
 
@@ -111,6 +113,19 @@ function buildChatCompletionsUrl(baseUrl: string, mode: "generic" | "direct" = "
   return normalizedBaseUrl.endsWith("/v1")
     ? `${normalizedBaseUrl}/chat/completions`
     : `${normalizedBaseUrl}/v1/chat/completions`;
+}
+
+function getTimeoutMs(capability: LlmCapability) {
+  const capabilityOverride = process.env[
+    `AI_QUALITY_LLM_${capability.toUpperCase()}_TIMEOUT_MS`
+  ]?.trim();
+  const globalOverride = process.env.AI_QUALITY_LLM_TIMEOUT_MS?.trim();
+  const raw = capabilityOverride || globalOverride;
+  const parsed = raw ? Number(raw) : NaN;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+  return DEFAULT_TIMEOUT_MS;
 }
 
 function getProviderConfig(
@@ -298,8 +313,11 @@ async function callOpenAiCompatible(
   endpoint: string,
   apiKey: string,
   model: string,
-  messages: ChatMessage[]
+  messages: ChatMessage[],
+  timeoutMs: number
 ) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
   try {
     response = await fetch(endpoint, {
@@ -308,6 +326,7 @@ async function callOpenAiCompatible(
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
+      signal: controller.signal,
       body: JSON.stringify({
         model,
         temperature: 0.2,
@@ -320,6 +339,8 @@ async function callOpenAiCompatible(
       "request_failed",
       error instanceof Error ? error.message : "fetch failed"
     );
+  } finally {
+    clearTimeout(timeout);
   }
 
   if (!response.ok) {
@@ -364,6 +385,7 @@ export async function extractEvidenceWithLlm(
 
   const routes = getProviderRoutes("extract");
   if (routes.length === 0) return null;
+  const timeoutMs = getTimeoutMs("extract");
 
   const failures: string[] = [];
 
@@ -379,7 +401,8 @@ export async function extractEvidenceWithLlm(
         route.baseUrl,
         route.apiKey,
         route.model,
-        buildExtractionPrompt(payload)
+        buildExtractionPrompt(payload),
+        timeoutMs
       );
       const extraction = parseExtraction(content);
       if (!extraction) {

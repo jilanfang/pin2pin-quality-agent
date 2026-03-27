@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 afterEach(() => {
   vi.restoreAllMocks();
   delete process.env.AI_QUALITY_LLM_ENABLED;
+  delete process.env.AI_QUALITY_LLM_TIMEOUT_MS;
+  delete process.env.AI_QUALITY_LLM_EXTRACT_TIMEOUT_MS;
   delete process.env.AI_QUALITY_LLM_BASE_URL;
   delete process.env.AI_QUALITY_LLM_API_KEY;
   delete process.env.AI_QUALITY_LLM_PROVIDER;
@@ -610,5 +612,34 @@ describe("llm adapter", () => {
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining("[llm][extract] fallback_exhausted")
     );
+  });
+
+  it("returns null after timing out extract routes instead of hanging forever", async () => {
+    process.env.AI_QUALITY_LLM_ENABLED = "true";
+    process.env.AI_QUALITY_LLM_PROVIDER = "qwen";
+    process.env.AI_QUALITY_LLM_BASE_URL = "https://api.vectorengine.ai/v1";
+    process.env.AI_QUALITY_LLM_API_KEY = "generic-key";
+    process.env.AI_QUALITY_ARK_API_KEY = "ark-key";
+    process.env.AI_QUALITY_ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/coding/v3";
+    process.env.AI_QUALITY_LLM_EXTRACT_TIMEOUT_MS = "10";
+
+    const fetchMock = vi.fn((_input, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(new DOMException("The operation was aborted.", "AbortError"));
+        });
+      });
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { extractEvidenceWithLlm } = await import("@/lib/server/llm");
+    const result = await extractEvidenceWithLlm({
+      content: "客户大麦科技反馈 MCU-800 产线停线。",
+      contextStage: "D2",
+    });
+
+    expect(result).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

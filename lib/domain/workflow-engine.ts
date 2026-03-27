@@ -265,6 +265,93 @@ function nextStage(stage: ActiveWorkflowStage): ActiveWorkflowStage {
   return ACTIVE_WORKFLOW_STAGES[index + 1];
 }
 
+function shouldAutoAdvanceFromD2(aggregate: CaseAggregate) {
+  if (aggregate.caseRecord.currentStage !== "D2") return false;
+
+  const facts = factMap(aggregate.knownFacts);
+  const isUrgentComplaint = facts.mode === "customer_complaint_urgent";
+  if (!isUrgentComplaint) return false;
+
+  const missing = new Set(aggregate.missingFields.map((item) => item.field));
+  return !missing.has("failure_location") && !missing.has("containment_status");
+}
+
+function shouldAutoAdvanceFromD3(aggregate: CaseAggregate) {
+  if (aggregate.caseRecord.currentStage !== "D3") return false;
+
+  const facts = factMap(aggregate.knownFacts);
+  const isUrgentComplaint = facts.mode === "customer_complaint_urgent";
+  if (!isUrgentComplaint) return false;
+
+  return Boolean(
+    facts.containment_customer_site &&
+      facts.containment_shipped &&
+      facts.containment_stock &&
+      facts.containment_wip
+  );
+}
+
+function shouldAutoAdvanceFromD4(aggregate: CaseAggregate, userInput: string) {
+  if (aggregate.caseRecord.currentStage !== "D4") return false;
+
+  const facts = factMap(aggregate.knownFacts);
+  const isUrgentComplaint = facts.mode === "customer_complaint_urgent";
+  if (!isUrgentComplaint) return false;
+
+  const normalizedInput = userInput.replace(/\s+/g, "");
+  const mentionsDualCauseChain =
+    (normalizedInput.includes("发生原因") || normalizedInput.includes("occurrence")) &&
+    (
+      normalizedInput.includes("流出原因") ||
+      normalizedInput.includes("逃逸原因") ||
+      normalizedInput.includes("escape")
+    );
+
+  return Boolean(facts.change_point && mentionsDualCauseChain);
+}
+
+function shouldAutoAdvanceFromD5(aggregate: CaseAggregate, userInput: string) {
+  if (aggregate.caseRecord.currentStage !== "D5") return false;
+
+  const facts = factMap(aggregate.knownFacts);
+  const isUrgentComplaint = facts.mode === "customer_complaint_urgent";
+  if (!isUrgentComplaint) return false;
+
+  const normalizedInput = userInput.replace(/\s+/g, "");
+  const hasOccurrenceAction =
+    normalizedInput.includes("发生原因侧永久措施") ||
+    (normalizedInput.includes("发生原因") && normalizedInput.includes("永久措施"));
+  const hasEscapeAction =
+    normalizedInput.includes("流出原因侧永久措施") ||
+    normalizedInput.includes("逃逸原因侧永久措施") ||
+    ((normalizedInput.includes("流出原因") || normalizedInput.includes("逃逸原因")) &&
+      normalizedInput.includes("永久措施"));
+  const hasSystemicAction =
+    normalizedInput.includes("系统性纠正措施") ||
+    (normalizedInput.includes("系统性") && normalizedInput.includes("纠正措施"));
+
+  return hasOccurrenceAction && hasEscapeAction && hasSystemicAction;
+}
+
+function advanceCaseStage(
+  aggregate: CaseAggregate,
+  next: ActiveWorkflowStage,
+  options?: {
+    userInput?: string;
+    confirmedContext?: string;
+  }
+) {
+  aggregate.caseRecord.currentStage = next;
+  if (!aggregate.stages[next].workingContent.trim()) {
+    aggregate.stages[next].workingContent = buildStageFallback(
+      next,
+      aggregate.knownFacts,
+      options?.userInput ?? "",
+      options?.confirmedContext ?? buildConfirmedContext(aggregate)
+    );
+  }
+}
+
 function getGuidedThinking(aggregate: CaseAggregate) {
   return buildGuidedThinking(
     aggregate.caseRecord.currentStage,
@@ -492,6 +579,29 @@ export function applyEvidence(
     targetStage,
     impactReason
   );
+
+  if (shouldAutoAdvanceFromD2(aggregate)) {
+    advanceCaseStage(aggregate, "D3", {
+      userInput: payload.content,
+      confirmedContext: buildConfirmedContext(aggregate),
+    });
+  } else if (shouldAutoAdvanceFromD3(aggregate)) {
+    advanceCaseStage(aggregate, "D4", {
+      userInput: payload.content,
+      confirmedContext: buildConfirmedContext(aggregate),
+    });
+  } else if (shouldAutoAdvanceFromD4(aggregate, payload.content)) {
+    advanceCaseStage(aggregate, "D5", {
+      userInput: payload.content,
+      confirmedContext: buildConfirmedContext(aggregate),
+    });
+  } else if (shouldAutoAdvanceFromD5(aggregate, payload.content)) {
+    advanceCaseStage(aggregate, "D6", {
+      userInput: payload.content,
+      confirmedContext: buildConfirmedContext(aggregate),
+    });
+  }
+
   syncCaseState(aggregate);
   pushAssistantNote(aggregate, buildAssistantResponseForEvidence(aggregate, targetStage));
   return aggregate;
@@ -521,15 +631,7 @@ export function confirmStage(
     aggregate.caseRecord.d1Status = "complete";
   } else if (payload.stage !== "D8") {
     const next = nextStage(payload.stage as ActiveWorkflowStage);
-    aggregate.caseRecord.currentStage = next;
-    if (!aggregate.stages[next].workingContent) {
-      aggregate.stages[next].workingContent = buildStageFallback(
-        next,
-        aggregate.knownFacts,
-        "",
-        buildConfirmedContext(aggregate)
-      );
-    }
+    advanceCaseStage(aggregate, next);
   }
 
   syncCaseState(aggregate);

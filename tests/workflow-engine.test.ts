@@ -61,6 +61,32 @@ describe("workflowEngine", () => {
     expect(assistantMessage).not.toContain("工单、批次、线别");
   });
 
+  it("auto-advances urgent complaints to D3 once D2 facts are complete enough to start containment review", () => {
+    let aggregate = createCaseAggregate("紧急客诉");
+
+    aggregate = applyEvidence(aggregate, {
+      content:
+        "客户现场发现上电冒烟，批次B22，今天早班出现3台，已暂停出货。",
+      contextStage: "D2",
+    });
+
+    aggregate = applyEvidence(aggregate, {
+      content: "失效位置在输入端钽电容C25附近，厂内库存已冻结，在制品暂停投线。",
+      contextStage: "D2",
+    });
+
+    const guided = buildCaseWorkflowView(aggregate).guidedThinking;
+    const assistantMessage = aggregate.messages.at(-1)?.content ?? "";
+
+    expect(aggregate.caseRecord.currentStage).toBe("D3");
+    expect(aggregate.stages.D3.workingContent).toContain("D3 临时遏制措施工作稿");
+    expect(guided?.focusArea).toBe("D3");
+    expect(guided?.suggestedQuestions).toEqual([
+      "客户现场、已发货、成品库存、在制品目前各自怎么处理，哪一块还没控住、责任人是谁、预计何时关窗？",
+    ]);
+    expect(assistantMessage).toContain("客户现场、已发货、成品库存、在制品目前各自怎么处理");
+  });
+
   it("keeps only one highest-value next question in normal D2 guidance", () => {
     let aggregate = createCaseAggregate("普通异常");
 
@@ -258,6 +284,33 @@ describe("workflowEngine", () => {
     expect(aggregate.stages.D3.workingContent).toContain("关闭条件");
   });
 
+  it("auto-advances urgent complaints from D3 to D4 once containment scope is complete", () => {
+    let aggregate = createCaseAggregate("紧急客诉");
+
+    aggregate = applyEvidence(aggregate, {
+      content:
+        "客户大麦科技反馈 MCU-800 主控板爆板冒烟，位号C25处异常，批次B12，2026-03-21发现，客户产线停线，已暂停出货。",
+      contextStage: "D2",
+    });
+    aggregate = confirmStage(aggregate, { stage: "D2" });
+
+    aggregate = applyEvidence(aggregate, {
+      content: "客户现场已封存待检，已发货已冻结追查，成品库存已扣留，在制品暂停投线。",
+      contextStage: "D3",
+    });
+
+    const guided = buildCaseWorkflowView(aggregate).guidedThinking;
+    const assistantMessage = aggregate.messages.at(-1)?.content ?? "";
+
+    expect(aggregate.caseRecord.currentStage).toBe("D4");
+    expect(aggregate.stages.D4.workingContent).toContain("D4 根本原因分析工作稿");
+    expect(guided?.focusArea).toBe("D4");
+    expect(guided?.suggestedQuestions).toEqual([
+      "先确认这次异常的 change point 是什么，以及发生原因和流出原因各自被什么证据支持。",
+    ]);
+    expect(assistantMessage).toContain("change point");
+  });
+
   it("builds D4 around occurrence escape evidence and validation for urgent complaints", () => {
     let aggregate = createCaseAggregate("紧急客诉");
 
@@ -282,6 +335,73 @@ describe("workflowEngine", () => {
     expect(aggregate.stages.D4.workingContent).toContain("当前证据");
     expect(aggregate.stages.D4.workingContent).toContain("待验证项");
     expect(aggregate.messages.at(-1)?.content ?? "").toContain("change point");
+  });
+
+  it("auto-advances urgent complaints from D4 to D5 once change point evidence is clarified", () => {
+    let aggregate = createCaseAggregate("紧急客诉");
+
+    aggregate = applyEvidence(aggregate, {
+      content:
+        "客户大麦科技反馈 MCU-800 主控板爆板冒烟，位号C25处异常，批次B12，2026-03-21发现，客户产线停线，已暂停出货。",
+      contextStage: "D2",
+    });
+    aggregate = confirmStage(aggregate, { stage: "D2" });
+
+    aggregate = applyEvidence(aggregate, {
+      content: "客户端封存待检，已发货和库存冻结，在制品暂停投线。",
+      contextStage: "D3",
+    });
+    aggregate = confirmStage(aggregate, { stage: "D3" });
+
+    aggregate = applyEvidence(aggregate, {
+      content: "替代料导入后卷带方向与原厂相反，AOI 阈值也被放宽，发生原因和流出原因都需要围绕这个 change point 继续确认。",
+      contextStage: "D4",
+    });
+
+    const guided = buildCaseWorkflowView(aggregate).guidedThinking;
+    const assistantMessage = aggregate.messages.at(-1)?.content ?? "";
+
+    expect(aggregate.caseRecord.currentStage).toBe("D5");
+    expect(aggregate.stages.D5.workingContent).toContain("D5 永久纠正措施工作稿");
+    expect(guided?.focusArea).toBe("D5");
+    expect(guided?.suggestedQuestions).toEqual(["当前阶段还有哪些关键动作未完成？"]);
+    expect(assistantMessage).toContain("当前阶段还有哪些关键动作未完成");
+  });
+
+  it("auto-advances urgent complaints from D5 to D6 once corrective actions are stated explicitly", () => {
+    let aggregate = createCaseAggregate("紧急客诉");
+
+    aggregate = applyEvidence(aggregate, {
+      content:
+        "客户大麦科技反馈 MCU-800 主控板爆板冒烟，位号C25处异常，批次B12，2026-03-21发现，客户产线停线，已暂停出货。",
+      contextStage: "D2",
+    });
+    aggregate = confirmStage(aggregate, { stage: "D2" });
+
+    aggregate = applyEvidence(aggregate, {
+      content: "客户端封存待检，已发货和库存冻结，在制品暂停投线。",
+      contextStage: "D3",
+    });
+    aggregate = confirmStage(aggregate, { stage: "D3" });
+
+    aggregate = applyEvidence(aggregate, {
+      content: "替代料导入后卷带方向与原厂相反，发生原因和流出原因都需要围绕这个 change point 继续确认。",
+      contextStage: "D4",
+    });
+
+    aggregate = applyEvidence(aggregate, {
+      content: "发生原因侧永久措施是恢复原厂卷带方向并锁定贴片角度，流出原因侧永久措施是收紧AOI阈值并加严放行，系统性纠正措施是更新程序、SOP和培训。",
+      contextStage: "D5",
+    });
+
+    const guided = buildCaseWorkflowView(aggregate).guidedThinking;
+    const assistantMessage = aggregate.messages.at(-1)?.content ?? "";
+
+    expect(aggregate.caseRecord.currentStage).toBe("D6");
+    expect(aggregate.stages.D6.workingContent).toContain("D6 实施与验证计划工作稿");
+    expect(guided?.focusArea).toBe("D6");
+    expect(guided?.suggestedQuestions).toEqual(["当前阶段还有哪些关键动作未完成？"]);
+    expect(assistantMessage).toContain("当前阶段还有哪些关键动作未完成");
   });
 
   it("writes D3 as an actionable containment worksheet instead of a generic suggestion", () => {

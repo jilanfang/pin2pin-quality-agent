@@ -260,6 +260,16 @@ export function buildResultRecommendation(aggregate: CaseAggregate): ResultRecom
     };
   }
 
+  if (!readiness.analysisSummary) {
+    return {
+      kind: "analysis_summary",
+      title: "先继续补关键信息",
+      rationale: "当前还没有稳定事实，先补现象、时间、批次和影响范围，再整理分析结论。",
+      primaryActionLabel: "继续补信息",
+      secondaryActionLabel: "稍后整理",
+    };
+  }
+
   return {
     kind: "analysis_summary",
     title: "建议先整理分析结论",
