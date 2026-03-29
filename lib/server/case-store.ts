@@ -2,7 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { getDb } from "@/lib/db/client";
 import {
@@ -34,6 +34,10 @@ import { createCaseAggregate } from "@/lib/domain/workflow-engine";
 type CaseUpdateInput = {
   title?: string;
   archived?: boolean;
+};
+
+type CaseOwnerContext = {
+  ownerUserId?: string | null;
 };
 
 function nowIso() {
@@ -103,34 +107,38 @@ async function writeLocalStoreState(state: LocalStoreState) {
 }
 
 class MemoryCaseStore {
-  async listCases() {
+  async listCases(ownerUserId?: string | null) {
     const state = await readLocalStoreState();
     return Object.values(state.cases)
+      .filter((item) => !ownerUserId || item.caseRecord.ownerUserId === ownerUserId)
       .map((item) => item.caseRecord)
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   }
 
-  async createCase(title: string, seedCase?: SeedCaseKey) {
+  async createCase(title: string, seedCase?: SeedCaseKey, ownerUserId?: string | null) {
     const state = await readLocalStoreState();
     const aggregate = seedCase ? buildSeedCase(seedCase) : null;
     const next: CaseAggregate = aggregate
       ? { ...cloneAggregate(aggregate), caseRecord: { ...aggregate.caseRecord, title } }
       : createCaseAggregate(title);
+    next.caseRecord.ownerUserId = ownerUserId ?? null;
     state.cases[next.caseRecord.id] = cloneAggregate(next);
     await writeLocalStoreState(state);
     return cloneAggregate(next);
   }
 
-  async getCase(id: string) {
+  async getCase(id: string, ownerUserId?: string | null) {
     const state = await readLocalStoreState();
     const aggregate = state.cases[id];
+    if (aggregate && ownerUserId && aggregate.caseRecord.ownerUserId !== ownerUserId) return null;
     return aggregate ? cloneAggregate(aggregate) : null;
   }
 
-  async updateCase(id: string, updates: CaseUpdateInput) {
+  async updateCase(id: string, updates: CaseUpdateInput, ownerUserId?: string | null) {
     const state = await readLocalStoreState();
     const aggregate = state.cases[id];
     if (!aggregate) return null;
+    if (ownerUserId && aggregate.caseRecord.ownerUserId !== ownerUserId) return null;
 
     if (typeof updates.title === "string") {
       aggregate.caseRecord.title = updates.title;
@@ -146,9 +154,10 @@ class MemoryCaseStore {
     return cloneAggregate(aggregate);
   }
 
-  async deleteCase(id: string) {
+  async deleteCase(id: string, ownerUserId?: string | null) {
     const state = await readLocalStoreState();
     if (!state.cases[id]) return false;
+    if (ownerUserId && state.cases[id]?.caseRecord.ownerUserId !== ownerUserId) return false;
     delete state.cases[id];
     await writeLocalStoreState(state);
     return true;
@@ -180,14 +189,21 @@ function getMemoryStoreSingleton() {
 }
 
 class PostgresCaseStore {
-  async listCases(): Promise<CaseRecord[]> {
+  async listCases(ownerUserId?: string | null): Promise<CaseRecord[]> {
     const db = getDb();
     if (!db) throw new Error("DATABASE_URL is required");
-    const rows = await db.select().from(casesTable).orderBy(desc(casesTable.updatedAt));
+    const rows = ownerUserId
+      ? await db
+          .select()
+          .from(casesTable)
+          .where(eq(casesTable.ownerUserId, ownerUserId))
+          .orderBy(desc(casesTable.updatedAt))
+      : await db.select().from(casesTable).orderBy(desc(casesTable.updatedAt));
     return rows.map(
       (row) =>
         ({
           id: row.id,
+          ownerUserId: row.ownerUserId,
           title: row.title,
           status: row.status as CaseStatus,
           archivedAt: parseDate(row.archivedAt),
@@ -200,20 +216,27 @@ class PostgresCaseStore {
     );
   }
 
-  async createCase(title: string, seedCase?: SeedCaseKey) {
+  async createCase(title: string, seedCase?: SeedCaseKey, ownerUserId?: string | null) {
     const aggregate = seedCase
       ? buildSeedCase(seedCase)
       : createCaseAggregate(title);
     aggregate.caseRecord.title = title;
+    aggregate.caseRecord.ownerUserId = ownerUserId ?? null;
     await this.saveCase(aggregate);
     return aggregate;
   }
 
-  async getCase(id: string) {
+  async getCase(id: string, ownerUserId?: string | null) {
     const db = getDb();
     if (!db) throw new Error("DATABASE_URL is required");
 
-    const [caseRow] = await db.select().from(casesTable).where(eq(casesTable.id, id)).limit(1);
+    const [caseRow] = ownerUserId
+      ? await db
+          .select()
+          .from(casesTable)
+          .where(and(eq(casesTable.id, id), eq(casesTable.ownerUserId, ownerUserId)))
+          .limit(1)
+      : await db.select().from(casesTable).where(eq(casesTable.id, id)).limit(1);
     if (!caseRow) return null;
 
     const stageRows = await db
@@ -261,6 +284,7 @@ class PostgresCaseStore {
     return {
       caseRecord: {
         id: caseRow.id,
+        ownerUserId: caseRow.ownerUserId,
         title: caseRow.title,
         status: caseRow.status as CaseStatus,
         archivedAt: parseDate(caseRow.archivedAt),
@@ -300,6 +324,7 @@ class PostgresCaseStore {
       .insert(casesTable)
       .values({
         id: aggregate.caseRecord.id,
+        ownerUserId: aggregate.caseRecord.ownerUserId,
         title: aggregate.caseRecord.title,
         status: aggregate.caseRecord.status,
         archivedAt: aggregate.caseRecord.archivedAt ? new Date(aggregate.caseRecord.archivedAt) : null,
@@ -313,6 +338,7 @@ class PostgresCaseStore {
         target: casesTable.id,
         set: {
           title: aggregate.caseRecord.title,
+          ownerUserId: aggregate.caseRecord.ownerUserId,
           status: aggregate.caseRecord.status,
           archivedAt: aggregate.caseRecord.archivedAt ? new Date(aggregate.caseRecord.archivedAt) : null,
           currentStage: aggregate.caseRecord.currentStage,
@@ -388,8 +414,8 @@ class PostgresCaseStore {
     });
   }
 
-  async updateCase(id: string, updates: CaseUpdateInput) {
-    const aggregate = await this.getCase(id);
+  async updateCase(id: string, updates: CaseUpdateInput, ownerUserId?: string | null) {
+    const aggregate = await this.getCase(id, ownerUserId);
     if (!aggregate) return null;
 
     if (typeof updates.title === "string") {
@@ -405,11 +431,17 @@ class PostgresCaseStore {
     return aggregate;
   }
 
-  async deleteCase(id: string) {
+  async deleteCase(id: string, ownerUserId?: string | null) {
     const db = getDb();
     if (!db) throw new Error("DATABASE_URL is required");
 
-    const [existing] = await db.select({ id: casesTable.id }).from(casesTable).where(eq(casesTable.id, id)).limit(1);
+    const [existing] = ownerUserId
+      ? await db
+          .select({ id: casesTable.id })
+          .from(casesTable)
+          .where(and(eq(casesTable.id, id), eq(casesTable.ownerUserId, ownerUserId)))
+          .limit(1)
+      : await db.select({ id: casesTable.id }).from(casesTable).where(eq(casesTable.id, id)).limit(1);
     if (!existing) return false;
 
     await db.delete(caseMessagesTable).where(eq(caseMessagesTable.caseId, id));
@@ -423,11 +455,11 @@ class PostgresCaseStore {
 }
 
 export interface CaseStore {
-  listCases(): Promise<CaseRecord[]>;
-  createCase(title: string, seedCase?: SeedCaseKey): Promise<CaseAggregate>;
-  getCase(id: string): Promise<CaseAggregate | null>;
-  updateCase(id: string, updates: CaseUpdateInput): Promise<CaseAggregate | null>;
-  deleteCase(id: string): Promise<boolean>;
+  listCases(ownerUserId?: string | null): Promise<CaseRecord[]>;
+  createCase(title: string, seedCase?: SeedCaseKey, ownerUserId?: string | null): Promise<CaseAggregate>;
+  getCase(id: string, ownerUserId?: string | null): Promise<CaseAggregate | null>;
+  updateCase(id: string, updates: CaseUpdateInput, ownerUserId?: string | null): Promise<CaseAggregate | null>;
+  deleteCase(id: string, ownerUserId?: string | null): Promise<boolean>;
   saveCase(aggregate: CaseAggregate): Promise<void>;
   saveReport(document: OutputDocument): Promise<void>;
 }

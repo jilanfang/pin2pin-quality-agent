@@ -50,16 +50,37 @@ function appendFact(
   });
 }
 
+function isHypothesisOnlyInput(content: string) {
+  const hasHypothesisMarker = hasAnyTerm(content, ["猜", "怀疑", "可能", "推测", "估计"]);
+  const hasConcreteIncidentMarker = hasAnyTerm(content, [
+    "客户",
+    "批次",
+    "现场",
+    "停线",
+    "冒烟",
+    "打火",
+    "库存",
+    "出货",
+    "工单",
+    "位号",
+    "会议纪要",
+    "邮件",
+    "确认",
+  ]);
+  return hasHypothesisMarker && !hasConcreteIncidentMarker;
+}
+
 export function extractCaseState(content: string): ExtractionResult {
   const normalized = content.trim();
   const lowered = normalized.toLowerCase();
+  const hypothesisOnlyInput = isHypothesisOnlyInput(normalized);
 
   const knownFacts: FactItem[] = [];
   const missingFields: GapItem[] = [];
   const assumptions: AssumptionItem[] = [];
   const riskFlags: string[] = [];
 
-  if (normalized) {
+  if (normalized && !hypothesisOnlyInput) {
     knownFacts.push({
       field: "problem_symptom",
       value: normalized,
@@ -99,6 +120,13 @@ export function extractCaseState(content: string): ExtractionResult {
   } else {
     assumptions.push({
       statement: "Issue may not yet be tied to an external customer complaint.",
+      needsValidation: true,
+    });
+  }
+
+  if (hypothesisOnlyInput) {
+    assumptions.push({
+      statement: normalized,
       needsValidation: true,
     });
   }
@@ -203,7 +231,14 @@ export function extractCaseState(content: string): ExtractionResult {
   const changePointMatch = normalized.match(
     /((?:替代料|换料|导入|程序|角度|AOI|阈值|编带方向|B品牌|A品牌)[^。]*?)(?=。|$)/
   );
-  appendFact(knownFacts, "change_point", changePointMatch?.[1], 0.82);
+  if (hypothesisOnlyInput && changePointMatch?.[1]) {
+    assumptions.push({
+      statement: changePointMatch[1].trim(),
+      needsValidation: true,
+    });
+  } else {
+    appendFact(knownFacts, "change_point", changePointMatch?.[1], 0.82);
+  }
 
   const validationMatch = normalized.match(/(完成[^。]*?(?:验证|复测|确认)[^。]*?)(?=。|$)/);
   appendFact(knownFacts, "validation_record", validationMatch?.[1], 0.8);

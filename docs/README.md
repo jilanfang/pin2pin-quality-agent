@@ -4,6 +4,8 @@
 
 1. [产品线定位](./product-line-positioning.md)
    说明本仓库为什么对齐到 `Pin2pin Fireline`，以及它与历史 `8D Copilot` 命名的关系。
+2. [用户旅程资产](./journeys/README.md)
+   混合版用户旅程主账本与结构化场景 schema。后续 benchmark、regression、smoke、demo case 都从这里派生。
 
 当前项目的文档必须按“**双线并存**”来理解：
 
@@ -25,23 +27,27 @@
 
 1. [产品线定位](./product-line-positioning.md)
    当前正式命名、产品边界和历史名称映射。
-2. [当前交接说明](./current-handoff.md)
+2. [gtm-fireline-execution-2026-03-28.md](./gtm-fireline-execution-2026-03-28.md)
+   当前 `Pin2pin Fireline` GTM 执行文档。明确 case 门诊、标准化试用、项目型支援与内容主线的关系。
+3. [journeys/README.md](./journeys/README.md)
+   用户旅程主账本入口。说明混合版用户群、case family 和结构化场景 schema 的权威位置。
+4. [当前交接说明](./current-handoff.md)
    当前最重要的恢复文件。已明确说明：
    - 哪些是当前真实实现
    - 文档和代码哪里漂移了
    - 哪些能力只在离线原型或只在 Next.js 存在
    - 下一步建议怎么收敛
-3. [`../task_plan.md`](/Users/jilanfang/ai-quality/task_plan.md)
+5. [`../task_plan.md`](/Users/jilanfang/ai-quality/task_plan.md)
    当前最新工作计划，记录的是 `Next.js` 主链路的产品加固，不再是旧的路由任务描述。
-4. [MVP 加固清单](./mvp-hardening-checklist.md)
+6. [MVP 加固清单](./mvp-hardening-checklist.md)
    当前最适合直接执行的工程清单。回答“这套架构对 MVP 还行不行”“现在必须补什么”“哪些先不要做”。
-5. [迁移账本](./index-html-to-nextjs-migration-ledger.md)
+7. [迁移账本](./index-html-to-nextjs-migration-ledger.md)
    当前 `index.html -> Next.js` 差异账本。回答“离线原型里还有什么没回灌”“哪些该迁、哪些不该迁”。
-6. [运行与部署说明](./deployment-and-demo.md)
+8. [运行与部署说明](./deployment-and-demo.md)
    当前运行、部署、环境变量与外部试用边界。外部预览 / 试用必须使用 Postgres；本地文件存储只用于本机演示。
-7. [`../DESIGN.md`](/Users/jilanfang/ai-quality/DESIGN.md)
+9. [`../DESIGN.md`](/Users/jilanfang/ai-quality/DESIGN.md)
    当前设计基线。做报告页、工作台、品牌、阶段语义前先读。
-8. [`../AGENTS.md`](/Users/jilanfang/ai-quality/AGENTS.md)
+10. [`../AGENTS.md`](/Users/jilanfang/ai-quality/AGENTS.md)
    当前协作约束文件。包含 localhost 端口、运行态污染、LLM 接入和待办规则。
 
 ## 按场景阅读
@@ -68,12 +74,13 @@
 优先看：
 
 1. [当前交接说明](./current-handoff.md)
-2. [`../components/workspace.tsx`](/Users/jilanfang/ai-quality/components/workspace.tsx)
-3. [`../app/page.tsx`](/Users/jilanfang/ai-quality/app/page.tsx)
-4. [`../lib/domain/workflow-engine.ts`](/Users/jilanfang/ai-quality/lib/domain/workflow-engine.ts)
-5. [`../lib/domain/report-builder.ts`](/Users/jilanfang/ai-quality/lib/domain/report-builder.ts)
-6. [`../lib/server/llm.ts`](/Users/jilanfang/ai-quality/lib/server/llm.ts)
-7. [`../lib/server/api.ts`](/Users/jilanfang/ai-quality/lib/server/api.ts)
+2. [gtm-fireline-execution-2026-03-28.md](./gtm-fireline-execution-2026-03-28.md)
+3. [`../components/workspace.tsx`](/Users/jilanfang/ai-quality/components/workspace.tsx)
+4. [`../app/page.tsx`](/Users/jilanfang/ai-quality/app/page.tsx)
+5. [`../lib/domain/workflow-engine.ts`](/Users/jilanfang/ai-quality/lib/domain/workflow-engine.ts)
+6. [`../lib/domain/report-builder.ts`](/Users/jilanfang/ai-quality/lib/domain/report-builder.ts)
+7. [`../lib/server/llm.ts`](/Users/jilanfang/ai-quality/lib/server/llm.ts)
+8. [`../lib/server/api.ts`](/Users/jilanfang/ai-quality/lib/server/api.ts)
 
 适合的任务：
 
@@ -86,11 +93,13 @@
 ## 当前推荐阅读顺序
 
 1. [当前交接说明](./current-handoff.md)
-2. [MVP 加固清单](./mvp-hardening-checklist.md)
-3. [迁移账本](./index-html-to-nextjs-migration-ledger.md)
-4. [运行与部署说明](./deployment-and-demo.md)
-5. [`../DESIGN.md`](/Users/jilanfang/ai-quality/DESIGN.md)
-6. [`../AGENTS.md`](/Users/jilanfang/ai-quality/AGENTS.md)
+2. [gtm-fireline-execution-2026-03-28.md](./gtm-fireline-execution-2026-03-28.md)
+3. [journeys/README.md](./journeys/README.md)
+4. [MVP 加固清单](./mvp-hardening-checklist.md)
+5. [迁移账本](./index-html-to-nextjs-migration-ledger.md)
+6. [运行与部署说明](./deployment-and-demo.md)
+7. [`../DESIGN.md`](/Users/jilanfang/ai-quality/DESIGN.md)
+8. [`../AGENTS.md`](/Users/jilanfang/ai-quality/AGENTS.md)
 
 ## 当前最重要的文档结论
 

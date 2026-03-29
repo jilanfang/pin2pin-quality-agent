@@ -1,21 +1,32 @@
 import { NextResponse } from "next/server";
 
 import { createCaseHandler, listCasesHandler } from "@/lib/server/api";
+import { assertAuthenticated, getServerAuthState } from "@/lib/server/auth";
 
 export async function GET() {
-  const payload = await listCasesHandler();
-  return NextResponse.json(payload);
+  try {
+    const auth = await getServerAuthState();
+    assertAuthenticated(auth);
+    const payload = await listCasesHandler(auth);
+    return NextResponse.json(payload);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unexpected error";
+    return NextResponse.json({ error: message }, { status: message === "Authentication required" ? 401 : 400 });
+  }
 }
 
 export async function POST(request: Request) {
   try {
+    const auth = await getServerAuthState();
+    assertAuthenticated(auth);
     const body = await request.json();
-    const payload = await createCaseHandler(body);
+    const payload = await createCaseHandler(body, auth);
     return NextResponse.json(payload);
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Unexpected error";
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unexpected error" },
-      { status: 400 }
+      { error: message },
+      { status: message === "Authentication required" ? 401 : 400 }
     );
   }
 }

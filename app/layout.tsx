@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
 import { SovereignShell } from "@/components/sovereign-shell";
+import { getServerAuthState } from "@/lib/server/auth";
 
 import "./globals.css";
 
@@ -16,6 +17,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const auth = await getServerAuthState();
   let hasCasesCookie = false;
   try {
     const cookieStore = await cookies();
@@ -27,7 +29,13 @@ export default async function RootLayout({
   return (
     <html lang="zh-CN">
       <body>
-        <SovereignShell activeSection="Workspace" hasCases={hasCasesCookie}>
+        <SovereignShell
+          activeSection="Workspace"
+          hasCases={hasCasesCookie}
+          authEnabled={auth.authEnabled}
+          isAuthenticated={auth.isAuthenticated}
+          userEmail={auth.email}
+        >
           {children}
         </SovereignShell>
       </body>

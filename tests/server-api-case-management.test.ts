@@ -59,4 +59,19 @@ describe("server api case management", () => {
     const cases = await api.listCasesHandler();
     expect(cases.map((item) => item.id)).not.toContain(created.id);
   });
+
+  it("only lists cases that belong to the current user context", async () => {
+    const api = await import("@/lib/server/api");
+
+    await api.createCaseHandler({ title: "用户A案件" }, { userId: "user-a", isAuthenticated: true });
+    await api.createCaseHandler({ title: "用户B案件" }, { userId: "user-b", isAuthenticated: true });
+
+    const userACases = await api.listCasesHandler({ userId: "user-a", isAuthenticated: true });
+    const userBCases = await api.listCasesHandler({ userId: "user-b", isAuthenticated: true });
+
+    expect(userACases).toHaveLength(1);
+    expect(userACases[0]?.title).toBe("用户A案件");
+    expect(userBCases).toHaveLength(1);
+    expect(userBCases[0]?.title).toBe("用户B案件");
+  });
 });

@@ -55,6 +55,7 @@ export interface StageRecord {
 
 export interface CaseRecord {
   id: string;
+  ownerUserId: string | null;
   title: string;
   status: CaseStatus;
   archivedAt: string | null;
@@ -69,7 +70,7 @@ export interface CaseMessage {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
-  messageType: "evidence" | "assistant_note" | "system";
+  messageType: "evidence" | "conversation" | "assistant_note" | "system";
   createdAt: string;
 }
 
@@ -176,6 +177,7 @@ export interface OutputDocument {
 export interface EvidencePayload {
   content: string;
   contextStage?: WorkflowStage;
+  forceCaseConfirmation?: "attach_to_current_case";
 }
 
 export interface EvidenceExtraction {
@@ -210,4 +212,143 @@ export interface ReportPreview {
   text: string;
   html: string;
   warnings: string[];
+}
+
+export type ConversationIntent =
+  | "evidence"
+  | "question"
+  | "summary_request"
+  | "correction"
+  | "decision_signal";
+
+export type ConversationSourceShape =
+  | "long_document"
+  | "fragmented_update"
+  | "meeting_notes"
+  | "question_only"
+  | "mixed_input";
+
+export type ConversationCaseOperation =
+  | "create_new_case"
+  | "attach_to_current_case"
+  | "needs_case_confirmation";
+
+export type ConversationResponseMode = "inform" | "guide" | "result_action";
+
+export type ThinkingMode =
+  | "processing_input"
+  | "reviewing_prior_judgement"
+  | "summarizing_case"
+  | "preparing_artifact";
+
+export interface ConversationThinkingState {
+  startedAt: string;
+  finishedAt: string;
+  etaLabel: string;
+  mode: ThinkingMode;
+  steps: string[];
+}
+
+export interface ConversationMeta {
+  intents: ConversationIntent[];
+  primaryStage: WorkflowStage;
+  relatedStages: WorkflowStage[];
+  impactedStages: WorkflowStage[];
+  sourceShape: ConversationSourceShape;
+  caseOperation: ConversationCaseOperation;
+  responseMode: ConversationResponseMode;
+  thinking: ConversationThinkingState;
+}
+
+export interface ConversationInputContext {
+  sourceShape: ConversationSourceShape;
+  isFirstTurn: boolean;
+}
+
+export type JourneyScenarioSegment = "customer_quality" | "factory_qe" | "sqe";
+
+export type JourneyScenarioCaseFamily =
+  | "customer_smoke_line_stop"
+  | "customer_intermittent_function"
+  | "line_solder_bridge_batch"
+  | "reliability_intermittent_reset"
+  | "incoming_mlcc_microcrack"
+  | "supplier_8d_review_connector";
+
+export type JourneyScenarioBusinessPriority = "critical" | "high" | "medium";
+
+export type JourneyScenarioSourceType =
+  | "email"
+  | "wechat"
+  | "feishu"
+  | "phone_recap"
+  | "meeting_notes"
+  | "site_observation"
+  | "test_summary"
+  | "customer_portal"
+  | "supplier_reply"
+  | "manager_ping"
+  | "system_note";
+
+export type JourneyScenarioSpeakerRole =
+  | "user"
+  | "customer_quality_manager"
+  | "customer_engineer"
+  | "sales"
+  | "fae"
+  | "factory_supervisor"
+  | "process_engineer"
+  | "rd_engineer"
+  | "test_engineer"
+  | "reliability_engineer"
+  | "supplier_quality_engineer"
+  | "supplier_sales"
+  | "manager"
+  | "lab_engineer"
+  | "warehouse"
+  | "operator";
+
+export type JourneyScenarioRawInputLanguageStyle =
+  | "formal_email"
+  | "chat_fragment"
+  | "spoken_recap"
+  | "meeting_minutes"
+  | "lab_summary"
+  | "pressure_request"
+  | "customer_portal_note"
+  | "supplier_8d_excerpt";
+
+export type JourneyScenarioUsageTag = "benchmark" | "regression" | "smoke";
+export type JourneyScenarioPriority = "p0" | "p1";
+
+export interface StructuredJourneyScenario {
+  scenarioId: string;
+  segment: JourneyScenarioSegment;
+  caseFamily: JourneyScenarioCaseFamily;
+  stage: ActiveWorkflowStage;
+  businessPriority: JourneyScenarioBusinessPriority;
+  sourceType: JourneyScenarioSourceType;
+  speakerRole: JourneyScenarioSpeakerRole;
+  timestampOffset: string;
+  rawInput: string;
+  rawInputLanguageStyle: JourneyScenarioRawInputLanguageStyle;
+  knownFacts: string[];
+  assumptions: string[];
+  misleadingSignals: string[];
+  expectedIntents: ConversationIntent[];
+  expectedPrimaryStage: ActiveWorkflowStage;
+  expectedRelatedStages: ActiveWorkflowStage[];
+  expectedImpactedStages: ActiveWorkflowStage[];
+  expectedCaseOperation: ConversationCaseOperation;
+  expectedResponseMode: ConversationResponseMode;
+  expectedSourceShape: ConversationSourceShape;
+  expectedNextQuestions: string[];
+  expectedSafeBoundaries: string[];
+  expectedArtifactsReady: ResultArtifactKind[];
+  antiGoals: string[];
+  usageTags: JourneyScenarioUsageTag[];
+  priority: JourneyScenarioPriority;
+  currentCaseTitle: string;
+  currentKnownFacts: readonly FactItem[];
+  hasCurrentCase: boolean;
 }

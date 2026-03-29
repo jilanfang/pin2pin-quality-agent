@@ -167,6 +167,7 @@ function buildCaseWorkflow() {
       secondaryActionLabel: "继续补信息",
       deferActionLabel: "稍后再说",
     },
+    conversationMeta: null,
   };
 }
 
@@ -338,7 +339,7 @@ describe("Workspace", () => {
   it("lets the user send the first evidence directly from the empty state by creating a blank case first", async () => {
     const blankSummary = buildCaseSummary({
       id: "case-2",
-      title: "新的 8D 案件",
+      title: "华星科技上电冒烟客诉",
       currentStage: "D2",
       d1Status: "not_started",
       updatedAt: "2026-03-23T10:00:00.000Z",
@@ -346,7 +347,7 @@ describe("Workspace", () => {
     const blankWorkflow = {
       ...buildCaseWorkflow(),
       caseId: "case-2",
-      title: "新的 8D 案件",
+      title: "华星科技上电冒烟客诉",
       currentStage: "D2",
       d1Status: "not_started",
       messages: [],
@@ -364,8 +365,32 @@ describe("Workspace", () => {
           messageType: "evidence" as const,
           createdAt: "2026-03-23T10:05:00.000Z",
         },
+        {
+          id: "msg-assistant-2",
+          role: "assistant" as const,
+          content:
+            "我先帮你接下这个案件。\n我已提取到：客户现场发现上电冒烟；批次 B19；已暂停出货。\n当前还缺：首次发现时间、影响范围。\n下一步请直接补：客户现场数量和当前围堵范围。",
+          messageType: "assistant_note" as const,
+          createdAt: "2026-03-23T10:05:03.000Z",
+        },
       ],
       knownFacts: [{ field: "batch", value: "B19" }],
+      conversationMeta: {
+        intents: ["evidence"],
+        primaryStage: "D2",
+        relatedStages: ["D2"],
+        impactedStages: [],
+        sourceShape: "fragmented_update",
+        caseOperation: "attach_to_current_case",
+        responseMode: "guide",
+        thinking: {
+          startedAt: "2026-03-23T10:05:00.000Z",
+          finishedAt: "2026-03-23T10:05:03.000Z",
+          etaLabel: "6-10 秒",
+          mode: "processing_input",
+          steps: ["识别新增事实", "检查是否影响前序判断", "更新当前分析与下一步"],
+        },
+      },
     };
 
     const fetchMock = stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -394,17 +419,14 @@ describe("Workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "发送证据" }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/cases",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({
-            title: "新的 8D 案件",
-            seedCase: undefined,
-          }),
-        })
-      );
+      expect(fetchMock).toHaveBeenCalledWith("/api/cases", expect.objectContaining({ method: "POST" }));
     });
+
+    const createCall = fetchMock.mock.calls.find(
+      ([url, init]) => url === "/api/cases" && (init as RequestInit | undefined)?.method === "POST"
+    );
+    expect(createCall).toBeTruthy();
+    expect((createCall?.[1] as RequestInit).body).not.toBe(JSON.stringify({ title: "新的 8D 案件" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -415,7 +437,7 @@ describe("Workspace", () => {
       );
     });
 
-    await screen.findByRole("heading", { name: "新的 8D 案件" });
+    await screen.findByRole("heading", { name: "华星科技上电冒烟客诉" });
     expect(screen.getByText("ACTIVE CASE #CASE-2")).toBeInTheDocument();
   });
 
@@ -568,7 +590,8 @@ describe("Workspace", () => {
     expect(screen.queryByTestId("summary-strip")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "打开报告工具" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "快速预览报告" })).not.toBeInTheDocument();
-    expect(screen.getByTestId("result-recommendation-card")).toBeInTheDocument();
+    expect(screen.queryByTestId("result-recommendation-card")).not.toBeInTheDocument();
+    expect(screen.getByText("当前建议")).toBeInTheDocument();
   });
 
   it("keeps the case list in a drawer instead of a permanently expanded sidebar", async () => {
@@ -728,6 +751,22 @@ describe("Workspace", () => {
         secondaryActionLabel: "稍后整理",
       },
     };
+    const summaryWorkflow = {
+      ...buildCaseWorkflow(),
+      conversationMeta: {
+        intents: ["summary_request"],
+        primaryStage: "D3",
+        relatedStages: ["D3"],
+        impactedStages: [],
+        thinking: {
+          startedAt: "2026-03-22T12:00:06.000Z",
+          finishedAt: "2026-03-22T12:00:12.000Z",
+          etaLabel: "6-10 秒",
+          mode: "summarizing_case",
+          steps: ["汇总已确认事实", "区分判断与待验证项", "输出当前总结"],
+        },
+      },
+    };
 
     const fetchMock = stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -736,6 +775,9 @@ describe("Workspace", () => {
       }
       if (url === "/api/cases/case-1") {
         return new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 });
+      }
+      if (url === "/api/cases/case-1/evidence") {
+        return new Response(JSON.stringify(summaryWorkflow), { status: 200 });
       }
       if (url === "/api/cases/case-1/report-preview?artifact=analysis_summary") {
         return new Response(JSON.stringify(preview), { status: 200 });
@@ -763,6 +805,9 @@ describe("Workspace", () => {
       if (url === "/api/cases/case-1") {
         return new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 });
       }
+      if (url === "/api/cases/case-1/evidence") {
+        return new Response(JSON.stringify(summaryWorkflow), { status: 200 });
+      }
       if (url === "/api/cases/case-1/report-preview?artifact=analysis_summary") {
         return new Response(JSON.stringify(preview), { status: 200 });
       }
@@ -778,7 +823,11 @@ describe("Workspace", () => {
     render(<Workspace />);
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
-    fireEvent.click(screen.getByRole("button", { name: "整理分析结论" }));
+    fireEvent.change(screen.getByLabelText("证据输入框"), {
+      target: { value: "帮我总结一下现在情况" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送证据" }));
+    fireEvent.click(await screen.findByRole("button", { name: "整理分析结论" }));
     await screen.findByTestId("preview-drawer");
 
     act(() => {
@@ -807,14 +856,36 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "新的空白案件" });
     expect(screen.queryByTestId("preview-drawer")).not.toBeInTheDocument();
-    expect(screen.getByText("先继续补关键信息")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "继续补信息" })).toBeInTheDocument();
+    expect(screen.getByText("当前建议整理")).toBeInTheDocument();
+    expect(screen.queryByTestId("result-recommendation-card")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "继续补信息" })).not.toBeInTheDocument();
   });
 
   it("keeps the preview drawer hidden by default and opens it from the conversation action card", async () => {
     const preview = buildPreview();
     const { fetchMock } = workspaceWithSingleCase(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url === "/api/cases/case-1/evidence") {
+        return new Response(
+          JSON.stringify({
+            ...buildCaseWorkflow(),
+            conversationMeta: {
+              intents: ["summary_request"],
+              primaryStage: "D3",
+              relatedStages: ["D3"],
+              impactedStages: [],
+              thinking: {
+                startedAt: "2026-03-22T12:00:06.000Z",
+                finishedAt: "2026-03-22T12:00:12.000Z",
+                etaLabel: "6-10 秒",
+                mode: "summarizing_case",
+                steps: ["汇总已确认事实", "区分判断与待验证项", "输出当前总结"],
+              },
+            },
+          }),
+          { status: 200 }
+        );
+      }
       if (url === "/api/cases/case-1/report-preview?artifact=analysis_summary") {
         return new Response(JSON.stringify(preview), { status: 200 });
       }
@@ -824,6 +895,15 @@ describe("Workspace", () => {
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
     expect(screen.queryByTestId("preview-drawer")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("result-recommendation-card")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("证据输入框"), {
+      target: { value: "帮我总结一下现在情况" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送证据" }));
+
+    const actionCard = await screen.findByTestId("result-recommendation-card");
+    expect(within(actionCard).getByRole("button", { name: "整理分析结论" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "整理分析结论" }));
 
     await waitFor(() => {
@@ -858,13 +938,465 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
-    const actionCard = screen.getByTestId("result-recommendation-card");
-    expect(within(actionCard).getByText("建议先整理分析结论")).toBeInTheDocument();
-    expect(within(actionCard).getByRole("button", { name: "整理分析结论" })).toBeInTheDocument();
-    expect(within(actionCard).queryByRole("button", { name: "继续补信息" })).not.toBeInTheDocument();
-    expect(within(actionCard).queryByRole("button", { name: "稍后再说" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("result-recommendation-card")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "整理分析结论" })).not.toBeInTheDocument();
+    expect(screen.getByText("当前建议整理")).toBeInTheDocument();
     expect(screen.queryByLabelText("报告版本")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("文风")).not.toBeInTheDocument();
+  });
+
+  it("shows result recommendation actions only after a fresh summary-oriented interaction", async () => {
+    const summaryWorkflow = {
+      ...buildCaseWorkflow(),
+      conversationMeta: {
+        intents: ["summary_request"],
+        primaryStage: "D3",
+        relatedStages: ["D3"],
+        impactedStages: [],
+        thinking: {
+          startedAt: "2026-03-22T12:00:06.000Z",
+          finishedAt: "2026-03-22T12:00:12.000Z",
+          etaLabel: "6-10 秒",
+          mode: "summarizing_case",
+          steps: ["汇总已确认事实", "区分判断与待验证项", "输出当前总结"],
+        },
+      },
+    };
+
+    stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([buildCaseSummary()]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 });
+      }
+      if (url === "/api/cases/case-1/evidence") {
+        expect(init?.method).toBe("POST");
+        return new Response(JSON.stringify(summaryWorkflow), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+    expect(screen.queryByTestId("result-recommendation-card")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("证据输入框"), {
+      target: { value: "帮我总结一下现在情况" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送证据" }));
+
+    const actionCard = await screen.findByTestId("result-recommendation-card");
+    expect(within(actionCard).getByText("建议先整理分析结论")).toBeInTheDocument();
+    expect(within(actionCard).getByRole("button", { name: "整理分析结论" })).toBeInTheDocument();
+  });
+
+  it("shows an action-plan recommendation card after fresh evidence makes the case actionable", async () => {
+    const actionPlanWorkflow = {
+      ...buildCaseWorkflow(),
+      currentStage: "D5",
+      resultReadiness: {
+        analysisSummary: true,
+        actionPlan: true,
+        eightD: false,
+      },
+      resultRecommendation: {
+        kind: "action_plan" as const,
+        title: "建议整理行动方案",
+        rationale: "当前围堵和纠正方向已经成形，先把行动方案收口，再决定何时进入 8D。",
+        primaryActionLabel: "整理行动方案",
+        secondaryActionLabel: "继续补信息",
+      },
+      conversationMeta: {
+        intents: ["evidence"],
+        primaryStage: "D5",
+        relatedStages: ["D5"],
+        impactedStages: [],
+        sourceShape: "fragmented_update",
+        caseOperation: "attach_to_current_case",
+        responseMode: "guide",
+        thinking: {
+          startedAt: "2026-03-22T12:00:06.000Z",
+          finishedAt: "2026-03-22T12:00:12.000Z",
+          etaLabel: "6-10 秒",
+          mode: "processing_input",
+          steps: ["识别新增事实", "检查是否影响前序判断", "更新当前分析与下一步"],
+        },
+      },
+    };
+
+    stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([buildCaseSummary({ currentStage: "D5" })]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 });
+      }
+      if (url === "/api/cases/case-1/evidence") {
+        expect(init?.method).toBe("POST");
+        return new Response(JSON.stringify(actionPlanWorkflow), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+    expect(screen.queryByTestId("result-recommendation-card")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("证据输入框"), {
+      target: { value: "发生原因侧永久措施已经确定，流出原因侧也补了拦截和检查动作。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送证据" }));
+
+    const actionCard = await screen.findByTestId("result-recommendation-card");
+    expect(within(actionCard).getByText("建议整理行动方案")).toBeInTheDocument();
+    expect(within(actionCard).getByRole("button", { name: "整理行动方案" })).toBeInTheDocument();
+  });
+
+  it("keeps non-result guidance out of the result action card", async () => {
+    const blankWorkflow = {
+      ...buildCaseWorkflow(),
+      messages: [],
+      knownFacts: [],
+      assumptions: [],
+      riskFlags: [],
+      resultReadiness: {
+        analysisSummary: false,
+        actionPlan: false,
+        eightD: false,
+      },
+      resultRecommendation: {
+        kind: "analysis_summary" as const,
+        title: "先继续补关键信息",
+        rationale: "当前还没有稳定事实，先补现象、时间、批次和影响范围，再整理分析结论。",
+        primaryActionLabel: "继续补信息",
+        secondaryActionLabel: "稍后整理",
+      },
+      conversationMeta: {
+        intents: ["evidence"],
+        primaryStage: "D2",
+        relatedStages: ["D2"],
+        impactedStages: [],
+        sourceShape: "fragmented_update",
+        caseOperation: "attach_to_current_case",
+        responseMode: "guide",
+        thinking: {
+          startedAt: "2026-03-22T12:00:06.000Z",
+          finishedAt: "2026-03-22T12:00:10.000Z",
+          etaLabel: "6-10 秒",
+          mode: "processing_input",
+          steps: ["识别新增事实", "检查是否影响前序判断", "更新当前分析与下一步"],
+        },
+      },
+    };
+
+    stubFetch(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([buildCaseSummary()]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(blankWorkflow), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+    expect(screen.queryByTestId("result-recommendation-card")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "继续补信息" })).not.toBeInTheDocument();
+  });
+
+  it("does not show a result action card when the response mode is informational only", async () => {
+    const informationalWorkflow = {
+      ...buildCaseWorkflow(),
+      resultRecommendation: {
+        kind: "analysis_summary" as const,
+        title: "建议先整理分析结论",
+        rationale: "当前已具备稳定事实，可以先沉淀分析结论。",
+        primaryActionLabel: "整理分析结论",
+        secondaryActionLabel: "继续补信息",
+      },
+      conversationMeta: {
+        intents: ["question"],
+        primaryStage: "D4",
+        relatedStages: ["D4"],
+        impactedStages: [],
+        sourceShape: "question_only",
+        caseOperation: "attach_to_current_case",
+        responseMode: "inform",
+        thinking: {
+          startedAt: "2026-03-22T12:00:06.000Z",
+          finishedAt: "2026-03-22T12:00:10.000Z",
+          etaLabel: "6-10 秒",
+          mode: "processing_input",
+          steps: ["识别新增事实", "检查是否影响前序判断", "更新当前分析与下一步"],
+        },
+      },
+    };
+
+    stubFetch(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([buildCaseSummary()]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(informationalWorkflow), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+    expect(screen.queryByTestId("result-recommendation-card")).not.toBeInTheDocument();
+  });
+
+  it("asks for confirmation before attaching a likely new complaint to the current case", async () => {
+    const fetchMock = stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/cases" && init?.method === "POST") {
+        return new Response(
+          JSON.stringify(
+            buildCaseSummary({
+              id: "case-2",
+              title: "华星科技上电冒烟客诉",
+              currentStage: "D2",
+            })
+          ),
+          { status: 200 }
+        );
+      }
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([buildCaseSummary()]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 });
+      }
+      if (url === "/api/cases/case-1/evidence") {
+        return new Response(
+          JSON.stringify({
+            ...buildCaseWorkflow(),
+            conversationMeta: {
+              intents: ["evidence"],
+              primaryStage: "D2",
+              relatedStages: ["D2"],
+              impactedStages: [],
+              sourceShape: "long_document",
+              caseOperation: "needs_case_confirmation",
+              responseMode: "guide",
+              thinking: {
+                startedAt: "2026-03-22T12:00:06.000Z",
+                finishedAt: "2026-03-22T12:00:12.000Z",
+                etaLabel: "6-10 秒",
+                mode: "processing_input",
+                steps: ["识别新增事实", "检查是否影响前序判断", "更新当前分析与下一步"],
+              },
+            },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url === "/api/cases/case-2") {
+        return new Response(
+          JSON.stringify({
+            ...buildCaseWorkflow(),
+            caseId: "case-2",
+            title: "华星科技上电冒烟客诉",
+            currentStage: "D2",
+            messages: [],
+          }),
+          { status: 200 }
+        );
+      }
+      if (url === "/api/cases/case-2/evidence") {
+        return new Response(
+          JSON.stringify({
+            ...buildCaseWorkflow(),
+            caseId: "case-2",
+            title: "华星科技上电冒烟客诉",
+            currentStage: "D2",
+            messages: [],
+          }),
+          { status: 200 }
+        );
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+
+    fireEvent.change(screen.getByLabelText("证据输入框"), {
+      target: {
+        value:
+          "客户华星科技邮件反馈：昨日客户端上线后出现 3 台板卡上电冒烟，涉及批次 B19，要求 24 小时内回复临时遏制与初步分析。当前客户现场已暂停投线，我司仓库已先冻结库存待排查。",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送证据" }));
+
+    const confirmationCard = await screen.findByTestId("new-case-confirmation-card");
+    expect(within(confirmationCard).getByText("我判断这更像另一单新案件")).toBeInTheDocument();
+    expect(within(confirmationCard).getByRole("button", { name: "新建案件" })).toBeInTheDocument();
+    expect(within(confirmationCard).getByRole("button", { name: "继续当前案件" })).toBeInTheDocument();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/cases/case-1/evidence",
+      expect.objectContaining({ method: "POST" })
+    );
+
+    fireEvent.click(within(confirmationCard).getByRole("button", { name: "新建案件" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/cases",
+        expect.objectContaining({
+          method: "POST",
+        })
+      );
+    });
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/cases/case-2/evidence",
+        expect.objectContaining({
+          method: "POST",
+        })
+      );
+    });
+  });
+
+  it("also asks for confirmation when meeting notes look like a different case", async () => {
+    const fetchMock = stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([buildCaseSummary()]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 });
+      }
+      if (url === "/api/cases/case-1/evidence") {
+        expect(init?.method).toBe("POST");
+        return new Response(
+          JSON.stringify({
+            ...buildCaseWorkflow(),
+            conversationMeta: {
+              intents: ["evidence"],
+              primaryStage: "D2",
+              relatedStages: ["D2"],
+              impactedStages: [],
+              sourceShape: "meeting_notes",
+              caseOperation: "needs_case_confirmation",
+              responseMode: "guide",
+              thinking: {
+                startedAt: "2026-03-22T12:00:06.000Z",
+                finishedAt: "2026-03-22T12:00:12.000Z",
+                etaLabel: "6-10 秒",
+                mode: "processing_input",
+                steps: ["识别新增事实", "检查是否影响前序判断", "更新当前分析与下一步"],
+              },
+            },
+          }),
+          { status: 200 }
+        );
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+
+    fireEvent.change(screen.getByLabelText("证据输入框"), {
+      target: {
+        value:
+          "会议纪要：客户华星科技今天会后确认，机种 MCU-900 在 B19 批次已有 3 台板卡上电冒烟，现场先停线并要求 24 小时内回复遏制措施。",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送证据" }));
+
+    const confirmationCard = await screen.findByTestId("new-case-confirmation-card");
+    expect(within(confirmationCard).getByText("我判断这更像另一单新案件")).toBeInTheDocument();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/cases/case-1/evidence",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("shows confirmation after the server flags a likely different case, then can continue on the current case", async () => {
+    let evidenceRequestCount = 0;
+    const fetchMock = stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([buildCaseSummary()]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 });
+      }
+      if (url === "/api/cases/case-1/evidence") {
+        evidenceRequestCount += 1;
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        if (evidenceRequestCount === 1) {
+          expect(body.forceCaseConfirmation).toBeUndefined();
+          return new Response(
+            JSON.stringify({
+              ...buildCaseWorkflow(),
+              conversationMeta: {
+                intents: ["evidence"],
+                primaryStage: "D2",
+                relatedStages: ["D2"],
+                impactedStages: [],
+                sourceShape: "long_document",
+                caseOperation: "needs_case_confirmation",
+                responseMode: "guide",
+                thinking: {
+                  startedAt: "2026-03-22T12:00:06.000Z",
+                  finishedAt: "2026-03-22T12:00:12.000Z",
+                  etaLabel: "6-10 秒",
+                  mode: "processing_input",
+                  steps: ["识别新增事实", "检查是否影响前序判断", "更新当前分析与下一步"],
+                },
+              },
+            }),
+            { status: 200 }
+          );
+        }
+
+        expect(body.forceCaseConfirmation).toBe("attach_to_current_case");
+        return new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByText("我现在怎么看");
+
+    fireEvent.change(screen.getByLabelText("证据输入框"), {
+      target: {
+        value:
+          "客户华星科技邮件反馈：昨日客户端上线后出现 3 台板卡上电冒烟，涉及机种 MCU-900 与批次 B19，要求 24 小时内回复临时遏制与初步分析。",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送证据" }));
+
+    const confirmationCard = await screen.findByTestId("new-case-confirmation-card");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/cases/case-1/evidence",
+      expect.objectContaining({ method: "POST" })
+    );
+
+    fireEvent.click(within(confirmationCard).getByRole("button", { name: "继续当前案件" }));
+
+    await waitFor(() => {
+      expect(evidenceRequestCount).toBe(2);
+    });
   });
 
   it("removes unlock and revalidate buttons from the main stage view", async () => {
@@ -960,6 +1492,278 @@ describe("Workspace", () => {
     });
   });
 
+  it("shows a current-state summary in the conversation when the user asks for a summary", async () => {
+    const summaryWorkflow = {
+      ...buildCaseWorkflow(),
+      messages: [
+        ...buildCaseWorkflow().messages,
+        {
+          id: "msg-summary-1",
+          role: "assistant" as const,
+          content:
+            "当前情况总结\n当前阶段：D3\n\n已确认事实\n- 客户：大麦科技\n\n当前判断\n当前已具备一部分稳定事实，可以先沉淀分析结论，但仍需对关键假设继续验证。\n\n还缺什么\n- 还没有 change point 线索，需先确认替代料、换料、程序或检测参数变化。",
+          messageType: "assistant_note" as const,
+          createdAt: "2026-03-22T12:00:06.000Z",
+        },
+      ],
+    };
+
+    stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([buildCaseSummary()]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 });
+      }
+      if (url === "/api/cases/case-1/evidence") {
+        expect(init?.method).toBe("POST");
+        return new Response(JSON.stringify(summaryWorkflow), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+
+    fireEvent.change(screen.getByLabelText("证据输入框"), {
+      target: { value: "帮我总结一下现在情况" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送证据" }));
+
+    expect(
+      await screen.findByText((content) => content.includes("当前情况总结"))
+    ).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes("已确认事实"))).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes("当前判断"))).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes("还缺什么"))).toBeInTheDocument();
+  });
+
+  it("submits fragmented updates with a direct question through the single composer flow", async () => {
+    const mixedWorkflow = {
+      ...buildCaseWorkflow(),
+      conversationMeta: {
+        intents: ["evidence", "question"],
+        primaryStage: "D2",
+        relatedStages: ["D2"],
+        impactedStages: [],
+        sourceShape: "mixed_input",
+        caseOperation: "attach_to_current_case",
+        responseMode: "guide",
+        thinking: {
+          startedAt: "2026-03-22T12:00:06.000Z",
+          finishedAt: "2026-03-22T12:00:10.000Z",
+          etaLabel: "6-10 秒",
+          mode: "processing_input",
+          steps: ["识别新增事实", "检查是否影响前序判断", "更新当前分析与下一步"],
+        },
+      },
+      messages: [
+        ...buildCaseWorkflow().messages,
+        {
+          id: "msg-mixed-1",
+          role: "assistant" as const,
+          content: "我先帮你接下这个案件。当前还缺失效位置、影响范围和围堵状态。",
+          messageType: "assistant_note" as const,
+          createdAt: "2026-03-22T12:00:08.000Z",
+        },
+      ],
+    };
+
+    const fetchMock = stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([buildCaseSummary({ currentStage: "D2" })]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 });
+      }
+      if (url === "/api/cases/case-1/evidence") {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        expect(body.content).toBe("客户补充 B19 先别放，现场已经停线了。现在先给客户怎么说？");
+        return new Response(JSON.stringify(mixedWorkflow), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+
+    fireEvent.change(screen.getByLabelText("证据输入框"), {
+      target: { value: "客户补充 B19 先别放，现场已经停线了。现在先给客户怎么说？" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送证据" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/cases/case-1/evidence",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+    expect(await screen.findByText("我先帮你接下这个案件。当前还缺失效位置、影响范围和围堵状态。")).toBeInTheDocument();
+    expect(screen.queryByTestId("new-case-confirmation-card")).not.toBeInTheDocument();
+  });
+
+  it("submits direct result requests through the conversation composer without inventing a new case branch", async () => {
+    const decisionWorkflow = {
+      ...buildCaseWorkflow(),
+      resultRecommendation: {
+        kind: "eight_d" as const,
+        title: "建议生成 8D",
+        rationale: "当前关键阶段已闭环，可以生成正式 8D。",
+        primaryActionLabel: "生成 8D",
+        secondaryActionLabel: "预览 8D",
+      },
+      conversationMeta: {
+        intents: ["decision_signal"],
+        primaryStage: "D8",
+        relatedStages: ["D8"],
+        impactedStages: [],
+        sourceShape: "fragmented_update",
+        caseOperation: "attach_to_current_case",
+        responseMode: "result_action",
+        thinking: {
+          startedAt: "2026-03-22T12:00:06.000Z",
+          finishedAt: "2026-03-22T12:00:10.000Z",
+          etaLabel: "6-10 秒",
+          mode: "processing_input",
+          steps: ["识别新增事实", "检查是否影响前序判断", "更新当前分析与下一步"],
+        },
+      },
+    };
+
+    stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([buildCaseSummary({ currentStage: "D8", d1Status: "complete" })]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 });
+      }
+      if (url === "/api/cases/case-1/evidence") {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        expect(body.content).toBe("给我 8D 预览");
+        expect(body.forceCaseConfirmation).toBeUndefined();
+        return new Response(JSON.stringify(decisionWorkflow), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+
+    fireEvent.change(screen.getByLabelText("证据输入框"), {
+      target: { value: "给我 8D 预览" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送证据" }));
+
+    expect(await screen.findByTestId("result-recommendation-card")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "生成 8D" })).toBeInTheDocument();
+    expect(screen.queryByTestId("new-case-confirmation-card")).not.toBeInTheDocument();
+  });
+
+  it("shows a thinking status card when the latest response includes conversation metadata", async () => {
+    const workflowWithThinking = {
+      ...buildCaseWorkflow(),
+      conversationMeta: {
+        intents: ["evidence", "correction"],
+        primaryStage: "D2",
+        relatedStages: ["D2", "D3", "D4"],
+        impactedStages: ["D3", "D4"],
+        thinking: {
+          startedAt: "2026-03-22T12:00:06.000Z",
+          finishedAt: "2026-03-22T12:00:15.000Z",
+          etaLabel: "8-12 秒",
+          mode: "reviewing_prior_judgement",
+          steps: ["对比新旧信息", "标记受影响段落", "更新当前判断"],
+        },
+      },
+    };
+
+    stubFetch(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([buildCaseSummary()]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(workflowWithThinking), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+    expect(screen.getByTestId("thinking-status-card")).toBeInTheDocument();
+    expect(screen.getByText("正在回看前序判断")).toBeInTheDocument();
+    expect(screen.getByText("预计 8-12 秒")).toBeInTheDocument();
+    expect(screen.getByText("受影响阶段：D3 临时遏制 / D4 原因分析")).toBeInTheDocument();
+  });
+
+  it("shows a live thinking indicator while evidence is being sent", async () => {
+    let resolveEvidence: ((response: Response) => void) | null = null;
+    const pendingEvidence = new Promise<Response>((resolve) => {
+      resolveEvidence = resolve;
+    });
+
+    stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([buildCaseSummary()]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 });
+      }
+      if (url === "/api/cases/case-1/evidence") {
+        expect(init?.method).toBe("POST");
+        return pendingEvidence;
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+
+    fireEvent.change(screen.getByLabelText("证据输入框"), {
+      target: { value: "等下，失效位置可能不是 C25，要回看前面判断。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送证据" }));
+
+    expect(await screen.findByText("正在回看前序判断")).toBeInTheDocument();
+
+    act(() => {
+      resolveEvidence?.(
+        new Response(
+          JSON.stringify({
+            ...buildCaseWorkflow(),
+            conversationMeta: {
+              intents: ["evidence", "correction"],
+              primaryStage: "D2",
+              relatedStages: ["D2", "D3"],
+              impactedStages: ["D3"],
+              thinking: {
+                startedAt: "2026-03-22T12:00:06.000Z",
+                finishedAt: "2026-03-22T12:00:14.000Z",
+                etaLabel: "8-12 秒",
+                mode: "reviewing_prior_judgement",
+                steps: ["对比新旧信息", "标记受影响段落", "更新当前判断"],
+              },
+            },
+          }),
+          { status: 200 }
+        )
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("thinking-status-card")).toBeInTheDocument();
+    });
+  });
+
   it("keeps the stage timeline focused on the current stage until expanded", async () => {
     workspaceWithSingleCase();
 
@@ -1008,6 +1812,21 @@ describe("Workspace", () => {
     expect(screen.getByLabelText("AI 主分析卡")).toBeInTheDocument();
     expect(screen.getByLabelText("证据输入停靠区")).toBeInTheDocument();
     expect(screen.getByTestId("conversation-feed")).toHaveAttribute("data-has-floating-dock", "true");
+  });
+
+  it("shows an inline error instead of crashing when the initial case list load fails", async () => {
+    stubFetch(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify({ error: "数据库查询失败" }), { status: 400 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    expect(await screen.findByText("数据库查询失败")).toBeInTheDocument();
+    expect(screen.getByText("先跑通第一单，再继续补证据和出稿。")).toBeInTheDocument();
   });
 
   it("submits the 8D action from the conversation area and updates the case state", async () => {

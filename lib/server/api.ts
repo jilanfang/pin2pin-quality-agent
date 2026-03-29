@@ -1,7 +1,23 @@
 import { z } from "zod";
 
-import type { ReportBuildOptions, ResultArtifactKind, StyleMode, WorkflowStage } from "@/lib/domain/types";
-import { buildOutputDocument } from "@/lib/domain/report-builder";
+import type {
+  ConversationCaseOperation,
+  ConversationIntent,
+  ConversationMeta,
+  ConversationResponseMode,
+  ConversationSourceShape,
+  ConversationThinkingState,
+  ReportBuildOptions,
+  ResultArtifactKind,
+  StyleMode,
+  WorkflowStage,
+} from "@/lib/domain/types";
+import { buildActionPlan, buildAnalysisSummary, buildOutputDocument } from "@/lib/domain/report-builder";
+import {
+  detectConversationCaseOperation,
+  detectConversationIntents,
+  detectConversationSourceShape,
+} from "@/lib/domain/conversation-input";
 import {
   applyEvidence,
   confirmStage,
@@ -39,6 +55,7 @@ const evidenceSchema = z.object({
   contextStage: z
     .enum(["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8"])
     .optional() as z.ZodType<WorkflowStage | undefined>,
+  forceCaseConfirmation: z.enum(["attach_to_current_case"]).optional(),
 });
 
 const stageActionSchema = z.object({
@@ -100,9 +117,116 @@ const feedbackSchema = z.object({
   note: z.string().trim().max(1000).optional(),
 });
 
-export async function listCasesHandler() {
+export type RequestUserContext = {
+  userId: string | null;
+  isAuthenticated: boolean;
+};
+
+function buildThinkingState(intents: ConversationIntent[]): ConversationThinkingState {
+  const startedAt = new Date().toISOString();
+  const finishedAt = new Date().toISOString();
+
+  if (intents.includes("summary_request")) {
+    return {
+      startedAt,
+      finishedAt,
+      etaLabel: "6-10 秒",
+      mode: "summarizing_case",
+      steps: ["汇总已确认事实", "区分判断与待验证项", "输出当前总结"],
+    };
+  }
+
+  if (intents.includes("correction")) {
+    return {
+      startedAt,
+      finishedAt,
+      etaLabel: "8-12 秒",
+      mode: "reviewing_prior_judgement",
+      steps: ["对比新旧信息", "标记受影响段落", "更新当前判断"],
+    };
+  }
+
+  return {
+    startedAt,
+    finishedAt,
+    etaLabel: "6-10 秒",
+    mode: "processing_input",
+    steps: ["识别新增事实", "检查是否影响前序判断", "更新当前分析与下一步"],
+  };
+}
+
+function determineResponseMode(
+  intents: ConversationIntent[],
+  _next: ReturnType<typeof applyEvidence>
+): ConversationResponseMode {
+  if (intents.includes("decision_signal") || intents.includes("summary_request")) {
+    return "result_action";
+  }
+
+  if (intents.includes("question") && !intents.includes("evidence")) {
+    return "inform";
+  }
+
+  return "guide";
+}
+
+function buildConversationMeta(
+  intents: ConversationIntent[],
+  primaryStage: WorkflowStage,
+  next: ReturnType<typeof applyEvidence>,
+  options: {
+    sourceShape: ConversationSourceShape;
+    caseOperation: ConversationCaseOperation;
+  }
+): ConversationMeta {
+  const impactedStages = (["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8"] as WorkflowStage[]).filter(
+    (stage) => next.stages[stage].impacted
+  );
+  const relatedStages = Array.from(
+    new Set<WorkflowStage>([primaryStage, ...impactedStages])
+  );
+
+  return {
+    intents,
+    primaryStage,
+    relatedStages,
+    impactedStages,
+    sourceShape: options.sourceShape,
+    caseOperation: options.caseOperation,
+    responseMode: determineResponseMode(intents, next),
+    thinking: buildThinkingState(intents),
+  };
+}
+
+function buildConversationSummary(next: ReturnType<typeof applyEvidence>) {
+  const analysisSummary = buildAnalysisSummary(next);
+  const actionPlan = buildActionPlan(next);
+  const confirmedFacts =
+    analysisSummary.confirmedFacts.slice(0, 4).map((item) => `- ${item}`).join("\n") || "- 暂无稳定事实";
+  const openQuestions =
+    analysisSummary.openQuestions.slice(0, 4).map((item) => `- ${item}`).join("\n") || "- 当前没有明显待补项";
+  const currentJudgement = actionPlan
+    ? "当前已经可以先收口行动方案，但仍建议继续补关键验证，再决定何时进入正式 8D。"
+    : analysisSummary.overview;
+
+  return [
+    "当前情况总结",
+    `当前阶段：${next.caseRecord.currentStage}`,
+    "",
+    "已确认事实",
+    confirmedFacts,
+    "",
+    "当前判断",
+    currentJudgement,
+    "",
+    "还缺什么",
+    openQuestions,
+  ].join("\n");
+}
+
+export async function listCasesHandler(context?: RequestUserContext) {
   const store = getCaseStore();
-  const cases = await store.listCases();
+  const cases = await store.listCases(context?.userId ?? undefined);
   return cases.map((item) => ({
     id: item.id,
     title: item.title,
@@ -115,10 +239,10 @@ export async function listCasesHandler() {
   }));
 }
 
-export async function createCaseHandler(payload: unknown) {
+export async function createCaseHandler(payload: unknown, context?: RequestUserContext) {
   const parsed = createCaseSchema.parse(payload);
   const store = getCaseStore();
-  const aggregate = await store.createCase(parsed.title, parsed.seedCase);
+  const aggregate = await store.createCase(parsed.title, parsed.seedCase, context?.userId ?? undefined);
   await safeRecordEvent({
     name: parsed.seedCase ? "seed_case_loaded" : "case_created",
     caseId: aggregate.caseRecord.id,
@@ -127,61 +251,110 @@ export async function createCaseHandler(payload: unknown) {
   return serializeCaseSummary(aggregate);
 }
 
-export async function getCaseHandler(caseId: string) {
+export async function getCaseHandler(caseId: string, context?: RequestUserContext) {
   const store = getCaseStore();
-  const aggregate = await store.getCase(caseId);
+  const aggregate = await store.getCase(caseId, context?.userId ?? undefined);
   if (!aggregate) {
     throw new Error("Case not found");
   }
   return serializeCaseWorkflow(aggregate);
 }
 
-export async function updateCaseHandler(caseId: string, payload: unknown) {
+export async function updateCaseHandler(caseId: string, payload: unknown, context?: RequestUserContext) {
   const parsed = updateCaseSchema.parse(payload);
   const store = getCaseStore();
-  const aggregate = await store.updateCase(caseId, parsed);
+  const aggregate = await store.updateCase(caseId, parsed, context?.userId ?? undefined);
   if (!aggregate) {
     throw new Error("Case not found");
   }
   return serializeCaseSummary(aggregate);
 }
 
-export async function deleteCaseHandler(caseId: string) {
+export async function deleteCaseHandler(caseId: string, context?: RequestUserContext) {
   const store = getCaseStore();
-  const deleted = await store.deleteCase(caseId);
+  const deleted = await store.deleteCase(caseId, context?.userId ?? undefined);
   if (!deleted) {
     throw new Error("Case not found");
   }
   return { ok: true as const };
 }
 
-export async function postEvidenceHandler(caseId: string, payload: unknown) {
+export async function postEvidenceHandler(caseId: string, payload: unknown, context?: RequestUserContext) {
   const parsed = evidenceSchema.parse(payload);
   const store = getCaseStore();
-  const aggregate = await store.getCase(caseId);
+  const aggregate = await store.getCase(caseId, context?.userId ?? undefined);
   if (!aggregate) {
     throw new Error("Case not found");
   }
+  const intents = detectConversationIntents(parsed.content);
+  const sourceShape = detectConversationSourceShape(parsed.content, intents);
+  const isFirstTurn = aggregate.messages.filter((item) => item.role === "user").length === 0;
+  const caseOperation = detectConversationCaseOperation({
+    content: parsed.content,
+    currentCaseTitle: aggregate.caseRecord.title,
+    currentKnownFacts: aggregate.knownFacts,
+    sourceShape,
+    hasCurrentCase: true,
+  });
+  const shouldHoldForConfirmation =
+    caseOperation === "needs_case_confirmation" && parsed.forceCaseConfirmation !== "attach_to_current_case";
+  if (shouldHoldForConfirmation) {
+    const conversationMeta = buildConversationMeta(
+      intents,
+      parsed.contextStage ?? aggregate.caseRecord.currentStage,
+      aggregate,
+      {
+        sourceShape,
+        caseOperation,
+      }
+    );
+    return serializeCaseWorkflow(aggregate, conversationMeta);
+  }
   const llmExtraction = await extractEvidenceWithLlm(parsed);
-  const next = applyEvidence(aggregate, parsed, { llmExtraction });
+  const next = applyEvidence(aggregate, parsed, {
+    llmExtraction,
+    inputContext: {
+      sourceShape,
+      isFirstTurn,
+    },
+  });
+  if (intents.includes("summary_request")) {
+    next.messages.push({
+      id: `msg-${Math.random().toString(36).slice(2, 10)}`,
+      role: "assistant",
+      content: buildConversationSummary(next),
+      messageType: "assistant_note",
+      createdAt: new Date().toISOString(),
+    });
+  }
   await store.saveCase(next);
   await safeRecordEvent({
     name: "evidence_sent",
     caseId,
     metadata: { contextStage: parsed.contextStage ?? "D2" },
   });
-  return serializeCaseWorkflow(next);
+  const conversationMeta = buildConversationMeta(
+    intents,
+    parsed.contextStage ?? next.caseRecord.currentStage,
+    next,
+    {
+      sourceShape,
+      caseOperation,
+    }
+  );
+  return serializeCaseWorkflow(next, conversationMeta);
 }
 
 export async function stageActionHandler(
   caseId: string,
   stage: WorkflowStage,
   action: "confirm" | "unlock" | "revalidate",
-  payload: unknown
+  payload: unknown,
+  context?: RequestUserContext
 ) {
   const parsed = stageActionSchema.parse(payload);
   const store = getCaseStore();
-  const aggregate = await store.getCase(caseId);
+  const aggregate = await store.getCase(caseId, context?.userId ?? undefined);
   if (!aggregate) {
     throw new Error("Case not found");
   }
@@ -199,11 +372,15 @@ export async function stageActionHandler(
   return serializeCaseWorkflow(next);
 }
 
-export async function reportPreviewHandler(caseId: string, searchParams: URLSearchParams) {
+export async function reportPreviewHandler(
+  caseId: string,
+  searchParams: URLSearchParams,
+  context?: RequestUserContext
+) {
   const parsed = reportQuerySchema.parse(Object.fromEntries(searchParams.entries()));
   const options = normalizeReportOptions(parsed);
   const store = getCaseStore();
-  const aggregate = await store.getCase(caseId);
+  const aggregate = await store.getCase(caseId, context?.userId ?? undefined);
   if (!aggregate) {
     throw new Error("Case not found");
   }
@@ -219,11 +396,15 @@ export async function reportPreviewHandler(caseId: string, searchParams: URLSear
   return serializeReportPreview(aggregate, options);
 }
 
-export async function reportHtmlHandler(caseId: string, searchParams: URLSearchParams) {
+export async function reportHtmlHandler(
+  caseId: string,
+  searchParams: URLSearchParams,
+  context?: RequestUserContext
+) {
   const parsed = reportQuerySchema.parse(Object.fromEntries(searchParams.entries()));
   const options = normalizeReportOptions(parsed);
   const store = getCaseStore();
-  const aggregate = await store.getCase(caseId);
+  const aggregate = await store.getCase(caseId, context?.userId ?? undefined);
   if (!aggregate) {
     throw new Error("Case not found");
   }
@@ -240,14 +421,18 @@ export async function reportHtmlHandler(caseId: string, searchParams: URLSearchP
   return preview.html;
 }
 
-export async function closeCaseForFinalReport(caseId: string, searchParams: URLSearchParams) {
+export async function closeCaseForFinalReport(
+  caseId: string,
+  searchParams: URLSearchParams,
+  context?: RequestUserContext
+) {
   const parsed = reportQuerySchema.parse(Object.fromEntries(searchParams.entries()));
   const options = normalizeReportOptions(parsed);
   if (options.reportStage !== "final") {
     throw new Error("Only final report can close a case.");
   }
   const store = getCaseStore();
-  const aggregate = await store.getCase(caseId);
+  const aggregate = await store.getCase(caseId, context?.userId ?? undefined);
   if (!aggregate) {
     throw new Error("Case not found");
   }

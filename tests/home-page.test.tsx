@@ -177,12 +177,14 @@ describe("HomePage", () => {
   it("renders the embedded workspace content without owning the global shell", async () => {
     stubHomePageFetch();
 
-    render(<HomePage />);
+    const page = await HomePage();
+    render(page);
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
     expect(screen.queryByTestId("sovereign-shell")).not.toBeInTheDocument();
     expect(screen.getByText("Fireline Workspace")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "整理分析结论" })).toBeInTheDocument();
+    expect(screen.getByText("当前建议")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "整理分析结论" })).not.toBeInTheDocument();
   });
 });

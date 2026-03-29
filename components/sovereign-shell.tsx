@@ -5,6 +5,9 @@ import React from "react";
 type SovereignShellProps = {
   activeSection?: "Workspace";
   hasCases?: boolean;
+  authEnabled?: boolean;
+  isAuthenticated?: boolean;
+  userEmail?: string | null;
   children: React.ReactNode;
 };
 
@@ -26,6 +29,9 @@ function dispatchShellEvent(name: string) {
 
 export function SovereignShell({
   activeSection = "Workspace",
+  authEnabled = false,
+  isAuthenticated = false,
+  userEmail = null,
   children,
 }: SovereignShellProps) {
   return (
@@ -55,6 +61,19 @@ export function SovereignShell({
 
         <div className="sovereign-utilities">
           <span className="shell-status-chip">CASE + CHAT ONLY</span>
+          {authEnabled ? (
+            isAuthenticated ? (
+              <form action="/auth/sign-out" method="post">
+                <button className="shell-auth-button" type="submit">
+                  {userEmail ? `退出 ${userEmail}` : "退出"}
+                </button>
+              </form>
+            ) : (
+              <a className="shell-auth-link" href="/login">
+                登录
+              </a>
+            )
+          ) : null}
         </div>
       </header>
 
@@ -191,6 +210,22 @@ export function SovereignShell({
           font-size: 10px;
           font-weight: 700;
           letter-spacing: 0.08em;
+        }
+
+        .shell-auth-button,
+        .shell-auth-link {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 28px;
+          padding: 0 10px;
+          border-radius: 999px;
+          border: 1px solid rgba(0, 99, 153, 0.18);
+          background: rgba(255, 255, 255, 0.72);
+          color: var(--text);
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: -0.01em;
         }
 
         .sovereign-body {

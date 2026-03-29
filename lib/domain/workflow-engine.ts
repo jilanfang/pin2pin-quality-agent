@@ -5,6 +5,7 @@ import type {
   ApplyEvidenceOptions,
   AssumptionItem,
   CaseAggregate,
+  ConversationInputContext,
   EvidencePayload,
   FactItem,
   GapItem,
@@ -426,7 +427,8 @@ function pushAssistantNote(aggregate: CaseAggregate, content: string) {
 
 function buildAssistantResponseForEvidence(
   aggregate: CaseAggregate,
-  targetStage: WorkflowStage
+  targetStage: WorkflowStage,
+  inputContext?: ConversationInputContext
 ) {
   const guided = getGuidedThinking(aggregate);
   const activeStage = aggregate.caseRecord.currentStage;
@@ -436,11 +438,50 @@ function buildAssistantResponseForEvidence(
   const facts = factMap(aggregate.knownFacts);
   const urgentComplaint = facts.mode === "customer_complaint_urgent";
   const impactedStages = ACTIVE_WORKFLOW_STAGES.filter((stage) => aggregate.stages[stage].impacted);
+  const isFirstTurn = Boolean(inputContext?.isFirstTurn);
+  const sourceShape = inputContext?.sourceShape ?? "fragmented_update";
   const impactHint =
     impactedStages.length && targetStage === "D2"
       ? aggregate.stages[impactedStages[0]]?.impactSummary ??
         `前序判断受影响，建议回看 ${impactedStages.filter((stage) => stage === "D3" || stage === "D4").join(" / ") || impactedStages.join(" / ")}。`
       : "";
+  const extractedFacts = aggregate.knownFacts
+    .filter((item) =>
+      ["customer", "problem_symptom", "batch", "impact", "containment_action", "discovery_time"].includes(item.field)
+    )
+    .slice(0, 4)
+    .map((item) => item.value);
+  const factSummary = extractedFacts.join("；") || "当前异常现象与现场状态";
+  const nextNeedText = nextQuestion ?? "客户现场数量、影响范围和当前围堵范围";
+  const missingText = missing.join("；") || "暂无明显缺口，可继续补充更具体现场信息";
+
+  if (isFirstTurn) {
+    const opening =
+      sourceShape === "long_document"
+        ? "我先帮你接下这个案件，并把这份材料当成首轮案情输入。"
+        : "我先帮你接下这个案件。";
+    if (urgentComplaint) {
+      return [
+        opening,
+        "高优先级异常响应：先把现场止血，再决定怎么写快速响应版。",
+        `我已提取到：${factSummary}。`,
+        `我现在怎么看：${guided?.guidanceText ?? "当前先控住影响范围。"}${impactHint ? ` ${impactHint}` : ""}`,
+        `为什么先问这个：${guided?.thinkingGoal ?? "失效位置和围堵状态决定你能不能先交差。"}${
+          facts.change_point ? " 当前还要同时盯住 change point。" : ""
+        }`,
+        `当前还缺：${missingText}。`,
+        `你只需要补：${nextNeedText}。`,
+      ].join("\n");
+    }
+
+    return [
+      opening,
+      `我已提取到：${factSummary}。`,
+      `当前主要推进：${activeStage === "D2" ? "D2 问题定义" : activeStage}${impactHint ? `；${impactHint}` : ""}`,
+      `当前还缺：${missingText}。`,
+      `下一步请直接补：${nextNeedText}。`,
+    ].join("\n");
+  }
 
   if (urgentComplaint) {
     return [
@@ -495,6 +536,7 @@ export function createCaseAggregate(title: string): CaseAggregate {
   return {
     caseRecord: {
       id: makeId("case"),
+      ownerUserId: null,
       title,
       status: "open",
       archivedAt: null,
@@ -517,9 +559,10 @@ export function createCaseAggregate(title: string): CaseAggregate {
 export function applyEvidence(
   source: CaseAggregate,
   payload: EvidencePayload,
-  options: ApplyEvidenceOptions = {}
+  options: ApplyEvidenceOptions & { inputContext?: ConversationInputContext } = {}
 ): CaseAggregate {
   const aggregate = cloneAggregate(source);
+  const isFirstTurn = aggregate.messages.filter((item) => item.role === "user").length === 0;
   const previousFacts = [...aggregate.knownFacts];
   const targetStage =
     payload.contextStage && WORKFLOW_STAGES.includes(payload.contextStage)
@@ -603,7 +646,13 @@ export function applyEvidence(
   }
 
   syncCaseState(aggregate);
-  pushAssistantNote(aggregate, buildAssistantResponseForEvidence(aggregate, targetStage));
+  pushAssistantNote(
+    aggregate,
+    buildAssistantResponseForEvidence(aggregate, targetStage, {
+      sourceShape: options.inputContext?.sourceShape ?? "fragmented_update",
+      isFirstTurn,
+    })
+  );
   return aggregate;
 }
 

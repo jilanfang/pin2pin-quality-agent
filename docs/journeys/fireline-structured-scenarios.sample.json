@@ -1,0 +1,1484 @@
+[
+  {
+    "scenarioId": "CQ-01-D2-01",
+    "priority": "p0",
+    "usageTags": [
+      "benchmark",
+      "regression",
+      "smoke"
+    ],
+    "segment": "customer_quality",
+    "caseFamily": "customer_smoke_line_stop",
+    "stage": "D2",
+    "businessPriority": "critical",
+    "sourceType": "email",
+    "speakerRole": "customer_quality_manager",
+    "timestampOffset": "T+0h",
+    "rawInput": "客户华星科技邮件反馈：昨日客户端上线后出现 3 台板卡上电冒烟，涉及批次 B19，要求 24 小时内回复临时遏制与初步分析。当前客户现场已暂停投线，我司仓库已先冻结库存待排查。客户 24 小时内要回复，我现在先怎么说？",
+    "rawInputLanguageStyle": "formal_email",
+    "knownFacts": [
+      "客户华星科技",
+      "批次 B19",
+      "3 台上电冒烟",
+      "客户停线"
+    ],
+    "assumptions": [
+      "当前根因未知"
+    ],
+    "misleadingSignals": [
+      "客户邮件暗示已定位到具体位号"
+    ],
+    "expectedIntents": [
+      "evidence",
+      "question"
+    ],
+    "expectedPrimaryStage": "D2",
+    "expectedRelatedStages": [
+      "D2"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "guide",
+    "expectedSourceShape": "long_document",
+    "expectedNextQuestions": [
+      "影响范围",
+      "客户现场库存",
+      "在途批次"
+    ],
+    "expectedSafeBoundaries": [
+      "不要承诺根因已确认"
+    ],
+    "expectedArtifactsReady": [],
+    "antiGoals": [
+      "直接输出 final 8D",
+      "直接承诺根因"
+    ],
+    "currentCaseTitle": "华星科技上电冒烟客诉",
+    "currentKnownFacts": [
+      {
+        "field": "customer",
+        "value": "华星科技"
+      },
+      {
+        "field": "batch",
+        "value": "B19"
+      },
+      {
+        "field": "model",
+        "value": "MCU-900"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "CQ-01-D4-01",
+    "priority": "p0",
+    "usageTags": [
+      "benchmark",
+      "regression"
+    ],
+    "segment": "customer_quality",
+    "caseFamily": "customer_smoke_line_stop",
+    "stage": "D4",
+    "businessPriority": "critical",
+    "sourceType": "customer_portal",
+    "speakerRole": "customer_engineer",
+    "timestampOffset": "T+13h",
+    "rawInput": "等下，客户更新：有一台不是 C25 冒烟，而是输入连接器附近重新上电时打火，这会影响我们前面的判断。",
+    "rawInputLanguageStyle": "customer_portal_note",
+    "knownFacts": [
+      "至少 1 台现象不同",
+      "连接器附近火花"
+    ],
+    "assumptions": [
+      "三台不一定是同一失效模式"
+    ],
+    "misleadingSignals": [
+      "此前默认三台都是 C25 冒烟"
+    ],
+    "expectedIntents": [
+      "evidence",
+      "correction"
+    ],
+    "expectedPrimaryStage": "D4",
+    "expectedRelatedStages": [
+      "D4"
+    ],
+    "expectedImpactedStages": [
+      "D2",
+      "D3",
+      "D4"
+    ],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "guide",
+    "expectedSourceShape": "mixed_input",
+    "expectedNextQuestions": [
+      "三台是否同一现象",
+      "是否需要拆案"
+    ],
+    "expectedSafeBoundaries": [
+      "不要维持旧的单一根因表述"
+    ],
+    "expectedArtifactsReady": [],
+    "antiGoals": [
+      "忽略回看",
+      "继续把三台硬并成一个现象"
+    ],
+    "currentCaseTitle": "华星科技上电冒烟客诉",
+    "currentKnownFacts": [
+      {
+        "field": "customer",
+        "value": "华星科技"
+      },
+      {
+        "field": "batch",
+        "value": "B19"
+      },
+      {
+        "field": "model",
+        "value": "MCU-900"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "CQ-01-D5-01",
+    "priority": "p1",
+    "usageTags": [
+      "benchmark"
+    ],
+    "segment": "customer_quality",
+    "caseFamily": "customer_smoke_line_stop",
+    "stage": "D5",
+    "businessPriority": "critical",
+    "sourceType": "wechat",
+    "speakerRole": "user",
+    "timestampOffset": "T+1d",
+    "rawInput": "先整理一下行动方案",
+    "rawInputLanguageStyle": "pressure_request",
+    "knownFacts": [
+      "客户下午还会追进度"
+    ],
+    "assumptions": [],
+    "misleadingSignals": [],
+    "expectedIntents": [
+      "decision_signal"
+    ],
+    "expectedPrimaryStage": "D5",
+    "expectedRelatedStages": [
+      "D5"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "result_action",
+    "expectedSourceShape": "fragmented_update",
+    "expectedNextQuestions": [
+      "owner",
+      "上线时间",
+      "覆盖范围"
+    ],
+    "expectedSafeBoundaries": [
+      "不要直接跳到 final 8D"
+    ],
+    "expectedArtifactsReady": [
+      "action_plan"
+    ],
+    "antiGoals": [
+      "直接出最终 8D"
+    ],
+    "currentCaseTitle": "华星科技上电冒烟客诉",
+    "currentKnownFacts": [
+      {
+        "field": "customer",
+        "value": "华星科技"
+      },
+      {
+        "field": "batch",
+        "value": "B19"
+      },
+      {
+        "field": "model",
+        "value": "MCU-900"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "CQ-01-D7-01",
+    "priority": "p0",
+    "usageTags": [
+      "benchmark",
+      "regression",
+      "smoke"
+    ],
+    "segment": "customer_quality",
+    "caseFamily": "customer_smoke_line_stop",
+    "stage": "D7",
+    "businessPriority": "high",
+    "sourceType": "wechat",
+    "speakerRole": "user",
+    "timestampOffset": "T+7.5d",
+    "rawInput": "帮我总结一下现在这个案子还差什么，别给我一堆套话。",
+    "rawInputLanguageStyle": "chat_fragment",
+    "knownFacts": [
+      "已经有防再发动作"
+    ],
+    "assumptions": [
+      "培训和执行可能未全覆盖"
+    ],
+    "misleadingSignals": [],
+    "expectedIntents": [
+      "evidence",
+      "summary_request"
+    ],
+    "expectedPrimaryStage": "D7",
+    "expectedRelatedStages": [
+      "D7"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "result_action",
+    "expectedSourceShape": "mixed_input",
+    "expectedNextQuestions": [
+      "还差哪些未关闭项"
+    ],
+    "expectedSafeBoundaries": [
+      "不要装作全部闭环"
+    ],
+    "expectedArtifactsReady": [
+      "analysis_summary"
+    ],
+    "antiGoals": [
+      "输出空泛总结"
+    ],
+    "currentCaseTitle": "华星科技上电冒烟客诉",
+    "currentKnownFacts": [
+      {
+        "field": "customer",
+        "value": "华星科技"
+      },
+      {
+        "field": "batch",
+        "value": "B19"
+      },
+      {
+        "field": "model",
+        "value": "MCU-900"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "CQ-02-D2-01",
+    "priority": "p1",
+    "usageTags": [
+      "benchmark"
+    ],
+    "segment": "customer_quality",
+    "caseFamily": "customer_intermittent_function",
+    "stage": "D2",
+    "businessPriority": "high",
+    "sourceType": "customer_portal",
+    "speakerRole": "customer_quality_manager",
+    "timestampOffset": "T+0h",
+    "rawInput": "补充一下，Field issue reported in Poland: HUB-230 main board occasionally goes black or reboots after 2-3 days of use. Current complaints are concentrated on lot F12. Need your investigation path.",
+    "rawInputLanguageStyle": "customer_portal_note",
+    "knownFacts": [
+      "波兰市场",
+      "HUB-230",
+      "F12",
+      "黑屏/重启"
+    ],
+    "assumptions": [
+      "黑屏和重启未必同一个模式",
+      "这更像另一单案"
+    ],
+    "misleadingSignals": [
+      "客户先把黑屏和重启放在一起"
+    ],
+    "expectedIntents": [
+      "evidence",
+      "correction"
+    ],
+    "expectedPrimaryStage": "D2",
+    "expectedRelatedStages": [
+      "D2"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "needs_case_confirmation",
+    "expectedResponseMode": "guide",
+    "expectedSourceShape": "long_document",
+    "expectedNextQuestions": [
+      "序列号",
+      "软件版本",
+      "复现条件"
+    ],
+    "expectedSafeBoundaries": [
+      "不要把 PMIC 历史问题写成当前结论"
+    ],
+    "expectedArtifactsReady": [],
+    "antiGoals": [
+      "直接定软件或硬件单一根因"
+    ],
+    "currentCaseTitle": "HUB-220 黑屏重启客诉",
+    "currentKnownFacts": [
+      {
+        "field": "customer",
+        "value": "北曜智能"
+      },
+      {
+        "field": "batch",
+        "value": "G07"
+      },
+      {
+        "field": "model",
+        "value": "HUB-220"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "CQ-02-D4-01",
+    "priority": "p1",
+    "usageTags": [
+      "benchmark"
+    ],
+    "segment": "customer_quality",
+    "caseFamily": "customer_intermittent_function",
+    "stage": "D4",
+    "businessPriority": "high",
+    "sourceType": "customer_portal",
+    "speakerRole": "customer_quality_manager",
+    "timestampOffset": "T+3d",
+    "rawInput": "补充一下，One newly returned unit is HUB-230/F12, not HUB-220/G07. Please confirm whether this is the same case or a separate issue.",
+    "rawInputLanguageStyle": "customer_portal_note",
+    "knownFacts": [
+      "出现 HUB-230/F12 新退机"
+    ],
+    "assumptions": [
+      "可能是另一单案件"
+    ],
+    "misleadingSignals": [
+      "相似现象容易被混成一个 case"
+    ],
+    "expectedIntents": [
+      "evidence",
+      "correction"
+    ],
+    "expectedPrimaryStage": "D4",
+    "expectedRelatedStages": [
+      "D4"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "needs_case_confirmation",
+    "expectedResponseMode": "inform",
+    "expectedSourceShape": "long_document",
+    "expectedNextQuestions": [
+      "是否拆成新案",
+      "型号和批次差异"
+    ],
+    "expectedSafeBoundaries": [
+      "不要静默合并不同机种"
+    ],
+    "expectedArtifactsReady": [],
+    "antiGoals": [
+      "把 HUB-230 混进当前 G07 案"
+    ],
+    "currentCaseTitle": "HUB-220 黑屏重启客诉",
+    "currentKnownFacts": [
+      {
+        "field": "customer",
+        "value": "北曜智能"
+      },
+      {
+        "field": "batch",
+        "value": "G07"
+      },
+      {
+        "field": "model",
+        "value": "HUB-220"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "CQ-02-D5-01",
+    "priority": "p1",
+    "usageTags": [
+      "benchmark"
+    ],
+    "segment": "customer_quality",
+    "caseFamily": "customer_intermittent_function",
+    "stage": "D5",
+    "businessPriority": "high",
+    "sourceType": "wechat",
+    "speakerRole": "user",
+    "timestampOffset": "T+4d",
+    "rawInput": "先整理一下行动方案",
+    "rawInputLanguageStyle": "pressure_request",
+    "knownFacts": [
+      "用户先要下一步动作"
+    ],
+    "assumptions": [],
+    "misleadingSignals": [],
+    "expectedIntents": [
+      "decision_signal"
+    ],
+    "expectedPrimaryStage": "D5",
+    "expectedRelatedStages": [
+      "D5"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "result_action",
+    "expectedSourceShape": "fragmented_update",
+    "expectedNextQuestions": [
+      "硬件措施",
+      "软件措施",
+      "验证计划"
+    ],
+    "expectedSafeBoundaries": [
+      "不要直接出 final 8D"
+    ],
+    "expectedArtifactsReady": [
+      "action_plan"
+    ],
+    "antiGoals": [
+      "跳过行动方案"
+    ],
+    "currentCaseTitle": "HUB-220 黑屏重启客诉",
+    "currentKnownFacts": [
+      {
+        "field": "customer",
+        "value": "北曜智能"
+      },
+      {
+        "field": "batch",
+        "value": "G07"
+      },
+      {
+        "field": "model",
+        "value": "HUB-220"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "CQ-02-D7-01",
+    "priority": "p1",
+    "usageTags": [
+      "benchmark"
+    ],
+    "segment": "customer_quality",
+    "caseFamily": "customer_intermittent_function",
+    "stage": "D7",
+    "businessPriority": "high",
+    "sourceType": "wechat",
+    "speakerRole": "user",
+    "timestampOffset": "T+12.3d",
+    "rawInput": "帮我总结一下现在这个案子能说清什么，还不能说清什么，顺便给我一句话口径。",
+    "rawInputLanguageStyle": "chat_fragment",
+    "knownFacts": [
+      "已有阶段性验证"
+    ],
+    "assumptions": [
+      "仍有边界条件未完全关闭"
+    ],
+    "misleadingSignals": [],
+    "expectedIntents": [
+      "evidence",
+      "summary_request"
+    ],
+    "expectedPrimaryStage": "D7",
+    "expectedRelatedStages": [
+      "D7"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "result_action",
+    "expectedSourceShape": "mixed_input",
+    "expectedNextQuestions": [
+      "放行条件",
+      "旧案噪音是否剔除"
+    ],
+    "expectedSafeBoundaries": [
+      "不要说 fully closed"
+    ],
+    "expectedArtifactsReady": [
+      "analysis_summary"
+    ],
+    "antiGoals": [
+      "含糊其辞地总结"
+    ],
+    "currentCaseTitle": "HUB-220 黑屏重启客诉",
+    "currentKnownFacts": [
+      {
+        "field": "customer",
+        "value": "北曜智能"
+      },
+      {
+        "field": "batch",
+        "value": "G07"
+      },
+      {
+        "field": "model",
+        "value": "HUB-220"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "QE-01-D2-01",
+    "priority": "p1",
+    "usageTags": [
+      "benchmark"
+    ],
+    "segment": "factory_qe",
+    "caseFamily": "line_solder_bridge_batch",
+    "stage": "D2",
+    "businessPriority": "high",
+    "sourceType": "system_note",
+    "speakerRole": "factory_supervisor",
+    "timestampOffset": "T+0h",
+    "rawInput": "MES alarm: Line 3 ICT short fail jumped from 0.4% to 3.8% within this shift, concentrated at U17 adjacent pins.",
+    "rawInputLanguageStyle": "lab_summary",
+    "knownFacts": [
+      "Line 3",
+      "ICT short fail 0.4% -> 3.8%",
+      "U17 邻脚"
+    ],
+    "assumptions": [
+      "是否和上周 stencil 问题同源未知"
+    ],
+    "misleadingSignals": [
+      "报警只给位号不等于成因"
+    ],
+    "expectedIntents": [
+      "evidence"
+    ],
+    "expectedPrimaryStage": "D2",
+    "expectedRelatedStages": [
+      "D2"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "guide",
+    "expectedSourceShape": "fragmented_update",
+    "expectedNextQuestions": [
+      "WIP 数量",
+      "已放行数量",
+      "是否只在单线"
+    ],
+    "expectedSafeBoundaries": [
+      "不要直接套用历史根因"
+    ],
+    "expectedArtifactsReady": [],
+    "antiGoals": [
+      "直接认定 stencil 脏污"
+    ],
+    "currentCaseTitle": "PWR-610 桥连异常",
+    "currentKnownFacts": [
+      {
+        "field": "batch",
+        "value": "L3-0328"
+      },
+      {
+        "field": "model",
+        "value": "PWR-610"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "QE-01-D4-01",
+    "priority": "p1",
+    "usageTags": [
+      "benchmark"
+    ],
+    "segment": "factory_qe",
+    "caseFamily": "line_solder_bridge_batch",
+    "stage": "D4",
+    "businessPriority": "high",
+    "sourceType": "wechat",
+    "speakerRole": "process_engineer",
+    "timestampOffset": "T+1.3d",
+    "rawInput": "等下，刚补查发现不是只有 3 号线，2 号线昨天夜班也用了同一版旧 stencil 备件，这会影响前面的隔离判断。",
+    "rawInputLanguageStyle": "chat_fragment",
+    "knownFacts": [
+      "2 号线也用了同版旧 stencil"
+    ],
+    "assumptions": [
+      "隔离范围需要扩大"
+    ],
+    "misleadingSignals": [
+      "只盯 3 号线会漏掉 2 号线风险"
+    ],
+    "expectedIntents": [
+      "evidence",
+      "correction"
+    ],
+    "expectedPrimaryStage": "D4",
+    "expectedRelatedStages": [
+      "D4"
+    ],
+    "expectedImpactedStages": [
+      "D2",
+      "D3",
+      "D4"
+    ],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "guide",
+    "expectedSourceShape": "mixed_input",
+    "expectedNextQuestions": [
+      "2 号线 lot 边界",
+      "是否需要追加隔离"
+    ],
+    "expectedSafeBoundaries": [
+      "不要维持原先过窄隔离范围"
+    ],
+    "expectedArtifactsReady": [],
+    "antiGoals": [
+      "忽略 2 号线"
+    ],
+    "currentCaseTitle": "PWR-610 桥连异常",
+    "currentKnownFacts": [
+      {
+        "field": "batch",
+        "value": "L3-0328"
+      },
+      {
+        "field": "model",
+        "value": "PWR-610"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "QE-01-D5-01",
+    "priority": "p0",
+    "usageTags": [
+      "benchmark",
+      "regression",
+      "smoke"
+    ],
+    "segment": "factory_qe",
+    "caseFamily": "line_solder_bridge_batch",
+    "stage": "D5",
+    "businessPriority": "high",
+    "sourceType": "wechat",
+    "speakerRole": "user",
+    "timestampOffset": "T+4.3d",
+    "rawInput": "先整理一下行动方案",
+    "rawInputLanguageStyle": "pressure_request",
+    "knownFacts": [
+      "用户不急着出完整 8D"
+    ],
+    "assumptions": [],
+    "misleadingSignals": [],
+    "expectedIntents": [
+      "decision_signal"
+    ],
+    "expectedPrimaryStage": "D5",
+    "expectedRelatedStages": [
+      "D5"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "result_action",
+    "expectedSourceShape": "fragmented_update",
+    "expectedNextQuestions": [
+      "owner",
+      "验证计划",
+      "隔离边界是否重算"
+    ],
+    "expectedSafeBoundaries": [
+      "不要把行动方案写成最终闭环"
+    ],
+    "expectedArtifactsReady": [
+      "action_plan"
+    ],
+    "antiGoals": [
+      "直接出 8D final"
+    ],
+    "currentCaseTitle": "PWR-610 桥连异常",
+    "currentKnownFacts": [
+      {
+        "field": "batch",
+        "value": "L3-0328"
+      },
+      {
+        "field": "model",
+        "value": "PWR-610"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "QE-01-D7-01",
+    "priority": "p1",
+    "usageTags": [
+      "benchmark"
+    ],
+    "segment": "factory_qe",
+    "caseFamily": "line_solder_bridge_batch",
+    "stage": "D7",
+    "businessPriority": "medium",
+    "sourceType": "wechat",
+    "speakerRole": "user",
+    "timestampOffset": "T+6.2d",
+    "rawInput": "帮我总结一下，这单最该给老板看的一句话和三件事分别是什么？",
+    "rawInputLanguageStyle": "chat_fragment",
+    "knownFacts": [
+      "隔离范围、主因链、已验证动作"
+    ],
+    "assumptions": [],
+    "misleadingSignals": [],
+    "expectedIntents": [
+      "evidence",
+      "summary_request"
+    ],
+    "expectedPrimaryStage": "D7",
+    "expectedRelatedStages": [
+      "D7"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "result_action",
+    "expectedSourceShape": "mixed_input",
+    "expectedNextQuestions": [
+      "管理层要看什么"
+    ],
+    "expectedSafeBoundaries": [
+      "不要写太虚"
+    ],
+    "expectedArtifactsReady": [
+      "analysis_summary"
+    ],
+    "antiGoals": [
+      "空泛汇报"
+    ],
+    "currentCaseTitle": "PWR-610 桥连异常",
+    "currentKnownFacts": [
+      {
+        "field": "batch",
+        "value": "L3-0328"
+      },
+      {
+        "field": "model",
+        "value": "PWR-610"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "QE-02-D2-01",
+    "priority": "p1",
+    "usageTags": [
+      "benchmark"
+    ],
+    "segment": "factory_qe",
+    "caseFamily": "reliability_intermittent_reset",
+    "stage": "D2",
+    "businessPriority": "high",
+    "sourceType": "test_summary",
+    "speakerRole": "reliability_engineer",
+    "timestampOffset": "T+0h",
+    "rawInput": "Thermal shock -20C to 70C, 30 cycles in, 6/20 units showed intermittent reset on power ramp. Failure is not permanent and cannot be reproduced on every restart.",
+    "rawInputLanguageStyle": "lab_summary",
+    "knownFacts": [
+      "-20C to 70C",
+      "30 cycles",
+      "6/20 间歇复位"
+    ],
+    "assumptions": [
+      "边界条件很关键"
+    ],
+    "misleadingSignals": [
+      "如果只写系统死机会失真"
+    ],
+    "expectedIntents": [
+      "evidence"
+    ],
+    "expectedPrimaryStage": "D2",
+    "expectedRelatedStages": [
+      "D2"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "needs_case_confirmation",
+    "expectedResponseMode": "guide",
+    "expectedSourceShape": "long_document",
+    "expectedNextQuestions": [
+      "复现边界",
+      "样本量",
+      "是否插 debug cable"
+    ],
+    "expectedSafeBoundaries": [
+      "不要过早写单一根因"
+    ],
+    "expectedArtifactsReady": [],
+    "antiGoals": [
+      "把间歇失效说成稳定复现"
+    ],
+    "currentCaseTitle": "控制模块热冲击复位",
+    "currentKnownFacts": [
+      {
+        "field": "model",
+        "value": "CTRL-77"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "QE-02-D4-01",
+    "priority": "p1",
+    "usageTags": [
+      "benchmark"
+    ],
+    "segment": "factory_qe",
+    "caseFamily": "reliability_intermittent_reset",
+    "stage": "D4",
+    "businessPriority": "high",
+    "sourceType": "test_summary",
+    "speakerRole": "test_engineer",
+    "timestampOffset": "T+2.5d",
+    "rawInput": "等下，补实验发现其中一台只有插着 debug cable 才会复位，不插 cable 就过，这会影响我们前面的判断。",
+    "rawInputLanguageStyle": "spoken_recap",
+    "knownFacts": [
+      "debug cable 改变复位行为"
+    ],
+    "assumptions": [
+      "之前 6/20 统计需要回看"
+    ],
+    "misleadingSignals": [
+      "旧的问题定义可能把不同边界条件混在一起"
+    ],
+    "expectedIntents": [
+      "evidence",
+      "correction"
+    ],
+    "expectedPrimaryStage": "D4",
+    "expectedRelatedStages": [
+      "D4"
+    ],
+    "expectedImpactedStages": [
+      "D2",
+      "D4"
+    ],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "guide",
+    "expectedSourceShape": "mixed_input",
+    "expectedNextQuestions": [
+      "是否重做样本分组",
+      "主路径和边界路径是否拆开"
+    ],
+    "expectedSafeBoundaries": [
+      "不要沿用旧的 6/20 统一解释"
+    ],
+    "expectedArtifactsReady": [],
+    "antiGoals": [
+      "忽略边界条件变化"
+    ],
+    "currentCaseTitle": "控制模块热冲击复位",
+    "currentKnownFacts": [
+      {
+        "field": "model",
+        "value": "CTRL-77"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "QE-02-D5-01",
+    "priority": "p1",
+    "usageTags": [
+      "benchmark"
+    ],
+    "segment": "factory_qe",
+    "caseFamily": "reliability_intermittent_reset",
+    "stage": "D5",
+    "businessPriority": "high",
+    "sourceType": "wechat",
+    "speakerRole": "user",
+    "timestampOffset": "T+4.1d",
+    "rawInput": "先整理一下行动方案",
+    "rawInputLanguageStyle": "pressure_request",
+    "knownFacts": [
+      "用户要下一步动作"
+    ],
+    "assumptions": [],
+    "misleadingSignals": [],
+    "expectedIntents": [
+      "decision_signal"
+    ],
+    "expectedPrimaryStage": "D5",
+    "expectedRelatedStages": [
+      "D5"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "result_action",
+    "expectedSourceShape": "fragmented_update",
+    "expectedNextQuestions": [
+      "硬件措施",
+      "试验控制措施"
+    ],
+    "expectedSafeBoundaries": [
+      "不要把 action plan 当结案"
+    ],
+    "expectedArtifactsReady": [
+      "action_plan"
+    ],
+    "antiGoals": [
+      "直接出 final 8D"
+    ],
+    "currentCaseTitle": "控制模块热冲击复位",
+    "currentKnownFacts": [
+      {
+        "field": "model",
+        "value": "CTRL-77"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "QE-02-D6-01",
+    "priority": "p0",
+    "usageTags": [
+      "benchmark",
+      "regression"
+    ],
+    "segment": "factory_qe",
+    "caseFamily": "reliability_intermittent_reset",
+    "stage": "D6",
+    "businessPriority": "medium",
+    "sourceType": "wechat",
+    "speakerRole": "user",
+    "timestampOffset": "T+7.3d",
+    "rawInput": "帮我总结一下现在能说到哪一步，顺便给我一句话口径，别说太满。",
+    "rawInputLanguageStyle": "pressure_request",
+    "knownFacts": [
+      "已有阶段性验证"
+    ],
+    "assumptions": [
+      "极限边界仍在确认"
+    ],
+    "misleadingSignals": [],
+    "expectedIntents": [
+      "evidence",
+      "summary_request"
+    ],
+    "expectedPrimaryStage": "D6",
+    "expectedRelatedStages": [
+      "D6"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "result_action",
+    "expectedSourceShape": "mixed_input",
+    "expectedNextQuestions": [
+      "主路径验证是否通过",
+      "残余风险是什么"
+    ],
+    "expectedSafeBoundaries": [
+      "不要说 fully validated"
+    ],
+    "expectedArtifactsReady": [],
+    "antiGoals": [
+      "过度承诺验证完成"
+    ],
+    "currentCaseTitle": "控制模块热冲击复位",
+    "currentKnownFacts": [
+      {
+        "field": "model",
+        "value": "CTRL-77"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "SQE-01-D2-01",
+    "priority": "p1",
+    "usageTags": [
+      "benchmark"
+    ],
+    "segment": "sqe",
+    "caseFamily": "incoming_mlcc_microcrack",
+    "stage": "D2",
+    "businessPriority": "high",
+    "sourceType": "wechat",
+    "speakerRole": "factory_supervisor",
+    "timestampOffset": "T+0.3d",
+    "rawInput": "线边那边已经有人说是吸嘴打裂了，但 IQC 那边说没上机前就看到裂。",
+    "rawInputLanguageStyle": "chat_fragment",
+    "knownFacts": [
+      "IQC 说未上机前就有裂纹"
+    ],
+    "assumptions": [
+      "吸嘴打裂和来料裂纹都在竞争"
+    ],
+    "misleadingSignals": [
+      "责任界面会先行"
+    ],
+    "expectedIntents": [
+      "evidence"
+    ],
+    "expectedPrimaryStage": "D2",
+    "expectedRelatedStages": [
+      "D2"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "guide",
+    "expectedSourceShape": "fragmented_update",
+    "expectedNextQuestions": [
+      "开封前证据",
+      "上机前照片",
+      "lot 范围"
+    ],
+    "expectedSafeBoundaries": [
+      "不要先归责"
+    ],
+    "expectedArtifactsReady": [],
+    "antiGoals": [
+      "先把锅判给工厂或供应商"
+    ],
+    "currentCaseTitle": "MLCC 微裂争议",
+    "currentKnownFacts": [
+      {
+        "field": "batch",
+        "value": "C9K"
+      },
+      {
+        "field": "model",
+        "value": "10uF-MLCC"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "SQE-01-D4-01",
+    "priority": "p1",
+    "usageTags": [
+      "benchmark"
+    ],
+    "segment": "sqe",
+    "caseFamily": "incoming_mlcc_microcrack",
+    "stage": "D4",
+    "businessPriority": "high",
+    "sourceType": "meeting_notes",
+    "speakerRole": "user",
+    "timestampOffset": "T+2.5d",
+    "rawInput": "会议纪要：补充一下，苏州和重庆两个工厂都在未上机的开封 reel 里看到同类裂纹，这会影响前面的责任判断。",
+    "rawInputLanguageStyle": "meeting_minutes",
+    "knownFacts": [
+      "双工厂",
+      "未上机开封 reel 也见裂纹"
+    ],
+    "assumptions": [
+      "供应商侧概率上升"
+    ],
+    "misleadingSignals": [
+      "早先有人说是吸嘴打裂"
+    ],
+    "expectedIntents": [
+      "evidence",
+      "correction"
+    ],
+    "expectedPrimaryStage": "D4",
+    "expectedRelatedStages": [
+      "D4"
+    ],
+    "expectedImpactedStages": [
+      "D2",
+      "D4"
+    ],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "guide",
+    "expectedSourceShape": "meeting_notes",
+    "expectedNextQuestions": [
+      "是否还有 unopened reel 证据",
+      "供应商是否需要重做根因"
+    ],
+    "expectedSafeBoundaries": [
+      "不要继续沿用工厂 handling 归责"
+    ],
+    "expectedArtifactsReady": [],
+    "antiGoals": [
+      "忽略双工厂未上机证据"
+    ],
+    "currentCaseTitle": "MLCC 微裂争议",
+    "currentKnownFacts": [
+      {
+        "field": "batch",
+        "value": "C9K"
+      },
+      {
+        "field": "model",
+        "value": "10uF-MLCC"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "SQE-01-D5-01",
+    "priority": "p0",
+    "usageTags": [
+      "benchmark",
+      "regression"
+    ],
+    "segment": "sqe",
+    "caseFamily": "incoming_mlcc_microcrack",
+    "stage": "D5",
+    "businessPriority": "high",
+    "sourceType": "wechat",
+    "speakerRole": "user",
+    "timestampOffset": "T+4.1d",
+    "rawInput": "先跟供应商一句话怎么说比较硬但又不至于撕破脸？",
+    "rawInputLanguageStyle": "pressure_request",
+    "knownFacts": [
+      "供应商动作回复还不够硬"
+    ],
+    "assumptions": [
+      "需要一个外部沟通口径"
+    ],
+    "misleadingSignals": [],
+    "expectedIntents": [
+      "question"
+    ],
+    "expectedPrimaryStage": "D5",
+    "expectedRelatedStages": [
+      "D5"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "inform",
+    "expectedSourceShape": "question_only",
+    "expectedNextQuestions": [
+      "根因证据",
+      "验证计划",
+      "lot 追溯"
+    ],
+    "expectedSafeBoundaries": [
+      "不要默认接受供应商初版 8D"
+    ],
+    "expectedArtifactsReady": [],
+    "antiGoals": [
+      "直接同意供应商 8D"
+    ],
+    "currentCaseTitle": "MLCC 微裂争议",
+    "currentKnownFacts": [
+      {
+        "field": "batch",
+        "value": "C9K"
+      },
+      {
+        "field": "model",
+        "value": "10uF-MLCC"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "SQE-01-D7-01",
+    "priority": "p1",
+    "usageTags": [
+      "benchmark"
+    ],
+    "segment": "sqe",
+    "caseFamily": "incoming_mlcc_microcrack",
+    "stage": "D7",
+    "businessPriority": "medium",
+    "sourceType": "wechat",
+    "speakerRole": "user",
+    "timestampOffset": "T+12.4d",
+    "rawInput": "帮我总结一下，现在这单能确认到什么程度，还卡在哪。",
+    "rawInputLanguageStyle": "chat_fragment",
+    "knownFacts": [
+      "新 lot 有阶段性验证"
+    ],
+    "assumptions": [
+      "审厂和包装改版未完全关闭"
+    ],
+    "misleadingSignals": [],
+    "expectedIntents": [
+      "evidence",
+      "summary_request",
+      "question"
+    ],
+    "expectedPrimaryStage": "D7",
+    "expectedRelatedStages": [
+      "D7"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "result_action",
+    "expectedSourceShape": "mixed_input",
+    "expectedNextQuestions": [
+      "审厂状态",
+      "放行边界"
+    ],
+    "expectedSafeBoundaries": [
+      "不要说 fully closed"
+    ],
+    "expectedArtifactsReady": [
+      "analysis_summary"
+    ],
+    "antiGoals": [
+      "含糊总结"
+    ],
+    "currentCaseTitle": "MLCC 微裂争议",
+    "currentKnownFacts": [
+      {
+        "field": "batch",
+        "value": "C9K"
+      },
+      {
+        "field": "model",
+        "value": "10uF-MLCC"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "SQE-02-D2-01",
+    "priority": "p0",
+    "usageTags": [
+      "benchmark",
+      "regression",
+      "smoke"
+    ],
+    "segment": "sqe",
+    "caseFamily": "supplier_8d_review_connector",
+    "stage": "D2",
+    "businessPriority": "high",
+    "sourceType": "meeting_notes",
+    "speakerRole": "user",
+    "timestampOffset": "T+0.8d",
+    "rawInput": "会议纪要：补充一下，客户退机 2 台、工厂在线异常 11 台，都集中在 K55；但另外还有 1 台老 Lot K49 返修件被客服顺手混进来了。",
+    "rawInputLanguageStyle": "meeting_minutes",
+    "knownFacts": [
+      "K55 是主批次",
+      "还有 1 台老 Lot K49 噪音"
+    ],
+    "assumptions": [
+      "老 lot 可能需要拆案"
+    ],
+    "misleadingSignals": [
+      "相似接触不良容易混案"
+    ],
+    "expectedIntents": [
+      "evidence",
+      "correction"
+    ],
+    "expectedPrimaryStage": "D2",
+    "expectedRelatedStages": [
+      "D2"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "needs_case_confirmation",
+    "expectedResponseMode": "guide",
+    "expectedSourceShape": "meeting_notes",
+    "expectedNextQuestions": [
+      "老 lot 是否另开 case",
+      "客户和工厂失效率"
+    ],
+    "expectedSafeBoundaries": [
+      "不要把老 lot 混入 K55 主案"
+    ],
+    "expectedArtifactsReady": [],
+    "antiGoals": [
+      "静默合并老 lot"
+    ],
+    "currentCaseTitle": "连接器 8D 审回",
+    "currentKnownFacts": [
+      {
+        "field": "batch",
+        "value": "K55"
+      },
+      {
+        "field": "model",
+        "value": "DOCK-CONN"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "SQE-02-D3-01",
+    "priority": "p1",
+    "usageTags": [
+      "benchmark"
+    ],
+    "segment": "sqe",
+    "caseFamily": "supplier_8d_review_connector",
+    "stage": "D3",
+    "businessPriority": "high",
+    "sourceType": "wechat",
+    "speakerRole": "warehouse",
+    "timestampOffset": "T+1.4d",
+    "rawInput": "海外仓那批不是 K55，是 K49/K50 混放，但客户那边说也有一台表现类似。",
+    "rawInputLanguageStyle": "chat_fragment",
+    "knownFacts": [
+      "海外仓是 K49/K50 混放",
+      "客户又说有相似现象"
+    ],
+    "assumptions": [
+      "可能是另一单 case"
+    ],
+    "misleadingSignals": [
+      "相似现象不等于同根因"
+    ],
+    "expectedIntents": [
+      "evidence"
+    ],
+    "expectedPrimaryStage": "D3",
+    "expectedRelatedStages": [
+      "D3"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "guide",
+    "expectedSourceShape": "fragmented_update",
+    "expectedNextQuestions": [
+      "是否拆成新案",
+      "海外仓 lot 和 K55 是否同风险"
+    ],
+    "expectedSafeBoundaries": [
+      "不要静默合并 K49/K50"
+    ],
+    "expectedArtifactsReady": [],
+    "antiGoals": [
+      "把海外仓混 lot 算进当前 K55 主案"
+    ],
+    "currentCaseTitle": "连接器 8D 审回",
+    "currentKnownFacts": [
+      {
+        "field": "batch",
+        "value": "K55"
+      },
+      {
+        "field": "model",
+        "value": "DOCK-CONN"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "SQE-02-D5-01",
+    "priority": "p0",
+    "usageTags": [
+      "benchmark",
+      "regression"
+    ],
+    "segment": "sqe",
+    "caseFamily": "supplier_8d_review_connector",
+    "stage": "D5",
+    "businessPriority": "high",
+    "sourceType": "wechat",
+    "speakerRole": "user",
+    "timestampOffset": "T+5d",
+    "rawInput": "给我 8D 预览",
+    "rawInputLanguageStyle": "pressure_request",
+    "knownFacts": [
+      "用户在问最终产物"
+    ],
+    "assumptions": [
+      "未必达到 final ready"
+    ],
+    "misleadingSignals": [],
+    "expectedIntents": [
+      "decision_signal"
+    ],
+    "expectedPrimaryStage": "D5",
+    "expectedRelatedStages": [
+      "D5"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "result_action",
+    "expectedSourceShape": "fragmented_update",
+    "expectedNextQuestions": [
+      "是否先 review supplier 8D",
+      "验证是否足够"
+    ],
+    "expectedSafeBoundaries": [
+      "不要在供应商 8D 很虚时直接出 final"
+    ],
+    "expectedArtifactsReady": [],
+    "antiGoals": [
+      "把供应商初版 8D 直接包装成 final"
+    ],
+    "currentCaseTitle": "连接器 8D 审回",
+    "currentKnownFacts": [
+      {
+        "field": "batch",
+        "value": "K55"
+      },
+      {
+        "field": "model",
+        "value": "DOCK-CONN"
+      }
+    ],
+    "hasCurrentCase": true
+  },
+  {
+    "scenarioId": "SQE-02-D7-01",
+    "priority": "p1",
+    "usageTags": [
+      "benchmark"
+    ],
+    "segment": "sqe",
+    "caseFamily": "supplier_8d_review_connector",
+    "stage": "D7",
+    "businessPriority": "medium",
+    "sourceType": "wechat",
+    "speakerRole": "user",
+    "timestampOffset": "T+14.4d",
+    "rawInput": "帮我总结一下，这单现在离真正闭环还差什么；如果已经够了就给我 8D 预览，再顺便给一句话口径。",
+    "rawInputLanguageStyle": "chat_fragment",
+    "knownFacts": [
+      "有 revised 8D 和阶段性验证"
+    ],
+    "assumptions": [
+      "traceability label 和 controlled sourcing 仍未完全关闭"
+    ],
+    "misleadingSignals": [],
+    "expectedIntents": [
+      "evidence",
+      "summary_request",
+      "decision_signal"
+    ],
+    "expectedPrimaryStage": "D7",
+    "expectedRelatedStages": [
+      "D7"
+    ],
+    "expectedImpactedStages": [],
+    "expectedCaseOperation": "attach_to_current_case",
+    "expectedResponseMode": "result_action",
+    "expectedSourceShape": "mixed_input",
+    "expectedNextQuestions": [
+      "恢复 sourcing 条件",
+      "traceability 是否全上线"
+    ],
+    "expectedSafeBoundaries": [
+      "不要说 fully implemented"
+    ],
+    "expectedArtifactsReady": [
+      "analysis_summary"
+    ],
+    "antiGoals": [
+      "过早结案"
+    ],
+    "currentCaseTitle": "连接器 8D 审回",
+    "currentKnownFacts": [
+      {
+        "field": "batch",
+        "value": "K55"
+      },
+      {
+        "field": "model",
+        "value": "DOCK-CONN"
+      }
+    ],
+    "hasCurrentCase": true
+  }
+]

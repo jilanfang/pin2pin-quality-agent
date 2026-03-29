@@ -28,3 +28,5 @@ __pycache__/
 # local databases
 *.db
 .gstack/
+.vercel
+.env*.local

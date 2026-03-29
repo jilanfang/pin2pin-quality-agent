@@ -79,4 +79,20 @@ describe("caseStore", () => {
     await expect(store.deleteCase(created.caseRecord.id)).resolves.toBe(true);
     await expect(store.getCase(created.caseRecord.id)).resolves.toBeNull();
   }, 15000);
+
+  it("filters cases by owner when an owner id is provided", async () => {
+    const module = await import("@/lib/server/case-store");
+    const store = module.getCaseStore();
+
+    const ownerACase = await store.createCase("Owner A 案件", undefined, "user-a");
+    const ownerBCase = await store.createCase("Owner B 案件", undefined, "user-b");
+
+    const ownerACases = await store.listCases("user-a");
+    const ownerBCases = await store.listCases("user-b");
+
+    expect(ownerACases.map((item) => item.id)).toContain(ownerACase.caseRecord.id);
+    expect(ownerACases.map((item) => item.id)).not.toContain(ownerBCase.caseRecord.id);
+    expect(ownerBCases.map((item) => item.id)).toContain(ownerBCase.caseRecord.id);
+    expect(ownerBCases.map((item) => item.id)).not.toContain(ownerACase.caseRecord.id);
+  }, 15000);
 });

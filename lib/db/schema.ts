@@ -8,6 +8,7 @@ import {
 
 export const casesTable = pgTable("cases", {
   id: text("id").primaryKey(),
+  ownerUserId: text("owner_user_id"),
   title: text("title").notNull(),
   status: text("status").notNull(),
   archivedAt: timestamp("archived_at", { withTimezone: true }),

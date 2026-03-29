@@ -68,4 +68,25 @@ describe("server api report preview", () => {
     expect(html).toContain("行动方案");
     expect(saveReportSpy).not.toHaveBeenCalled();
   });
+
+  it("scopes report preview to the current user context", async () => {
+    delete process.env.DATABASE_URL;
+
+    const { createCaseAggregate } = await import("@/lib/domain/workflow-engine");
+    const { getCaseStore } = await import("@/lib/server/case-store");
+    const { reportPreviewHandler } = await import("@/lib/server/api");
+
+    const store = getCaseStore();
+    const aggregate = createCaseAggregate("用户隔离预览");
+    aggregate.caseRecord.ownerUserId = "user-a";
+    await store.saveCase(aggregate);
+
+    await expect(
+      reportPreviewHandler(
+        aggregate.caseRecord.id,
+        new URLSearchParams({ artifact: "analysis_summary" }),
+        { userId: "user-b", isAuthenticated: true }
+      )
+    ).rejects.toThrow("Case not found");
+  });
 });

@@ -4,6 +4,8 @@ import React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { inferCaseTitleFromInput } from "@/lib/domain/conversation-input";
+
 type CaseSummary = {
   id: string;
   title: string;
@@ -71,6 +73,32 @@ type ResultRecommendation = {
   deferActionLabel?: string;
 };
 
+type ConversationMeta = {
+  intents: Array<"evidence" | "question" | "summary_request" | "correction" | "decision_signal">;
+  primaryStage: string;
+  relatedStages: string[];
+  impactedStages: string[];
+  sourceShape:
+    | "long_document"
+    | "fragmented_update"
+    | "meeting_notes"
+    | "question_only"
+    | "mixed_input";
+  caseOperation: "create_new_case" | "attach_to_current_case" | "needs_case_confirmation";
+  responseMode: "inform" | "guide" | "result_action";
+  thinking: {
+    startedAt: string;
+    finishedAt: string;
+    etaLabel: string;
+    mode:
+      | "processing_input"
+      | "reviewing_prior_judgement"
+      | "summarizing_case"
+      | "preparing_artifact";
+    steps: string[];
+  };
+} | null;
+
 type CaseWorkflow = {
   caseId: string;
   title: string;
@@ -97,6 +125,7 @@ type CaseWorkflow = {
   actionPlan: ActionPlan | null;
   resultReadiness: ResultReadiness;
   resultRecommendation: ResultRecommendation;
+  conversationMeta: ConversationMeta;
 };
 
 type ReportPreview = {
@@ -138,6 +167,11 @@ type RebuildReviewCard = {
   revisitStages: string;
   whyRevisit: string;
   unstableConclusions: string;
+};
+
+type PendingCaseConfirmation = {
+  content: string;
+  suggestedTitle: string;
 };
 
 type TelemetryMetadata = Record<string, string | number | boolean | null>;
@@ -194,9 +228,43 @@ async function readJson(response: Response) {
   return response.json();
 }
 
+function messageFromError(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 function stageLabel(stage?: string) {
   if (!stage) return "未开始";
   return STAGE_LABELS[stage] ?? stage;
+}
+
+function thinkingModeLabel(mode?: NonNullable<ConversationMeta>["thinking"]["mode"]) {
+  if (mode === "reviewing_prior_judgement") return "正在回看前序判断";
+  if (mode === "summarizing_case") return "正在整理当前情况";
+  if (mode === "preparing_artifact") return "正在准备结果预览";
+  return "正在处理新信息";
+}
+
+function inferCaseTitleFromComposer(content: string) {
+  return inferCaseTitleFromInput(content);
+}
+
+function shouldShowResultActionCard(
+  recommendation: ResultRecommendation | null,
+  conversationMeta: ConversationMeta
+) {
+  if (!recommendation) return false;
+  if (recommendation.primaryActionLabel.includes("继续补信息")) return false;
+  if (recommendation.kind === "eight_d") return true;
+  if (!conversationMeta) return false;
+  if (conversationMeta.responseMode === "inform") return false;
+  if (conversationMeta.thinking.mode === "preparing_artifact") return true;
+  if (
+    conversationMeta.intents.includes("summary_request") ||
+    conversationMeta.intents.includes("decision_signal")
+  ) {
+    return true;
+  }
+  return recommendation.kind !== "analysis_summary" && conversationMeta.intents.includes("evidence");
 }
 
 function caseStatusLabel(status?: string) {
@@ -469,6 +537,7 @@ function WorkspaceContextHeader({
 
 function AssistantStageCard({
   currentCase,
+  pendingCaseConfirmation,
   selectedStage,
   summaryItems,
   impactSummary,
@@ -489,6 +558,7 @@ function AssistantStageCard({
   onPrimaryRecommendation,
 }: {
   currentCase: CaseWorkflow | null;
+  pendingCaseConfirmation: PendingCaseConfirmation | null;
   selectedStage: StageRecord | null;
   summaryItems: SummaryItem[];
   impactSummary: string | null;
@@ -508,6 +578,11 @@ function AssistantStageCard({
   onSelectStage: (stage: string) => void;
   onPrimaryRecommendation: () => void;
 }) {
+  const showResultActionCard = shouldShowResultActionCard(
+    resultRecommendation,
+    currentCase?.conversationMeta ?? null
+  );
+
   return (
     <article className="message-card message-assistant stage-focus-card" aria-label="AI 主分析卡">
       <div className="message-meta">
@@ -537,6 +612,12 @@ function AssistantStageCard({
         <div className="inline-alert" role="status">
           <strong>案件认知已变化</strong>
           <p>{impactSummary}</p>
+        </div>
+      ) : null}
+      {pendingCaseConfirmation ? (
+        <div className="inline-alert" role="status">
+          <strong>我判断这更像另一单新案件</strong>
+          <p>{`这条内容更接近“${pendingCaseConfirmation.suggestedTitle}”这一类新投诉。如果继续挂在当前案件里，前面的结论和时间线可能会被带偏。`}</p>
         </div>
       ) : null}
       <div className="assistant-manuscript">
@@ -718,7 +799,7 @@ function AssistantStageCard({
         </div>
       ) : null}
 
-      {resultRecommendation ? (
+      {resultRecommendation && showResultActionCard ? (
         <div className="report-action-card" data-testid="result-recommendation-card">
           <div className="report-action-copy">
             <span className="section-label">AI 建议卡</span>
@@ -799,6 +880,62 @@ function ComposerDock({
   return createPortal(dock, document.body);
 }
 
+function inferPendingThinking(content: string): NonNullable<ConversationMeta>["thinking"] {
+  const normalized = content.replace(/\s+/g, "");
+  if (normalized.includes("总结") || normalized.includes("梳理") || normalized.includes("汇总")) {
+    return {
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      etaLabel: "6-10 秒",
+      mode: "summarizing_case",
+      steps: ["汇总已确认事实", "区分判断与待验证项", "输出当前总结"],
+    };
+  }
+  if (["等下", "刚刚不对", "新情况", "推翻", "回看", "补充一下"].some((signal) => normalized.includes(signal))) {
+    return {
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      etaLabel: "8-12 秒",
+      mode: "reviewing_prior_judgement",
+      steps: ["对比新旧信息", "标记受影响段落", "更新当前判断"],
+    };
+  }
+  return {
+    startedAt: new Date().toISOString(),
+    finishedAt: new Date().toISOString(),
+    etaLabel: "6-10 秒",
+    mode: "processing_input",
+    steps: ["识别新增事实", "检查是否影响前序判断", "更新当前分析与下一步"],
+  };
+}
+
+function ThinkingStatusCard({
+  thinking,
+  impactedStages,
+}: {
+  thinking: NonNullable<ConversationMeta>["thinking"];
+  impactedStages: string[];
+}) {
+  return (
+    <article className="message-card message-assistant thinking-status-card" data-testid="thinking-status-card">
+      <div className="message-meta">
+        <span className="message-role">AI 处理中</span>
+        <span>{formatTime(thinking.startedAt)}</span>
+      </div>
+      <div className="thinking-status-body">
+        <strong>{thinkingModeLabel(thinking.mode)}</strong>
+        <span className="thinking-eta">{`预计 ${thinking.etaLabel}`}</span>
+        <ol className="thinking-steps">
+          {thinking.steps.map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ol>
+        {impactedStages.length ? <div className="mini-note">{`受影响阶段：${impactedStages.map(stageLabel).join(" / ")}`}</div> : null}
+      </div>
+    </article>
+  );
+}
+
 export function Workspace() {
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [currentCaseId, setCurrentCaseId] = useState<string | null>(null);
@@ -815,6 +952,11 @@ export function Workspace() {
   const [caseSearch, setCaseSearch] = useState("");
   const [isStageRailExpanded, setIsStageRailExpanded] = useState(false);
   const [isComposerExpanded, setIsComposerExpanded] = useState(false);
+  const [pendingThinking, setPendingThinking] = useState<{
+    thinking: NonNullable<ConversationMeta>["thinking"];
+    impactedStages: string[];
+  } | null>(null);
+  const [pendingCaseConfirmation, setPendingCaseConfirmation] = useState<PendingCaseConfirmation | null>(null);
   const hasTrackedOpenRef = useRef(false);
   const lastTrackedErrorRef = useRef<string | null>(null);
   const casesRef = useRef<CaseSummary[]>([]);
@@ -1013,7 +1155,13 @@ export function Workspace() {
   }
 
   useEffect(() => {
-    void refreshCases();
+    void (async () => {
+      try {
+        await refreshCases();
+      } catch (nextError) {
+        setError(messageFromError(nextError, "案件加载失败"));
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -1044,13 +1192,13 @@ export function Workspace() {
     });
   }
 
-  async function createBlankCaseForConversation() {
+  async function createBlankCaseForConversation(initialContent?: string) {
     const payload = (await readJson(
       await fetch("/api/cases", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: "新的 8D 案件",
+          title: inferCaseTitleFromComposer(initialContent ?? ""),
         }),
       })
     )) as CaseSummary;
@@ -1071,28 +1219,91 @@ export function Workspace() {
     return payload.id;
   }
 
-  async function sendEvidence() {
-    if (!composer.trim()) return;
+  async function sendEvidenceToCase(
+    targetCaseId: string,
+    content: string,
+    useCurrentStage: boolean,
+    forceCaseConfirmation?: "attach_to_current_case"
+  ) {
+    const payload = (await readJson(
+      await fetch(`/api/cases/${targetCaseId}/evidence`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content,
+          contextStage: useCurrentStage ? currentCase?.currentStage : undefined,
+          forceCaseConfirmation,
+        }),
+      })
+    )) as CaseWorkflow;
+    if (payload.conversationMeta?.caseOperation === "needs_case_confirmation") {
+      setPendingThinking(null);
+      setPendingCaseConfirmation({
+        content,
+        suggestedTitle: inferCaseTitleFromComposer(content),
+      });
+      return;
+    }
+    setCurrentCase(payload);
+    setComposer("");
+    setIsComposerExpanded(false);
+    setPendingThinking(null);
+    setPendingCaseConfirmation(null);
+    await refreshCases({ preferredCaseId: targetCaseId });
+  }
+
+  async function confirmPendingCaseAsNew() {
+    if (!pendingCaseConfirmation) return;
     setLoading(true);
     setError(null);
+    setPendingThinking({
+      thinking: inferPendingThinking(pendingCaseConfirmation.content),
+      impactedStages: [],
+    });
     try {
-      const targetCaseId = currentCaseId ?? (await createBlankCaseForConversation());
-      const payload = (await readJson(
-        await fetch(`/api/cases/${targetCaseId}/evidence`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content: composer,
-            contextStage: currentCaseId ? currentCase?.currentStage : undefined,
-          }),
-        })
-      )) as CaseWorkflow;
-      setCurrentCase(payload);
-      setComposer("");
-      setIsComposerExpanded(false);
-      await refreshCases({ preferredCaseId: targetCaseId });
+      const targetCaseId = await createBlankCaseForConversation(pendingCaseConfirmation.content);
+      await sendEvidenceToCase(targetCaseId, pendingCaseConfirmation.content, false);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "提交证据失败");
+      setPendingThinking(null);
+      setError(messageFromError(nextError, "创建新案件失败"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function confirmPendingCaseAsCurrent() {
+    if (!pendingCaseConfirmation || !currentCaseId) return;
+    setLoading(true);
+    setError(null);
+    setPendingThinking({
+      thinking: inferPendingThinking(pendingCaseConfirmation.content),
+      impactedStages: [],
+    });
+    try {
+      await sendEvidenceToCase(currentCaseId, pendingCaseConfirmation.content, true, "attach_to_current_case");
+    } catch (nextError) {
+      setPendingThinking(null);
+      setError(messageFromError(nextError, "提交证据失败"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function sendEvidence() {
+    if (!composer.trim()) return;
+    const pendingContent = composer;
+    setLoading(true);
+    setError(null);
+    setPendingThinking({
+      thinking: inferPendingThinking(pendingContent),
+      impactedStages: [],
+    });
+    try {
+      const targetCaseId = currentCaseId ?? (await createBlankCaseForConversation(pendingContent));
+      await sendEvidenceToCase(targetCaseId, pendingContent, Boolean(currentCaseId));
+    } catch (nextError) {
+      setPendingThinking(null);
+      setError(messageFromError(nextError, "提交证据失败"));
     } finally {
       setLoading(false);
     }
@@ -1113,7 +1324,7 @@ export function Workspace() {
       setCurrentCase(payload);
       await refreshCases({ preferredCaseId: currentCaseId });
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "阶段操作失败");
+      setError(messageFromError(nextError, "阶段操作失败"));
     } finally {
       setLoading(false);
     }
@@ -1135,7 +1346,7 @@ export function Workspace() {
       )) as ReportPreview;
       setPreview(payload);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "预览生成失败");
+      setError(messageFromError(nextError, "预览生成失败"));
     } finally {
       setLoading(false);
     }
@@ -1154,7 +1365,7 @@ export function Workspace() {
       setCurrentCase(payload);
       await refreshCases({ preferredCaseId: currentCaseId });
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "生成完整 8D 失败");
+      setError(messageFromError(nextError, "生成完整 8D 失败"));
     } finally {
       setLoading(false);
     }
@@ -1202,7 +1413,7 @@ export function Workspace() {
       setIsCreateOpen(false);
       setIsCaseDrawerOpen(Boolean(options.openDrawer));
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "创建案件失败");
+      setError(messageFromError(nextError, "创建案件失败"));
     } finally {
       setLoading(false);
     }
@@ -1391,6 +1602,18 @@ export function Workspace() {
               </article>
             ) : (
               <>
+                {pendingThinking ? (
+                  <ThinkingStatusCard
+                    thinking={pendingThinking.thinking}
+                    impactedStages={pendingThinking.impactedStages}
+                  />
+                ) : null}
+                {!pendingThinking && currentCase?.conversationMeta ? (
+                  <ThinkingStatusCard
+                    thinking={currentCase.conversationMeta.thinking}
+                    impactedStages={currentCase.conversationMeta.impactedStages}
+                  />
+                ) : null}
                 {(currentCase?.messages.length ? currentCase.messages : []).map((message) => (
                   <article
                     key={message.id}
@@ -1408,6 +1631,7 @@ export function Workspace() {
 
                 <AssistantStageCard
                   currentCase={currentCase}
+                  pendingCaseConfirmation={pendingCaseConfirmation}
                   selectedStage={selectedStage}
                   summaryItems={summaryItems}
                   impactSummary={impactSummary}
@@ -1433,6 +1657,23 @@ export function Workspace() {
                     void openPreview(artifactForRecommendation(resultRecommendation?.kind));
                   }}
                 />
+                {pendingCaseConfirmation ? (
+                  <div className="report-action-card" data-testid="new-case-confirmation-card">
+                    <div className="report-action-copy">
+                      <span className="section-label">案件挂载确认</span>
+                      <p className="report-action-lead">我判断这更像另一单新案件</p>
+                      <p>{`建议按“${pendingCaseConfirmation.suggestedTitle}”新建。如果你确定它只是当前案件的新补充，也可以继续挂在当前案件里。`}</p>
+                    </div>
+                    <div className="report-action-row report-action-row-inline">
+                      <button className="primary-button" type="button" onClick={() => void confirmPendingCaseAsNew()} disabled={loading}>
+                        新建案件
+                      </button>
+                      <button className="ghost-button" type="button" onClick={() => void confirmPendingCaseAsCurrent()} disabled={loading}>
+                        继续当前案件
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </>
             )}
           </div>
@@ -2429,6 +2670,35 @@ export function Workspace() {
           margin: 0 auto;
           padding: 0 4px;
           pointer-events: none;
+        }
+
+        .thinking-status-card {
+          border-style: dashed;
+          border-color: rgba(75, 105, 160, 0.28);
+          background: linear-gradient(180deg, rgba(247, 250, 255, 0.96), rgba(255, 255, 255, 0.94));
+        }
+
+        .thinking-status-body {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          font-size: 12px;
+          color: var(--text);
+        }
+
+        .thinking-eta {
+          color: var(--muted);
+          font-size: 11px;
+        }
+
+        .thinking-steps {
+          margin: 0;
+          padding-left: 18px;
+          color: var(--muted);
+        }
+
+        .thinking-steps li + li {
+          margin-top: 4px;
         }
 
         .preview-body {

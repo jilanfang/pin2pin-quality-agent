@@ -14,6 +14,7 @@ import {
 } from "@/lib/domain/report-builder";
 import type {
   CaseAggregate,
+  ConversationMeta,
   ReportBuildOptions,
 } from "@/lib/domain/types";
 import { buildCaseWorkflowView } from "@/lib/domain/workflow-engine";
@@ -31,7 +32,7 @@ export function serializeCaseSummary(aggregate: CaseAggregate) {
   };
 }
 
-export function serializeCaseWorkflow(aggregate: CaseAggregate) {
+export function serializeCaseWorkflow(aggregate: CaseAggregate, conversationMeta?: ConversationMeta) {
   const view = buildCaseWorkflowView(aggregate);
   return {
     ...view,
@@ -40,6 +41,7 @@ export function serializeCaseWorkflow(aggregate: CaseAggregate) {
     resultReadiness: buildResultReadiness(aggregate),
     resultRecommendation: buildResultRecommendation(aggregate),
     reportCapabilities: buildReportCapabilities(aggregate),
+    conversationMeta: conversationMeta ?? null,
   };
 }
 

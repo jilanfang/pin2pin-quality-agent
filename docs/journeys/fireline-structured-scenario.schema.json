@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pin2pin.ai/fireline/journeys/fireline-structured-scenario.schema.json",
+  "title": "Fireline Structured Scenario Payload",
+  "description": "Schema for Fireline user-journey scenarios derived from the hybrid journey ledger.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scenarioId",
+    "segment",
+    "caseFamily",
+    "stage",
+    "businessPriority",
+    "sourceType",
+    "speakerRole",
+    "timestampOffset",
+    "rawInput",
+    "rawInputLanguageStyle",
+    "knownFacts",
+    "assumptions",
+    "misleadingSignals",
+    "expectedIntents",
+    "expectedPrimaryStage",
+    "expectedRelatedStages",
+    "expectedImpactedStages",
+    "expectedCaseOperation",
+    "expectedResponseMode",
+    "expectedNextQuestions",
+    "expectedSafeBoundaries",
+    "expectedArtifactsReady",
+    "antiGoals"
+  ],
+  "properties": {
+    "scenarioId": {
+      "type": "string",
+      "pattern": "^(CQ|QE|SQE)-\\d{2}-D[2-8]-\\d{2}$"
+    },
+    "segment": {
+      "type": "string",
+      "enum": [
+        "customer_quality",
+        "factory_qe",
+        "sqe"
+      ]
+    },
+    "caseFamily": {
+      "type": "string",
+      "enum": [
+        "customer_smoke_line_stop",
+        "customer_intermittent_function",
+        "line_solder_bridge_batch",
+        "reliability_intermittent_reset",
+        "incoming_mlcc_microcrack",
+        "supplier_8d_review_connector"
+      ]
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "D6",
+        "D7",
+        "D8"
+      ]
+    },
+    "businessPriority": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium"
+      ]
+    },
+    "sourceType": {
+      "type": "string",
+      "enum": [
+        "email",
+        "wechat",
+        "feishu",
+        "phone_recap",
+        "meeting_notes",
+        "site_observation",
+        "test_summary",
+        "customer_portal",
+        "supplier_reply",
+        "manager_ping",
+        "system_note"
+      ]
+    },
+    "speakerRole": {
+      "type": "string",
+      "enum": [
+        "user",
+        "customer_quality_manager",
+        "customer_engineer",
+        "sales",
+        "fae",
+        "factory_supervisor",
+        "process_engineer",
+        "rd_engineer",
+        "test_engineer",
+        "reliability_engineer",
+        "supplier_quality_engineer",
+        "supplier_sales",
+        "manager",
+        "lab_engineer",
+        "warehouse",
+        "operator"
+      ]
+    },
+    "timestampOffset": {
+      "type": "string",
+      "description": "Relative business timeline such as T+0h, T+6h, T+3d."
+    },
+    "rawInput": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rawInputLanguageStyle": {
+      "type": "string",
+      "enum": [
+        "formal_email",
+        "chat_fragment",
+        "spoken_recap",
+        "meeting_minutes",
+        "lab_summary",
+        "pressure_request",
+        "customer_portal_note",
+        "supplier_8d_excerpt"
+      ]
+    },
+    "knownFacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "misleadingSignals": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "expectedIntents": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "evidence",
+          "question",
+          "summary_request",
+          "correction",
+          "decision_signal"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "expectedPrimaryStage": {
+      "type": "string",
+      "enum": [
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "D6",
+        "D7",
+        "D8"
+      ]
+    },
+    "expectedRelatedStages": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D6",
+          "D7",
+          "D8"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "expectedImpactedStages": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D6",
+          "D7",
+          "D8"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "expectedCaseOperation": {
+      "type": "string",
+      "enum": [
+        "create_new_case",
+        "attach_to_current_case",
+        "needs_case_confirmation"
+      ]
+    },
+    "expectedResponseMode": {
+      "type": "string",
+      "enum": [
+        "inform",
+        "guide",
+        "result_action"
+      ]
+    },
+    "expectedNextQuestions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "expectedSafeBoundaries": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "expectedArtifactsReady": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "analysis_summary",
+          "action_plan",
+          "eight_d"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "antiGoals": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    }
+  }
+}
