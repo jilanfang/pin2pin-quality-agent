@@ -87,14 +87,26 @@ async (page) => {
     }
     await page.getByLabel("邮箱").fill(authEmail);
     await page.getByLabel("密码").fill(authPassword);
-    await Promise.all([
-      page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 30000 }),
-      page.getByRole("button", { name: "登录" }).click(),
-    ]);
-    await page.getByLabel("证据输入框").waitFor({ timeout: 30000 });
+    await page.getByRole("button", { name: "登录" }).click();
+    await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 30000 }).catch(() => {});
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(3000);
+
+    if (page.url().includes("/login")) {
+      throw new Error("Login did not leave /login. Body: " + (await page.locator("body").innerText()));
+    }
   }
 
   const smokeTitle = "browser-smoke-" + Date.now();
+  await page.getByRole("heading", { name: "把现场碎片，推进成可交付调查" }).waitFor({ timeout: 30000 });
+  await Promise.all([
+    page.waitForURL((url) => url.pathname.startsWith("/investigations/"), { timeout: 30000 }),
+    page.getByRole("button", { name: "开始新调查" }).click(),
+  ]);
+
+  await page.getByText("AI 协作区").waitFor({ timeout: 30000 });
+  await page.getByLabel("证据输入框").waitFor({ timeout: 30000 });
+  await page.getByText(/当前调查 #/).waitFor({ timeout: 30000 });
 
   await fillComposerAndWait(evidenceText);
 
@@ -108,9 +120,7 @@ async (page) => {
     ),
     page.getByRole("button", { name: "发送证据" }).click(),
   ]);
-
   await page.getByText("我先帮你接下这个案件").waitFor({ timeout: 30000 });
-  await page.getByText(/ACTIVE CASE #/).waitFor({ timeout: 30000 });
 
   await fillComposerAndWait(correctionText);
   await Promise.all([
@@ -146,7 +156,7 @@ async (page) => {
   await page.getByRole("button", { name: "关闭预览" }).click();
   await page.getByLabel("报告预览抽屉").waitFor({ state: "hidden", timeout: 30000 });
 
-  const caseRailButton = page.getByRole("button", { name: "CASES" });
+  const caseRailButton = page.getByRole("button", { name: "调查" });
   if (await caseRailButton.isVisible().catch(() => false)) {
     await caseRailButton.click();
   } else {
@@ -154,13 +164,13 @@ async (page) => {
       window.dispatchEvent(new CustomEvent("fireline:toggle-case-drawer"));
     });
   }
-  await page.getByLabel("案件抽屉").waitFor({ timeout: 30000 });
-  await page.getByRole("button", { name: "新建案件" }).click();
-  await page.getByLabel("案件标题").fill("钽电容反向贴装客诉案例");
+  await page.getByLabel("调查列表抽屉").waitFor({ timeout: 30000 });
+  await page.getByRole("button", { name: "新建调查" }).click();
+  await page.getByLabel("调查标题").fill("钽电容反向贴装客诉案例");
   await page.getByLabel("种子案例").selectOption({ label: "钽电容反向贴装客诉案例" });
-  await page.getByRole("button", { name: "创建案件" }).click();
+  await page.getByRole("button", { name: "创建调查" }).click();
   await page.getByRole("heading", { name: "钽电容反向贴装客诉案例" }).waitFor({ timeout: 30000 });
-  await page.getByText("会话主舞台").waitFor({ timeout: 30000 });
+  await page.getByText("AI 协作区").waitFor({ timeout: 30000 });
 
   await fillComposerAndWait(actionPlanText);
   await Promise.all([
@@ -194,7 +204,7 @@ async (page) => {
   ]);
 
   await page.getByTestId("new-case-confirmation-card").waitFor({ timeout: 30000 });
-  await page.getByText("我判断这更像另一单新案件").first().waitFor({ timeout: 30000 });
+  await page.getByText("我判断这更像另一条新调查").first().waitFor({ timeout: 30000 });
   await Promise.all([
     page.waitForResponse(
       (response) =>
@@ -203,7 +213,7 @@ async (page) => {
         response.ok(),
       { timeout: 30000 }
     ),
-    page.getByRole("button", { name: "继续当前案件" }).click(),
+    page.getByRole("button", { name: "继续当前调查" }).click(),
   ]);
 
   if (!staticResponses.some((item) => item.status === 200)) {

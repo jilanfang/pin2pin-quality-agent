@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
+import { usePathname } from "next/navigation";
 
 type SovereignShellProps = {
-  activeSection?: "Workspace";
   hasCases?: boolean;
   authEnabled?: boolean;
   isAuthenticated?: boolean;
@@ -12,15 +12,17 @@ type SovereignShellProps = {
 };
 
 const navItems: Array<{
-  label: SovereignShellProps["activeSection"];
+  label: "总览" | "调查" | "方法助手";
   href: string;
 }> = [
-  { label: "Workspace", href: "/" },
+  { label: "总览", href: "/" },
+  { label: "调查", href: "/investigations" },
+  { label: "方法助手", href: "/copilot" },
 ];
 
 const railItems = [
-  { label: "会话", sublabel: "ACTIVE", action: null, active: true },
-  { label: "案件", sublabel: "CASES", action: "fireline:toggle-case-drawer", active: false },
+  { label: "总", sublabel: "总览", action: null, active: false },
+  { label: "调", sublabel: "调查", action: "fireline:toggle-case-drawer", active: true },
 ] as const;
 
 function dispatchShellEvent(name: string) {
@@ -28,12 +30,19 @@ function dispatchShellEvent(name: string) {
 }
 
 export function SovereignShell({
-  activeSection = "Workspace",
   authEnabled = false,
   isAuthenticated = false,
   userEmail = null,
   children,
 }: SovereignShellProps) {
+  const pathname = usePathname();
+  const activeSection =
+    pathname?.startsWith("/copilot")
+      ? "方法助手"
+      : pathname?.startsWith("/investigations")
+        ? "调查"
+        : "总览";
+
   return (
     <div className="sovereign-shell" data-testid="sovereign-shell">
       <header className="sovereign-topbar">
@@ -60,7 +69,6 @@ export function SovereignShell({
         </nav>
 
         <div className="sovereign-utilities">
-          <span className="shell-status-chip">CASE + CHAT ONLY</span>
           {authEnabled ? (
             isAuthenticated ? (
               <form action="/auth/sign-out" method="post">
@@ -89,7 +97,9 @@ export function SovereignShell({
               item.action ? (
                 <button
                   key={item.label}
-                  className={`shell-rail-button${item.active ? " active" : ""}`}
+                  className={`shell-rail-button${
+                    activeSection === "调查" && item.sublabel === "调查" ? " active" : ""
+                  }`}
                   type="button"
                   onClick={() => dispatchShellEvent(item.action)}
                 >
@@ -99,7 +109,10 @@ export function SovereignShell({
                   <span>{item.sublabel}</span>
                 </button>
               ) : (
-                <div key={item.label} className={`shell-rail-label${item.active ? " active" : ""}`}>
+                <div
+                  key={item.label}
+                  className={`shell-rail-label${activeSection === "总览" ? " active" : ""}`}
+                >
                   <span className="shell-rail-icon" aria-hidden="true">
                     {item.label.slice(0, 1)}
                   </span>

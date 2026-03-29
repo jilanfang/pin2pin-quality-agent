@@ -309,6 +309,20 @@ function parseExtraction(content: string): EvidenceExtraction | null {
   };
 }
 
+function buildCopilotPrompt(prompt: string) {
+  return [
+    {
+      role: "system" as const,
+      content:
+        "你是 Pin2pin Fireline 的 8D 与质量方法助手。回答要面向制造业质量工程师，强调 8D、CAPA、5Why、FMEA、控制计划、量测系统分析等方法的实际应用。回答用中文，简洁、专业、可执行，不要空泛。",
+    },
+    {
+      role: "user" as const,
+      content: prompt,
+    },
+  ] satisfies ChatMessage[];
+}
+
 async function callOpenAiCompatible(
   endpoint: string,
   apiKey: string,
@@ -426,5 +440,53 @@ export async function extractEvidenceWithLlm(
   if (failures.length) {
     errorCapability("extract", "fallback_exhausted", failures.join(" | "));
   }
+  return null;
+}
+
+export async function askCopilotWithLlm(prompt: string): Promise<string | null> {
+  if (!isEnabled()) return null;
+
+  const routes = getProviderRoutes("copilot");
+  if (routes.length === 0) return null;
+  const timeoutMs = getTimeoutMs("copilot");
+  const failures: string[] = [];
+
+  for (const route of routes) {
+    if (!route.apiKey) {
+      warnRoute("copilot", route, "provider_unconfigured", "missing api key");
+      failures.push(`${route.slot}/${route.provider}:provider_unconfigured`);
+      continue;
+    }
+
+    try {
+      const content = await callOpenAiCompatible(
+        route.baseUrl,
+        route.apiKey,
+        route.model,
+        buildCopilotPrompt(prompt),
+        timeoutMs
+      );
+      const answer = content.trim();
+      if (!answer) {
+        warnRoute("copilot", route, "non_json_response", "empty copilot content");
+        failures.push(`${route.slot}/${route.provider}:non_json_response`);
+        continue;
+      }
+      if (route.slot === "fallback") {
+        warnRoute("copilot", route, "recovered_via_fallback");
+      }
+      return answer;
+    } catch (error) {
+      const code = toRouteFailureCode(error);
+      const detail = error instanceof Error ? error.message : "unexpected llm error";
+      warnRoute("copilot", route, code, detail);
+      failures.push(`${route.slot}/${route.provider}:${code}`);
+    }
+  }
+
+  if (failures.length) {
+    errorCapability("copilot", "fallback_exhausted", failures.join(" | "));
+  }
+
   return null;
 }

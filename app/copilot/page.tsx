@@ -1,15 +1,15 @@
 import React from "react";
 import { redirect } from "next/navigation";
 
-import { Overview } from "@/components/overview";
+import { Copilot } from "@/components/copilot";
 import { getServerAuthState } from "@/lib/server/auth";
 
-export default async function HomePage() {
+export default async function CopilotPage() {
   const auth = await getServerAuthState();
 
   if (auth.authEnabled && !auth.isAuthenticated) {
     redirect("/login");
   }
 
-  return <Overview />;
+  return <Copilot />;
 }

@@ -14,12 +14,11 @@ describe("RootLayout", () => {
     expect(markup).toContain("Pin2pin Fireline");
     expect(markup).toContain('aria-label="主导航"');
     expect(markup).toContain('aria-label="工具侧栏"');
-    expect(markup).not.toContain("快速新建案件");
-    expect(markup).not.toContain('aria-label="报告侧栏"');
+    expect(markup).toContain("总览");
+    expect(markup).toContain("调查");
+    expect(markup).toContain("方法助手");
     expect(markup).toContain("layout-child");
-    expect(markup).not.toContain("Anomalies");
-    expect(markup).not.toContain("Insights");
-    expect(markup).not.toContain("History");
-    expect(markup).not.toContain("Search logs...");
+    expect(markup).not.toContain("Workspace");
+    expect(markup).not.toContain("CASE + CHAT ONLY");
   });
 });

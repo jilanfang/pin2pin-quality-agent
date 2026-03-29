@@ -324,14 +324,14 @@ describe("Workspace", () => {
 
     render(<Workspace />);
 
-    await screen.findByText("先跑通第一单，再继续补证据和出稿。");
+    await screen.findByText("先开始一条调查，再继续补证据和出稿。");
     expect(screen.getByText(/推荐先加载一个种子案例，3 分钟内看到第一版结果/)).toBeInTheDocument();
-    expect(screen.getAllByText("先按开始第一单，我会直接带你进入分析。").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "开始第一单" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "直接新建空白案件" })).toBeInTheDocument();
+    expect(screen.getAllByText("先按开始新调查，我会直接带你进入分析。").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "开始新调查" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "直接新建空白调查" })).toBeInTheDocument();
     expect(screen.getByTestId("composer-dock")).toBeInTheDocument();
     expect(screen.getByLabelText("证据输入框")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "快速新建案件" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "快速新建调查" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "反馈" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "打开报告面板" })).not.toBeInTheDocument();
   });
@@ -426,7 +426,7 @@ describe("Workspace", () => {
       ([url, init]) => url === "/api/cases" && (init as RequestInit | undefined)?.method === "POST"
     );
     expect(createCall).toBeTruthy();
-    expect((createCall?.[1] as RequestInit).body).not.toBe(JSON.stringify({ title: "新的 8D 案件" }));
+    expect((createCall?.[1] as RequestInit).body).not.toBe(JSON.stringify({ title: "新的调查" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -438,7 +438,7 @@ describe("Workspace", () => {
     });
 
     await screen.findByRole("heading", { name: "华星科技上电冒烟客诉" });
-    expect(screen.getByText("ACTIVE CASE #CASE-2")).toBeInTheDocument();
+    expect(screen.getByText("当前调查 #CASE-2")).toBeInTheDocument();
   });
 
   it("keeps the shell chrome minimal even after cases exist", async () => {
@@ -446,7 +446,7 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
-    expect(screen.queryByRole("button", { name: "快速新建案件" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "快速新建调查" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "反馈" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "打开报告面板" })).not.toBeInTheDocument();
   });
@@ -473,8 +473,8 @@ describe("Workspace", () => {
 
     render(<Workspace />);
 
-    await screen.findByRole("button", { name: "开始第一单" });
-    fireEvent.click(screen.getByRole("button", { name: "开始第一单" }));
+    await screen.findByRole("button", { name: "开始新调查" });
+    fireEvent.click(screen.getByRole("button", { name: "开始新调查" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -490,7 +490,7 @@ describe("Workspace", () => {
     });
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉案例" });
-    expect(screen.queryByLabelText("案件抽屉")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("调查列表抽屉")).not.toBeInTheDocument();
   });
 
   it("creates a blank case from the drawer and switches the workspace context to the new case", async () => {
@@ -499,7 +499,7 @@ describe("Workspace", () => {
       [
         buildCaseSummary({
           id: "case-2",
-          title: "新的空白案件",
+          title: "新的空白调查",
           currentStage: "D2",
           d1Status: "not_started",
           updatedAt: "2026-03-23T10:00:00.000Z",
@@ -511,7 +511,7 @@ describe("Workspace", () => {
     const blankWorkflow = {
       ...buildCaseWorkflow(),
       caseId: "case-2",
-      title: "新的空白案件",
+      title: "新的空白调查",
       currentStage: "D2",
       d1Status: "not_started",
       messages: [],
@@ -530,7 +530,7 @@ describe("Workspace", () => {
           JSON.stringify(
             buildCaseSummary({
               id: "case-2",
-              title: "新的空白案件",
+              title: "新的空白调查",
               currentStage: "D2",
               d1Status: "not_started",
               updatedAt: "2026-03-23T10:00:00.000Z",
@@ -556,12 +556,12 @@ describe("Workspace", () => {
       window.dispatchEvent(new CustomEvent("fireline:toggle-case-drawer"));
     });
 
-    const drawer = await screen.findByLabelText("案件抽屉");
-    fireEvent.click(within(drawer).getByRole("button", { name: "新建案件" }));
-    fireEvent.change(within(drawer).getByLabelText("案件标题"), {
-      target: { value: "新的空白案件" },
+    const drawer = await screen.findByLabelText("调查列表抽屉");
+    fireEvent.click(within(drawer).getByRole("button", { name: "新建调查" }));
+    fireEvent.change(within(drawer).getByLabelText("调查标题"), {
+      target: { value: "新的空白调查" },
     });
-    fireEvent.click(within(drawer).getByRole("button", { name: "创建案件" }));
+    fireEvent.click(within(drawer).getByRole("button", { name: "创建调查" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -569,16 +569,16 @@ describe("Workspace", () => {
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({
-            title: "新的空白案件",
+            title: "新的空白调查",
             seedCase: undefined,
           }),
         })
       );
     });
 
-    await screen.findByRole("heading", { name: "新的空白案件" });
-    expect(screen.getByText("ACTIVE CASE #CASE-2")).toBeInTheDocument();
-    expect(screen.queryByLabelText("案件抽屉")).not.toBeInTheDocument();
+    await screen.findByRole("heading", { name: "新的空白调查" });
+    expect(screen.getByText("当前调查 #CASE-2")).toBeInTheDocument();
+    expect(screen.queryByLabelText("调查列表抽屉")).not.toBeInTheDocument();
   });
 
   it("uses a conversation-first chrome and removes the old summary strip and top report toolbar", async () => {
@@ -599,14 +599,14 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
-    expect(screen.queryByLabelText("案件抽屉")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("调查列表抽屉")).not.toBeInTheDocument();
     act(() => {
       window.dispatchEvent(new CustomEvent("fireline:toggle-case-drawer"));
     });
-    await screen.findByLabelText("案件抽屉");
-    expect(screen.getByText("新建案件")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "收起案件抽屉" }));
-    expect(screen.queryByLabelText("案件抽屉")).not.toBeInTheDocument();
+    await screen.findByLabelText("调查列表抽屉");
+    expect(screen.getByText("新建调查")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "收起调查列表" }));
+    expect(screen.queryByLabelText("调查列表抽屉")).not.toBeInTheDocument();
   });
 
   it("filters visible cases in the drawer with a single search-first flow", async () => {
@@ -655,8 +655,8 @@ describe("Workspace", () => {
       window.dispatchEvent(new CustomEvent("fireline:toggle-case-drawer"));
     });
 
-    const drawer = await screen.findByLabelText("案件抽屉");
-    const search = within(drawer).getByLabelText("搜索案件");
+    const drawer = await screen.findByLabelText("调查列表抽屉");
+    const search = within(drawer).getByLabelText("搜索调查");
     expect(within(drawer).getByText("连接器虚焊异常")).toBeInTheDocument();
     expect(
       within(drawer).getByRole("button", { name: /钽电容反向贴装客诉.*D3/i })
@@ -711,11 +711,11 @@ describe("Workspace", () => {
       window.dispatchEvent(new CustomEvent("fireline:toggle-case-drawer"));
     });
 
-    const drawer = await screen.findByLabelText("案件抽屉");
+    const drawer = await screen.findByLabelText("调查列表抽屉");
     fireEvent.click(within(drawer).getByRole("button", { name: /连接器虚焊异常.*D2/i }));
 
     await screen.findByRole("heading", { name: "连接器虚焊异常" });
-    expect(screen.queryByLabelText("案件抽屉")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("调查列表抽屉")).not.toBeInTheDocument();
   });
 
   it("clears an open preview drawer when creating a new case from the drawer", async () => {
@@ -723,7 +723,7 @@ describe("Workspace", () => {
     const originalSummary = buildCaseSummary();
     const blankSummary = buildCaseSummary({
       id: "case-2",
-      title: "新的空白案件",
+      title: "新的空白调查",
       currentStage: "D2",
       d1Status: "not_started",
       updatedAt: "2026-03-23T10:00:00.000Z",
@@ -731,7 +731,7 @@ describe("Workspace", () => {
     const blankWorkflow = {
       ...buildCaseWorkflow(),
       caseId: "case-2",
-      title: "新的空白案件",
+      title: "新的空白调查",
       currentStage: "D2",
       d1Status: "not_started",
       messages: [],
@@ -834,12 +834,12 @@ describe("Workspace", () => {
       window.dispatchEvent(new CustomEvent("fireline:toggle-case-drawer"));
     });
 
-    const drawer = await screen.findByLabelText("案件抽屉");
-    fireEvent.click(within(drawer).getByRole("button", { name: "新建案件" }));
-    fireEvent.change(within(drawer).getByLabelText("案件标题"), {
-      target: { value: "新的空白案件" },
+    const drawer = await screen.findByLabelText("调查列表抽屉");
+    fireEvent.click(within(drawer).getByRole("button", { name: "新建调查" }));
+    fireEvent.change(within(drawer).getByLabelText("调查标题"), {
+      target: { value: "新的空白调查" },
     });
-    fireEvent.click(within(drawer).getByRole("button", { name: "创建案件" }));
+    fireEvent.click(within(drawer).getByRole("button", { name: "创建调查" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -847,14 +847,14 @@ describe("Workspace", () => {
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({
-            title: "新的空白案件",
+            title: "新的空白调查",
             seedCase: undefined,
           }),
         })
       );
     });
 
-    await screen.findByRole("heading", { name: "新的空白案件" });
+    await screen.findByRole("heading", { name: "新的空白调查" });
     expect(screen.queryByTestId("preview-drawer")).not.toBeInTheDocument();
     expect(screen.getByText("当前建议整理")).toBeInTheDocument();
     expect(screen.queryByTestId("result-recommendation-card")).not.toBeInTheDocument();
@@ -926,7 +926,7 @@ describe("Workspace", () => {
       window.dispatchEvent(new CustomEvent("fireline:toggle-case-drawer"));
     });
 
-    const drawer = await screen.findByLabelText("案件抽屉");
+    const drawer = await screen.findByLabelText("调查列表抽屉");
     const scrim = screen.getByRole("button", { name: "关闭抽屉遮罩" });
 
     expect(scrim).toHaveStyle({ position: "fixed" });
@@ -1242,16 +1242,16 @@ describe("Workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "发送证据" }));
 
     const confirmationCard = await screen.findByTestId("new-case-confirmation-card");
-    expect(within(confirmationCard).getByText("我判断这更像另一单新案件")).toBeInTheDocument();
-    expect(within(confirmationCard).getByRole("button", { name: "新建案件" })).toBeInTheDocument();
-    expect(within(confirmationCard).getByRole("button", { name: "继续当前案件" })).toBeInTheDocument();
+    expect(within(confirmationCard).getByText("我判断这更像另一条新调查")).toBeInTheDocument();
+    expect(within(confirmationCard).getByRole("button", { name: "新建调查" })).toBeInTheDocument();
+    expect(within(confirmationCard).getByRole("button", { name: "继续当前调查" })).toBeInTheDocument();
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/cases/case-1/evidence",
       expect.objectContaining({ method: "POST" })
     );
 
-    fireEvent.click(within(confirmationCard).getByRole("button", { name: "新建案件" }));
+    fireEvent.click(within(confirmationCard).getByRole("button", { name: "新建调查" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -1321,7 +1321,7 @@ describe("Workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "发送证据" }));
 
     const confirmationCard = await screen.findByTestId("new-case-confirmation-card");
-    expect(within(confirmationCard).getByText("我判断这更像另一单新案件")).toBeInTheDocument();
+    expect(within(confirmationCard).getByText("我判断这更像另一条新调查")).toBeInTheDocument();
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/cases/case-1/evidence",
@@ -1392,7 +1392,7 @@ describe("Workspace", () => {
       expect.objectContaining({ method: "POST" })
     );
 
-    fireEvent.click(within(confirmationCard).getByRole("button", { name: "继续当前案件" }));
+    fireEvent.click(within(confirmationCard).getByRole("button", { name: "继续当前调查" }));
 
     await waitFor(() => {
       expect(evidenceRequestCount).toBe(2);
@@ -1427,7 +1427,7 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
-    expect(screen.getByText("案件认知已变化")).toBeInTheDocument();
+    expect(screen.getByText("调查认知已变化")).toBeInTheDocument();
     expect(
       screen.getAllByText("失效位置已从 C25 调整为连接器处，这条信息会影响 D3 / D4，需要回看。").length
     ).toBeGreaterThan(0);
@@ -1808,7 +1808,7 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
-    expect(screen.getByLabelText("案件上下文")).toBeInTheDocument();
+    expect(screen.getByLabelText("调查上下文")).toBeInTheDocument();
     expect(screen.getByLabelText("AI 主分析卡")).toBeInTheDocument();
     expect(screen.getByLabelText("证据输入停靠区")).toBeInTheDocument();
     expect(screen.getByTestId("conversation-feed")).toHaveAttribute("data-has-floating-dock", "true");
@@ -1826,7 +1826,7 @@ describe("Workspace", () => {
     render(<Workspace />);
 
     expect(await screen.findByText("数据库查询失败")).toBeInTheDocument();
-    expect(screen.getByText("先跑通第一单，再继续补证据和出稿。")).toBeInTheDocument();
+    expect(screen.getByText("先开始一条调查，再继续补证据和出稿。")).toBeInTheDocument();
   });
 
   it("submits the 8D action from the conversation area and updates the case state", async () => {
@@ -1913,7 +1913,7 @@ describe("Workspace", () => {
 
     render(<Workspace />);
 
-    await screen.findByText("先跑通第一单，再继续补证据和出稿。");
+    await screen.findByText("先开始一条调查，再继续补证据和出稿。");
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(

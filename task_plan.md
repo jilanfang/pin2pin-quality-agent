@@ -1,72 +1,61 @@
-# Task Plan: Journey Gap Analysis And QA Closeout
+# Task Plan: Fireline 用户旅程资产最小收口
 
 ## Goal
-基于当前 `Pin2pin Fireline` 主线代码，把用户旅程拆到功能点并分析 gap，同时收掉主界面里违背“case + 对话唯一主交互”的明显问题。
+把 Fireline 用户旅程资产收口成可直接服务 benchmark、regression、smoke 的轻量资产，不再继续过度工程化。
 
 ## Success Criteria
-- 形成可执行的用户旅程 gap 判断
-- 完成真实浏览器 QA 并修掉主界面关键误导问题
-- 工作区干净，验证通过
-- 明确下一步最值钱的实现顺序
+- `StructuredJourneyScenario` 带有 `priority` 和 `usageTags`
+- TS 样本包与 JSON 导出保持完全对齐
+- 至少一小组 P0 API 回归覆盖关键用户旅程
+- 三层测试和 typecheck 通过
 
 ## Scope
-- 只针对 `Next.js` 主线
-- 只做旅程分析和主界面 QA 收口
-- 不在本轮实现登录、上传、case 深度管理
+- 只补旅程资产的可消费性，不新增 DSL、runner、生成系统
+- 只改 `docs/journeys/`、`lib/domain/journey-scenarios.ts`、相关类型和测试
+- 不在这轮继续扩 benchmark 平台
 
 ## Current Phase
-已完成 QA 收口和旅程级 gap 分析；当前准备转成正式 backlog / 实施顺序。
+旅程资产最小收口已完成，下一步应切回 release blocker。
 
 ## Completed Work
-- 完成 `/qa` 并修复 4 个用户可见问题
-- 完成旅程级实现 / gap 分析
-- 明确当前最薄弱的两段：
-  - case 管理
-  - 登录后长期使用
-- 明确下一轮最值得优先补的 4 件事：
-  - case 管理补齐
-  - 登录 / 账号密码 / 用户隔离
-  - 多模态证据输入
-  - 结果对象产品化
+- 给 `StructuredJourneyScenario` 增加 `priority` 和 `usageTags`
+- 用轻量映射给全部结构化场景打标
+- 同步更新机器导出 JSON 和文档说明
+- 扩充 API 回归到 8 条高价值场景
+- 三层测试和 typecheck 已通过
 
 ## Remaining Work
-- 把旅程分析整理成正式 backlog 表
-- 在 `case 管理` 和 `登录 / 账号密码` 之间确定下一步实施项
-- 如继续实现，优先进入 case 管理能力
+- 处理登录与用户隔离
+- 收口前端主链路 bug
+- 做预览部署验证和种子用户试用回归
 
 ## Next Actions
-- 输出 backlog 版硬表：
-  - 旅程阶段
-  - 用户目标
-  - 当前已实现
-  - 关键 gap
-  - 优先级
-  - 建议落地顺序
-- 然后开始第一项实现：case 管理
+- 从 release blocker 开始，不再继续扩旅程资产系统
+- 优先排查主链路可用性：新建案件、对话输入、预览与案件推进
 
 ## Blockers
-- 无硬阻塞
-- 仅需产品优先级决策
+- 产品 blocker：None
+- 工程提醒：仓库当前有大量并行未提交改动，后续改动要控制范围
 
 ## Decisions Made
 | Decision | Rationale |
 |----------|-----------|
-| 优先先修主界面误导问题，而不是继续堆功能 | 假入口和误导按钮会直接伤害真实用户信任 |
-| 当前主界面继续坚持 `case + 对话` 两类主操作 | 对齐用户已确认的产品真相 |
-| 下一步实现优先考虑 case 管理 | 这是当前产品承诺与实际能力差距最大的点之一 |
+| 保持主账本 + TS 样本 + JSON 导出的三件套 | 已足够支撑当前消费需求 |
+| 元数据只加 `priority` 和 `usageTags` | 最小可用，不引入新系统 |
+| API 回归只补高价值 P0 场景 | 用最少测试卡住主链路语义 |
+| 8D 请求测试只断言“不直跳 final” | 保持测试卡业务语义而不是绑定实现文案 |
 
 ## Touched Files
-- /Users/jilanfang/ai-quality/components/sovereign-shell.tsx
-- /Users/jilanfang/ai-quality/components/workspace.tsx
-- /Users/jilanfang/ai-quality/lib/domain/report-builder.ts
-- /Users/jilanfang/ai-quality/tests/layout.test.tsx
-- /Users/jilanfang/ai-quality/tests/workspace.test.tsx
-- /Users/jilanfang/ai-quality/.gstack/qa-reports/qa-report-localhost-3001-2026-03-26.md
+- /Users/jilanfang/ai-quality/docs/journeys/README.md
+- /Users/jilanfang/ai-quality/docs/journeys/fireline-structured-scenarios.sample.json
+- /Users/jilanfang/ai-quality/lib/domain/journey-scenarios.ts
+- /Users/jilanfang/ai-quality/lib/domain/types.ts
+- /Users/jilanfang/ai-quality/tests/journey-scenario-api.test.ts
+- /Users/jilanfang/ai-quality/tests/journey-scenario-assets.test.ts
+- /Users/jilanfang/ai-quality/tests/journey-scenarios.test.ts
 
 ## Verification
 | Check | Status | Details |
 |-------|--------|---------|
-| `npm test` | passed | `13 files, 83 tests passed` |
-| `npm run typecheck` | passed | exit 0 |
-| `npm run build` | passed | Next.js production build completed |
-| Browser QA | passed | 首页、seed case、建议动作、反馈/预览互斥均已复验 |
+| `npm test -- tests/journey-scenarios.test.ts tests/journey-scenario-assets.test.ts tests/journey-scenario-api.test.ts` | passed | 15 tests passed |
+| `npm run typecheck` | passed | `tsc --noEmit` passed |

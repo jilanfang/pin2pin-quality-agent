@@ -475,18 +475,18 @@ function WorkspaceContextHeader({
   impactedStageNames: string[];
 }) {
   return (
-    <header className="workspace-context" aria-label="案件上下文">
+    <header className="workspace-context" aria-label="调查上下文">
       <div className="workspace-context-main">
         <div className="workspace-context-copy">
-          <strong>Fireline Workspace</strong>
+          <strong>质量调查工作台</strong>
           <span className="workspace-context-meta">
-            {currentCaseId ? `ACTIVE CASE #${currentCaseId.toUpperCase()}` : "ACTIVE CASE NOT INITIALIZED"}
+            {currentCaseId ? `当前调查 #${currentCaseId.toUpperCase()}` : "当前调查未初始化"}
           </span>
-          <h2>{currentCase?.title ?? "先跑通第一单"}</h2>
+          <h2>{currentCase?.title ?? "先开始第一条调查"}</h2>
           <p>
             {currentCaseId
               ? currentCase?.guidedThinking?.thinkingGoal ?? "继续补证据，再让 AI 带着往前推。"
-              : "先选一个开始方式，我再带着你把第一单跑通。"}
+              : "先开始一条调查，我再带着你把第一步跑通。"}
           </p>
         </div>
 
@@ -527,7 +527,7 @@ function WorkspaceContextHeader({
         ) : (
           <>
             <span className="status-chip">未开始</span>
-            <span className="status-chip">先创建或载入案件</span>
+            <span className="status-chip">先创建或载入调查</span>
           </>
         )}
       </div>
@@ -610,14 +610,14 @@ function AssistantStageCard({
       ) : null}
       {impactSummary ? (
         <div className="inline-alert" role="status">
-          <strong>案件认知已变化</strong>
+          <strong>调查认知已变化</strong>
           <p>{impactSummary}</p>
         </div>
       ) : null}
       {pendingCaseConfirmation ? (
         <div className="inline-alert" role="status">
-          <strong>我判断这更像另一单新案件</strong>
-          <p>{`这条内容更接近“${pendingCaseConfirmation.suggestedTitle}”这一类新投诉。如果继续挂在当前案件里，前面的结论和时间线可能会被带偏。`}</p>
+          <strong>我判断这更像另一条新调查</strong>
+          <p>{`这条内容更接近“${pendingCaseConfirmation.suggestedTitle}”这一类新投诉。如果继续挂在当前调查里，前面的结论和时间线可能会被带偏。`}</p>
         </div>
       ) : null}
       <div className="assistant-manuscript">
@@ -717,7 +717,12 @@ function AssistantStageCard({
             <div className="mini-note">{currentCase.riskFlags.slice(0, 1).join("；")}</div>
           ) : null}
         </section>
+      </div>
 
+      <details className="assistant-secondary-details">
+        <summary>查看辅助信息</summary>
+
+        <div className="assistant-secondary-grid">
         {isUrgentComplaint && actionFacts.length ? (
           <section className="copilot-panel">
             <span className="copilot-label">客户侧 / 厂内侧当前动作</span>
@@ -755,49 +760,50 @@ function AssistantStageCard({
             </ul>
           </section>
         ) : null}
-      </div>
-
-      <div className="timeline-wrap">
-        <div className="timeline-head">
-          <span className="section-label">阶段时间线</span>
-          <button className="ghost-button ghost-button-tight" type="button" onClick={onToggleStageRail}>
-            {isStageRailExpanded ? "收起阶段" : "展开全部阶段"}
-          </button>
         </div>
-        <div className="stage-timeline" data-testid="stage-timeline">
-          {visibleStages.map((stage) => (
-            <button
-              key={stage.stage}
-              type="button"
-              className={`stage-node${stage.stage === selectedStage?.stage ? " active" : ""}${stage.locked ? " locked" : ""}${
-                stage.impacted ? " impacted" : ""
-              }`}
-              onClick={() => onSelectStage(stage.stage)}
-            >
-              <span>{stageLabel(stage.stage)}</span>
-              <small>{stage.impacted ? "受影响" : stage.locked ? "已确认" : "工作稿"}</small>
+
+        <div className="timeline-wrap">
+          <div className="timeline-head">
+            <span className="section-label">阶段时间线</span>
+            <button className="ghost-button ghost-button-tight" type="button" onClick={onToggleStageRail}>
+              {isStageRailExpanded ? "收起阶段" : "展开全部阶段"}
             </button>
-          ))}
-        </div>
-      </div>
-
-      {selectedStage ? (
-        <div className={`stage-detail-card${selectedStage.impacted ? " stage-detail-impacted" : ""}`}>
-          <div className="stage-head">
-            <strong>
-              {stageLabel(selectedStage.stage)} {selectedStage.stage === currentCase?.currentStage ? "· 当前聚焦" : ""}
-            </strong>
-            <span>{selectedStage.impacted ? "需要回看" : selectedStage.locked ? "已确认" : "工作稿"}</span>
           </div>
-          <p>{stageCardPreview(selectedStage)}</p>
-          {selectedStage.impactSummary ? <div className="mini-note">{selectedStage.impactSummary}</div> : null}
-          {selectedStage.stage === currentCase?.currentStage ? (
-            <div className="stage-footnote">
-              <span>当前阶段会继续由对话推进，不再要求你在这里手动确认。</span>
-            </div>
-          ) : null}
+          <div className="stage-timeline" data-testid="stage-timeline">
+            {visibleStages.map((stage) => (
+              <button
+                key={stage.stage}
+                type="button"
+                className={`stage-node${stage.stage === selectedStage?.stage ? " active" : ""}${stage.locked ? " locked" : ""}${
+                  stage.impacted ? " impacted" : ""
+                }`}
+                onClick={() => onSelectStage(stage.stage)}
+              >
+                <span>{stageLabel(stage.stage)}</span>
+                <small>{stage.impacted ? "受影响" : stage.locked ? "已确认" : "工作稿"}</small>
+              </button>
+            ))}
+          </div>
         </div>
-      ) : null}
+
+        {selectedStage ? (
+          <div className={`stage-detail-card${selectedStage.impacted ? " stage-detail-impacted" : ""}`}>
+            <div className="stage-head">
+              <strong>
+                {stageLabel(selectedStage.stage)} {selectedStage.stage === currentCase?.currentStage ? "· 当前聚焦" : ""}
+              </strong>
+              <span>{selectedStage.impacted ? "需要回看" : selectedStage.locked ? "已确认" : "工作稿"}</span>
+            </div>
+            <p>{stageCardPreview(selectedStage)}</p>
+            {selectedStage.impactSummary ? <div className="mini-note">{selectedStage.impactSummary}</div> : null}
+            {selectedStage.stage === currentCase?.currentStage ? (
+              <div className="stage-footnote">
+                <span>当前阶段会继续由对话推进，不再要求你在这里手动确认。</span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </details>
 
       {resultRecommendation && showResultActionCard ? (
         <div className="report-action-card" data-testid="result-recommendation-card">
@@ -849,7 +855,7 @@ function ComposerDock({
       aria-label="证据输入停靠区"
     >
       <span className="helper-inline">
-        {focusArea ? `当前建议先推进 ${focusArea}` : "先创建案件，再开始输入证据"}
+        {focusArea ? `当前建议先推进 ${focusArea}` : "先创建调查，再开始输入证据"}
       </span>
       <div className="composer-frame">
         <textarea
@@ -936,12 +942,12 @@ function ThinkingStatusCard({
   );
 }
 
-export function Workspace() {
+export function Workspace({ initialCaseId = null }: { initialCaseId?: string | null } = {}) {
   const [cases, setCases] = useState<CaseSummary[]>([]);
-  const [currentCaseId, setCurrentCaseId] = useState<string | null>(null);
+  const [currentCaseId, setCurrentCaseId] = useState<string | null>(initialCaseId);
   const [currentCase, setCurrentCase] = useState<CaseWorkflow | null>(null);
   const [composer, setComposer] = useState("");
-  const [titleInput, setTitleInput] = useState("新的 8D 案件");
+  const [titleInput, setTitleInput] = useState("新的调查");
   const [seedCase, setSeedCase] = useState<(typeof seedCases)[number]["key"] | "">("");
   const [preview, setPreview] = useState<ReportPreview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1159,7 +1165,7 @@ export function Workspace() {
       try {
         await refreshCases();
       } catch (nextError) {
-        setError(messageFromError(nextError, "案件加载失败"));
+        setError(messageFromError(nextError, "调查加载失败"));
       }
     })();
   }, []);
@@ -1186,7 +1192,7 @@ export function Workspace() {
 
   async function createCase() {
     await createCaseFromTemplate({
-      title: titleInput.trim() || "新的 8D 案件",
+      title: titleInput.trim() || "新的调查",
       seedCase: seedCase || undefined,
       openDrawer: false,
     });
@@ -1213,7 +1219,7 @@ export function Workspace() {
     await refreshCurrentCase(payload.id);
     await refreshCases({ preferredCaseId: payload.id, fallbackSummary: payload });
     setSeedCase("");
-    setTitleInput("新的 8D 案件");
+    setTitleInput("新的调查");
     setIsCreateOpen(false);
     setIsCaseDrawerOpen(false);
     return payload.id;
@@ -1265,7 +1271,7 @@ export function Workspace() {
       await sendEvidenceToCase(targetCaseId, pendingCaseConfirmation.content, false);
     } catch (nextError) {
       setPendingThinking(null);
-      setError(messageFromError(nextError, "创建新案件失败"));
+      setError(messageFromError(nextError, "创建新调查失败"));
     } finally {
       setLoading(false);
     }
@@ -1409,11 +1415,11 @@ export function Workspace() {
       await refreshCases({ preferredCaseId: payload.id, fallbackSummary: payload });
       setComposer("");
       setSeedCase("");
-      setTitleInput("新的 8D 案件");
+      setTitleInput("新的调查");
       setIsCreateOpen(false);
       setIsCaseDrawerOpen(Boolean(options.openDrawer));
     } catch (nextError) {
-      setError(messageFromError(nextError, "创建案件失败"));
+      setError(messageFromError(nextError, "创建调查失败"));
     } finally {
       setLoading(false);
     }
@@ -1422,7 +1428,7 @@ export function Workspace() {
   function startWithSeedCase(defaultSeedCase: (typeof seedCases)[number]["key"]) {
     const seed = seedCases.find((item) => item.key === defaultSeedCase);
     void createCaseFromTemplate({
-      title: seed?.title ?? "新的 8D 案件",
+      title: seed?.title ?? "新的调查",
       seedCase: defaultSeedCase,
       openDrawer: false,
     });
@@ -1430,7 +1436,7 @@ export function Workspace() {
 
   function startWithBlankCase() {
     void createCaseFromTemplate({
-      title: "新的 8D 案件",
+      title: "新的调查",
       openDrawer: false,
     });
   }
@@ -1454,33 +1460,33 @@ export function Workspace() {
       {isCaseDrawerOpen ? <button className="drawer-scrim" type="button" aria-label="关闭抽屉遮罩" onClick={() => setIsCaseDrawerOpen(false)} /> : null}
 
       {isCaseDrawerOpen ? (
-        <section className="case-drawer panel" aria-label="案件抽屉">
+        <section className="case-drawer panel" aria-label="调查列表抽屉">
           <div className="drawer-head">
             <div className="drawer-copy">
-              <strong>案件抽屉</strong>
-              <span>缩起来只留主会话，展开时再切案件或新建。</span>
+              <strong>调查列表</strong>
+              <span>缩起来只留主会话，展开时再切换调查或新建。</span>
             </div>
             <button className="ghost-button ghost-button-tight" type="button" onClick={() => setIsCaseDrawerOpen(false)}>
-              收起案件抽屉
+              收起调查列表
             </button>
           </div>
 
           {!hasCases ? (
             <div className="first-run-card">
-              <span className="eyebrow">开始第一单</span>
-              <h3>先跑通第一单，再继续补证据和出稿。</h3>
+              <span className="eyebrow">开始新调查</span>
+              <h3>先把第一条调查跑通，再继续补证据和出稿。</h3>
               <p>推荐先加载一个种子案例，3 分钟内看到第一版结果。</p>
-              <p>如果你手头已经有真实异常，也可以直接新建空白案件开始录入。</p>
+              <p>如果你手头已经有真实异常，也可以直接新建空白调查开始录入。</p>
               <div className="first-run-actions">
                 <button
                   className="primary-button"
                   type="button"
                   onClick={() => startWithSeedCase(seedCases[0].key)}
                 >
-                  开始第一单
+                  开始新调查
                 </button>
                 <button className="ghost-button" type="button" onClick={startWithBlankCase}>
-                  直接新建空白案件
+                  直接新建空白调查
                 </button>
               </div>
             </div>
@@ -1488,8 +1494,8 @@ export function Workspace() {
 
           <div className="drawer-tools">
             <div className="drawer-tools-copy">
-              <strong>案件列表</strong>
-              <span>{currentCaseSummary ? `当前：${currentCaseSummary.title}` : `${visibleCases.length} 个案件`}</span>
+              <strong>调查列表</strong>
+              <span>{currentCaseSummary ? `当前：${currentCaseSummary.title}` : `${visibleCases.length} 条调查`}</span>
             </div>
             <div className="case-list-actions">
               <button
@@ -1500,16 +1506,16 @@ export function Workspace() {
                   setIsCreateOpen((value) => !value);
                 }}
               >
-                {isCreateOpen ? "收起新建" : "新建案件"}
+                {isCreateOpen ? "收起新建" : "新建调查"}
               </button>
             </div>
           </div>
 
           <label className="field case-search-field">
-            <span>搜索案件</span>
+            <span>搜索调查</span>
             <input
-              aria-label="搜索案件"
-              placeholder="搜索进行中案件"
+              aria-label="搜索调查"
+              placeholder="搜索进行中的调查"
               value={caseSearch}
               onChange={(event) => setCaseSearch(event.target.value)}
             />
@@ -1518,13 +1524,13 @@ export function Workspace() {
           {isCreateOpen ? (
             <div className="create-drawer">
               <label className="field">
-                <span>案件标题</span>
+                <span>调查标题</span>
                 <input value={titleInput} onChange={(event) => setTitleInput(event.target.value)} />
               </label>
               <label className="field">
                 <span>种子案例</span>
                 <select value={seedCase} onChange={(event) => setSeedCase(event.target.value as typeof seedCase)}>
-                  <option value="">空白案件</option>
+                  <option value="">空白调查</option>
                   {seedCases.map((item) => (
                     <option key={item.key} value={item.key}>
                       {item.title}
@@ -1534,7 +1540,7 @@ export function Workspace() {
               </label>
               <p className="helper">{currentSeedDescription ?? "可直接加载演示数据，所有后续交互仍走真实 API。"}</p>
               <button className="primary-button" type="button" onClick={createCase} disabled={loading}>
-                创建案件
+                创建调查
               </button>
             </div>
           ) : null}
@@ -1560,7 +1566,7 @@ export function Workspace() {
             ))}
             {!visibleCases.length ? (
               <div className="empty-inline-hint">
-                没有匹配的案件，试试换个关键词。
+                没有匹配的调查，试试换个关键词。
               </div>
             ) : null}
           </div>
@@ -1579,24 +1585,24 @@ export function Workspace() {
         <section className="conversation-shell panel">
           <div className="conversation-head">
             <strong>AI 协作区</strong>
-            <span>{loading ? "处理中…" : currentCaseId ? "会话主舞台" : "先选开始方式，再录入第一条证据"}</span>
+            <span>{loading ? "处理中…" : currentCaseId ? "推进当前调查" : "先开始一条调查，再录入第一条证据"}</span>
           </div>
 
           <div className="conversation-feed" data-testid="conversation-feed" data-has-floating-dock="true">
             {!currentCaseId ? (
               <article className="message-card message-assistant message-empty">
                 <span className="message-role">AI 协作</span>
-              <h3>先跑通第一单，再继续补证据和出稿。</h3>
-              <p>先按开始第一单，我会直接带你进入分析。</p>
+              <h3>先开始一条调查，再继续补证据和出稿。</h3>
+              <p>先按开始新调查，我会直接带你进入分析。</p>
               <p>
                   推荐先加载一个种子案例，3 分钟内看到第一版结果。也可以直接录入真实异常，随后把客户投诉、测试结论、批次工单或现场观察发进来，我会继续往前推进。
                 </p>
                 <div className="empty-actions">
                   <button className="primary-button" type="button" onClick={() => startWithSeedCase(seedCases[0].key)}>
-                    开始第一单
+                    开始新调查
                   </button>
                   <button className="ghost-button" type="button" onClick={startWithBlankCase}>
-                    直接新建空白案件
+                    直接新建空白调查
                   </button>
                 </div>
               </article>
@@ -1660,16 +1666,16 @@ export function Workspace() {
                 {pendingCaseConfirmation ? (
                   <div className="report-action-card" data-testid="new-case-confirmation-card">
                     <div className="report-action-copy">
-                      <span className="section-label">案件挂载确认</span>
-                      <p className="report-action-lead">我判断这更像另一单新案件</p>
-                      <p>{`建议按“${pendingCaseConfirmation.suggestedTitle}”新建。如果你确定它只是当前案件的新补充，也可以继续挂在当前案件里。`}</p>
+                      <span className="section-label">调查挂载确认</span>
+                      <p className="report-action-lead">我判断这更像另一条新调查</p>
+                      <p>{`建议按“${pendingCaseConfirmation.suggestedTitle}”新建。如果你确定它只是当前调查的新补充，也可以继续挂在当前调查里。`}</p>
                     </div>
                     <div className="report-action-row report-action-row-inline">
                       <button className="primary-button" type="button" onClick={() => void confirmPendingCaseAsNew()} disabled={loading}>
-                        新建案件
+                        新建调查
                       </button>
                       <button className="ghost-button" type="button" onClick={() => void confirmPendingCaseAsCurrent()} disabled={loading}>
-                        继续当前案件
+                        继续当前调查
                       </button>
                     </div>
                   </div>
@@ -2370,6 +2376,31 @@ export function Workspace() {
           margin-bottom: 2px;
         }
 
+        .assistant-secondary-details {
+          display: grid;
+          gap: 12px;
+          border-top: 1px solid rgba(215, 221, 234, 0.88);
+          padding-top: 12px;
+        }
+
+        .assistant-secondary-details > summary {
+          list-style: none;
+          cursor: pointer;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .assistant-secondary-details > summary::-webkit-details-marker {
+          display: none;
+        }
+
+        .assistant-secondary-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+        }
+
         .rebuild-review-card {
           display: grid;
           gap: 10px;
@@ -2735,6 +2766,7 @@ export function Workspace() {
         }
 
         @media (max-width: 1280px) {
+          .assistant-secondary-grid,
           .rebuild-review-grid,
           .copilot-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2758,6 +2790,7 @@ export function Workspace() {
             flex-direction: column;
           }
 
+          .assistant-secondary-grid,
           .rebuild-review-grid,
           .copilot-grid,
           .report-action-grid {

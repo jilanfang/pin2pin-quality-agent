@@ -31,7 +31,7 @@ describe("auth flow", () => {
     const page = await LoginPage();
     const markup = renderToStaticMarkup(page);
 
-    expect(markup).toContain("登录后继续处理案件");
+    expect(markup).toContain("登录后继续处理调查");
     expect(markup).toContain("没有账号？创建一个");
   });
 });

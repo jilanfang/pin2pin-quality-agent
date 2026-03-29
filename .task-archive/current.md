@@ -1,33 +1,31 @@
 # Current Checkpoint
 
-<!-- Update this file whenever you save a new checkpoint -->
-
 ## Snapshot ID
-20260326-015417-journey-gap-analysis-and-qa-closeout
+20260329-012229-fireline-journey-assets-minimal-closeout
 
 ## Saved At
-2026-03-26 01:54 CST
+2026-03-29 01:22 CST
 
 ## Project Path
 /Users/jilanfang/ai-quality
 
 ## Snapshot File
-.task-archive/snapshots/20260326-015417-journey-gap-analysis-and-qa-closeout.md
+.task-archive/snapshots/20260329-012229-fireline-journey-assets-minimal-closeout.md
 
 ## Goal
-基于当前代码完成用户旅程 gap 分析，并把主界面的 QA 问题收口到可继续推进 backlog 的状态。
+把 Fireline 用户旅程资产收口成可直接服务 benchmark、regression、smoke 的轻量资产，不再继续过度工程化。
 
 ## Current Phase
-已完成浏览器 QA 收口与旅程级 gap 分析；下一步适合把分析转成正式 backlog，并优先进入 case 管理或登录实现。
+旅程资产最小收口已完成，下一步应切回 release blocker。
 
 ## Next Actions
-- 先把旅程分析整理成开发 backlog 表
-- 在 `case 管理` 和 `登录 / 账号密码` 之间选下一步实现优先级
-- 若直接进入实现，优先做 `case 重命名 / 归档 / 删除 / 搜索`
+- 先处理登录与用户隔离
+- 再收口前端主链路 bug，重点看新建案件、抽屉按钮、输入框常驻可见
+- 做预览部署 smoke 和种子用户试用回归
 
 ## Blockers
-- 无硬阻塞
-- 仅需决定下一步产品优先级
+- 产品 blocker：None
+- 工程提醒：仓库存在大量其他未提交改动，后续继续开发时要避免误碰无关文件
 
 ## Restore Checklist
 1. Read the snapshot file listed above.

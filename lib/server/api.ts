@@ -26,7 +26,7 @@ import {
 } from "@/lib/domain/workflow-engine";
 import { type SeedCaseKey } from "@/lib/domain/seed-cases";
 import { getCaseStore } from "@/lib/server/case-store";
-import { extractEvidenceWithLlm } from "@/lib/server/llm";
+import { askCopilotWithLlm, extractEvidenceWithLlm } from "@/lib/server/llm";
 import {
   serializeCaseSummary,
   serializeCaseWorkflow,
@@ -115,6 +115,10 @@ const feedbackSchema = z.object({
   category: z.enum(["hard_to_understand", "not_professional_enough", "bug", "other"]),
   caseId: z.string().trim().nullable().optional(),
   note: z.string().trim().max(1000).optional(),
+});
+
+const copilotSchema = z.object({
+  prompt: z.string().trim().min(1),
 });
 
 export type RequestUserContext = {
@@ -239,6 +243,63 @@ export async function listCasesHandler(context?: RequestUserContext) {
   }));
 }
 
+export async function getOverviewHandler(context?: RequestUserContext) {
+  const store = getCaseStore();
+  const cases = await store.listCases(context?.userId ?? undefined);
+  const activeCases = cases.filter((item) => !item.archivedAt);
+  const recentInvestigations = activeCases.slice(0, 5).map((item) => ({
+    id: item.id,
+    title: item.title,
+    stageLabel: item.currentStage,
+    statusLabel: item.status === "open" ? "进行中" : "已关闭",
+    updatedAtLabel: new Date(item.updatedAt).toLocaleString("zh-CN", {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    href: `/investigations/${item.id}`,
+  }));
+
+  const artifactHighlights = [];
+  for (const item of activeCases.slice(0, 3)) {
+    const aggregate = await store.getCase(item.id, context?.userId ?? undefined);
+    if (!aggregate) continue;
+    const analysisSummary = buildAnalysisSummary(aggregate);
+    if (analysisSummary.confirmedFacts.length > 0) {
+      artifactHighlights.push({
+        caseId: item.id,
+        caseTitle: item.title,
+        artifactKind: "analysis_summary" as const,
+        artifactLabel: "分析结论",
+        href: `/investigations/${item.id}?preview=analysis_summary`,
+      });
+      continue;
+    }
+
+    const actionPlan = buildActionPlan(aggregate);
+    if (actionPlan) {
+      artifactHighlights.push({
+        caseId: item.id,
+        caseTitle: item.title,
+        artifactKind: "action_plan" as const,
+        artifactLabel: "行动方案",
+        href: `/investigations/${item.id}?preview=action_plan`,
+      });
+    }
+  }
+
+  return {
+    stats: {
+      activeInvestigations: activeCases.length,
+      pendingEvidence: activeCases.filter((item) => item.currentStage !== "D8").length,
+      readyArtifacts: artifactHighlights.length,
+    },
+    recentInvestigations,
+    artifactHighlights,
+  };
+}
+
 export async function createCaseHandler(payload: unknown, context?: RequestUserContext) {
   const parsed = createCaseSchema.parse(payload);
   const store = getCaseStore();
@@ -343,6 +404,17 @@ export async function postEvidenceHandler(caseId: string, payload: unknown, cont
     }
   );
   return serializeCaseWorkflow(next, conversationMeta);
+}
+
+export async function postCopilotHandler(payload: unknown) {
+  const parsed = copilotSchema.parse(payload);
+  const answer = await askCopilotWithLlm(parsed.prompt);
+
+  return {
+    answer:
+      answer ??
+      "当前未接通在线模型，请先根据既有质量体系与内部规范进行判断。建议你优先确认问题定义、临时遏制、根因链路和验证方式，再继续推进 8D。",
+  };
 }
 
 export async function stageActionHandler(

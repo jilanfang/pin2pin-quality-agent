@@ -1,15 +1,16 @@
 import React from "react";
 import { redirect } from "next/navigation";
 
-import { Overview } from "@/components/overview";
 import { getServerAuthState } from "@/lib/server/auth";
 
-export default async function HomePage() {
+import { InvestigationsIndex } from "@/components/investigations-index";
+
+export default async function InvestigationsPage() {
   const auth = await getServerAuthState();
 
   if (auth.authEnabled && !auth.isAuthenticated) {
     redirect("/login");
   }
 
-  return <Overview />;
+  return <InvestigationsIndex />;
 }

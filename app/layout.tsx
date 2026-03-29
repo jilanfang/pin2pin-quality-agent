@@ -30,7 +30,6 @@ export default async function RootLayout({
     <html lang="zh-CN">
       <body>
         <SovereignShell
-          activeSection="Workspace"
           hasCases={hasCasesCookie}
           authEnabled={auth.authEnabled}
           isAuthenticated={auth.isAuthenticated}

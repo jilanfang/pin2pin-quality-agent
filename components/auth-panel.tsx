@@ -34,8 +34,8 @@ export function AuthPanel() {
     <section className="auth-panel" aria-label="登录面板">
       <div className="auth-copy">
         <span className="auth-kicker">Pin2pin Fireline</span>
-        <h1>{mode === "sign_in" ? "登录后继续处理案件" : "创建账号开始试用"}</h1>
-        <p>只保留最小登录能力，进入后直接回到 case + 对话主界面。</p>
+        <h1>{mode === "sign_in" ? "登录后继续处理调查" : "创建账号开始试用"}</h1>
+        <p>只保留最小登录能力，进入后直接回到总览与调查工作台。</p>
       </div>
 
       <div className="auth-form">
