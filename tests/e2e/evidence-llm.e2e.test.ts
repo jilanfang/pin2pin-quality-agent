@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   assertChineseText,
@@ -100,7 +100,7 @@ describe("evidence llm e2e", () => {
     expect(payload.conversationMeta?.responseMode).toBe("guide");
   });
 
-  it("detects correction intent via real LLM", async () => {
+  it("detects correction intent via real LLM", { timeout: 60_000 }, async () => {
     const { createCaseAggregate } = await import("@/lib/domain/workflow-engine");
     const { getCaseStore } = await import("@/lib/server/case-store");
     const { postEvidenceHandler } = await import("@/lib/server/api");
@@ -126,7 +126,7 @@ describe("evidence llm e2e", () => {
     expect(payload.conversationMeta?.thinking.mode).toBe("reviewing_prior_judgement");
   });
 
-  it("generates a summary when requested via real LLM", async () => {
+  it("generates a summary when requested via real LLM", { timeout: 60_000 }, async () => {
     const { createCaseAggregate } = await import("@/lib/domain/workflow-engine");
     const { getCaseStore } = await import("@/lib/server/case-store");
     const { postEvidenceHandler } = await import("@/lib/server/api");
