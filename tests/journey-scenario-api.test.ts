@@ -7,6 +7,7 @@ describe("journey scenario api regression", () => {
   const previousDatabaseUrl = process.env.DATABASE_URL;
   const previousStorePath = process.env.AI_QUALITY_STORE_PATH;
   const previousLlmEnabled = process.env.AI_QUALITY_LLM_ENABLED;
+  const previousRuleBaseline = process.env.AI_QUALITY_LLM_RULE_BASELINE;
 
   afterEach(() => {
     if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
@@ -15,6 +16,8 @@ describe("journey scenario api regression", () => {
     else process.env.AI_QUALITY_STORE_PATH = previousStorePath;
     if (previousLlmEnabled === undefined) delete process.env.AI_QUALITY_LLM_ENABLED;
     else process.env.AI_QUALITY_LLM_ENABLED = previousLlmEnabled;
+    if (previousRuleBaseline === undefined) delete process.env.AI_QUALITY_LLM_RULE_BASELINE;
+    else process.env.AI_QUALITY_LLM_RULE_BASELINE = previousRuleBaseline;
     vi.restoreAllMocks();
     vi.resetModules();
   });
@@ -51,6 +54,7 @@ describe("journey scenario api regression", () => {
     delete process.env.DATABASE_URL;
     process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-journey-api-${Date.now()}-1.json`;
     process.env.AI_QUALITY_LLM_ENABLED = "false";
+    process.env.AI_QUALITY_LLM_RULE_BASELINE = "true";
 
     const { postEvidenceHandler } = await import("@/lib/server/api");
     const { aggregate, scenario } = await prepareScenarioCase("CQ-02-D2-01");
@@ -70,6 +74,7 @@ describe("journey scenario api regression", () => {
     delete process.env.DATABASE_URL;
     process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-journey-api-${Date.now()}-2.json`;
     process.env.AI_QUALITY_LLM_ENABLED = "false";
+    process.env.AI_QUALITY_LLM_RULE_BASELINE = "true";
 
     const { postEvidenceHandler } = await import("@/lib/server/api");
     const { aggregate, scenario } = await prepareScenarioCase("CQ-01-D7-01", {
@@ -90,6 +95,7 @@ describe("journey scenario api regression", () => {
     delete process.env.DATABASE_URL;
     process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-journey-api-${Date.now()}-3.json`;
     process.env.AI_QUALITY_LLM_ENABLED = "false";
+    process.env.AI_QUALITY_LLM_RULE_BASELINE = "true";
 
     const { postEvidenceHandler } = await import("@/lib/server/api");
     const { aggregate, scenario } = await prepareScenarioCase("QE-01-D5-01", {
@@ -110,6 +116,7 @@ describe("journey scenario api regression", () => {
     delete process.env.DATABASE_URL;
     process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-journey-api-${Date.now()}-4.json`;
     process.env.AI_QUALITY_LLM_ENABLED = "false";
+    process.env.AI_QUALITY_LLM_RULE_BASELINE = "true";
 
     const { applyEvidence } = await import("@/lib/domain/workflow-engine");
     const { getCaseStore } = await import("@/lib/server/case-store");
@@ -139,6 +146,7 @@ describe("journey scenario api regression", () => {
     delete process.env.DATABASE_URL;
     process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-journey-api-${Date.now()}-5.json`;
     process.env.AI_QUALITY_LLM_ENABLED = "false";
+    process.env.AI_QUALITY_LLM_RULE_BASELINE = "true";
 
     const { postEvidenceHandler } = await import("@/lib/server/api");
     const { aggregate, scenario } = await prepareScenarioCase("SQE-02-D5-01", {
@@ -160,6 +168,7 @@ describe("journey scenario api regression", () => {
     delete process.env.DATABASE_URL;
     process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-journey-api-${Date.now()}-6.json`;
     process.env.AI_QUALITY_LLM_ENABLED = "false";
+    process.env.AI_QUALITY_LLM_RULE_BASELINE = "true";
 
     const { postEvidenceHandler } = await import("@/lib/server/api");
     const { aggregate, scenario } = await prepareScenarioCase("SQE-01-D5-01", {
@@ -183,6 +192,7 @@ describe("journey scenario api regression", () => {
     delete process.env.DATABASE_URL;
     process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-journey-api-${Date.now()}-7.json`;
     process.env.AI_QUALITY_LLM_ENABLED = "false";
+    process.env.AI_QUALITY_LLM_RULE_BASELINE = "true";
 
     const { postEvidenceHandler } = await import("@/lib/server/api");
     const { aggregate, scenario } = await prepareScenarioCase("QE-02-D6-01", {
@@ -204,6 +214,7 @@ describe("journey scenario api regression", () => {
     delete process.env.DATABASE_URL;
     process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-journey-api-${Date.now()}-8.json`;
     process.env.AI_QUALITY_LLM_ENABLED = "false";
+    process.env.AI_QUALITY_LLM_RULE_BASELINE = "true";
 
     const { postEvidenceHandler } = await import("@/lib/server/api");
     const { aggregate, scenario } = await prepareScenarioCase("SQE-02-D2-01");

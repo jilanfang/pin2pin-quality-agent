@@ -15,7 +15,7 @@ function buildInitialReadyAggregate() {
   let aggregate = createCaseAggregate("钽电容客诉");
 
   aggregate = applyEvidence(aggregate, {
-    content: "客户大麦科技反馈 MCU-800 主控板冒烟，批次B12，2026-03-21发现，影响120台。",
+    content: "产线发现 MCU-800 主控板冒烟，批次B12，2026-03-21发现，影响120台。",
     contextStage: "D2",
   });
   aggregate = confirmStage(aggregate, { stage: "D2" });
@@ -64,6 +64,32 @@ describe("reportBuilder", () => {
     expect(recommendation.kind).toBe("analysis_summary");
     expect(recommendation.title).toBe("建议先整理分析结论");
     expect(recommendation.rationale).toContain("不建议直接生成 8D");
+  });
+
+  it("recommends 24h initial 8D wording for urgent customer complaints before final closure", () => {
+    let aggregate = createCaseAggregate("客户停线客诉");
+
+    aggregate = applyEvidence(aggregate, {
+      content:
+        "客户大麦科技反馈 MCU-800 上电冒烟并停线，要求立刻停止发货并在24小时内回复，当前客户现场已封存待检。",
+      contextStage: "D2",
+    });
+    aggregate = confirmStage(aggregate, { stage: "D2" });
+    aggregate = applyEvidence(aggregate, {
+      content: "已冻结已发货批次、扣留库存、暂停在制品投线。",
+      contextStage: "D3",
+    });
+    aggregate = applyEvidence(aggregate, {
+      content: "怀疑连接器处短路，但仍需继续验证失效位置和原因链。",
+      contextStage: "D4",
+    });
+
+    const recommendation = buildResultRecommendation(aggregate);
+
+    expect(recommendation.kind).toBe("analysis_summary");
+    expect(recommendation.title).toBe("建议先生成 24h 初版 8D");
+    expect(recommendation.primaryActionLabel).toBe("生成 24h 初版 8D");
+    expect(recommendation.rationale).toContain("先交出快速响应版");
   });
 
   it("recommends 8D only when all stages are closed and no impacted stage remains", () => {

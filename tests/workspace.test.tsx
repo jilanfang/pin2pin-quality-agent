@@ -166,8 +166,15 @@ function buildCaseWorkflow() {
       primaryActionLabel: "整理分析结论",
       secondaryActionLabel: "继续补信息",
       deferActionLabel: "稍后再说",
+      displayKindLabel: "分析结论",
     },
     conversationMeta: null,
+    presentation: {
+      isUrgentCustomerComplaint: false,
+      primaryNarrative: "把现场碎片，推进成可交付调查",
+      primaryArtifactLabel: "分析结论",
+      primaryArtifactShortLabel: "分析结论",
+    },
   };
 }
 
@@ -236,11 +243,18 @@ function buildUrgentComplaintWorkflow() {
     },
     resultRecommendation: {
       kind: "analysis_summary",
-      title: "建议先整理分析结论",
-      rationale: "当前更适合先把已确认事实和风险窗口整理出来，不要抢跑 8D。",
-      primaryActionLabel: "整理分析结论",
+      title: "建议先生成 24h 初版 8D",
+      rationale: "当前先把已确认事实、围堵状态和风险窗口整理成 24h 初版 8D，再继续补验证。",
+      primaryActionLabel: "生成 24h 初版 8D",
       secondaryActionLabel: "继续补信息",
       deferActionLabel: "稍后再说",
+      displayKindLabel: "24h 初版 8D",
+    },
+    presentation: {
+      isUrgentCustomerComplaint: true,
+      primaryNarrative: "导入客诉材料，生成 24h 初版 8D",
+      primaryArtifactLabel: "24h 初版 8D / 快速响应版",
+      primaryArtifactShortLabel: "24h 初版 8D",
     },
   };
 }
@@ -277,11 +291,13 @@ function buildPreview() {
   return {
     document: {
       artifactKind: "analysis_summary",
-      title: "分析结论",
+      displayArtifactLabel: "24h 初版 8D / 快速响应版",
+      trustSummary: "已确认事实需继续回看原材料，待验证项不能直接写成结论。",
+      title: "24h 初版 8D",
       caseStatus: "open",
     },
     text: "分析结论文本预览",
-    html: "<html><body><h1>分析结论预览</h1></body></html>",
+    html: "<html><body><h1>24h 初版 8D 预览</h1></body></html>",
     warnings: [],
   };
 }
@@ -449,6 +465,48 @@ describe("Workspace", () => {
     expect(screen.queryByRole("button", { name: "快速新建调查" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "反馈" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "打开报告面板" })).not.toBeInTheDocument();
+  });
+
+  it("shows a fail-closed error and keeps composer content when evidence api is unavailable", async () => {
+    const fetchMock = stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/cases" && !init?.method) {
+        return new Response(JSON.stringify([buildCaseSummary()]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1" && !init?.method) {
+        return new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 });
+      }
+      if (url === "/api/cases/case-1/evidence") {
+        return new Response(
+          JSON.stringify({
+            code: "llm_required_unavailable",
+            error: "当前模型服务不可用，本次调查输入未被处理，请稍后重试。",
+          }),
+          { status: 503 }
+        );
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+
+    fireEvent.change(screen.getByLabelText("证据输入框"), {
+      target: { value: "客户现场发现上电冒烟，批次 B19，已暂停出货。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送证据" }));
+
+    expect(
+      await screen.findByText("当前模型服务不可用，本次调查输入未被处理，请稍后重试。")
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("证据输入框")).toHaveValue("客户现场发现上电冒烟，批次 B19，已暂停出货。");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/cases/case-1/evidence",
+      expect.objectContaining({
+        method: "POST",
+      })
+    );
   });
 
   it("creates and opens a seed case immediately from the primary first-run action", async () => {
@@ -914,7 +972,9 @@ describe("Workspace", () => {
 
     const drawer = await screen.findByTestId("preview-drawer");
     expect(within(drawer).getAllByText("结果预览").length).toBeGreaterThan(0);
-    expect(within(drawer).getByTitle("分析结论预览")).toBeInTheDocument();
+    expect(within(drawer).getByText("类型：24h 初版 8D / 快速响应版")).toBeInTheDocument();
+    expect(within(drawer).getByText("已确认事实需继续回看原材料，待验证项不能直接写成结论。")).toBeInTheDocument();
+    expect(within(drawer).getByTitle("24h 初版 8D预览")).toBeInTheDocument();
   });
 
   it("anchors the case drawer as a viewport overlay so it does not depend on workspace layout flow", async () => {
@@ -991,6 +1051,31 @@ describe("Workspace", () => {
     const actionCard = await screen.findByTestId("result-recommendation-card");
     expect(within(actionCard).getByText("建议先整理分析结论")).toBeInTheDocument();
     expect(within(actionCard).getByRole("button", { name: "整理分析结论" })).toBeInTheDocument();
+  });
+
+  it("uses 24h initial 8D wording inside the assistant card for urgent complaint cases", async () => {
+    const urgentWorkflow = buildUrgentComplaintWorkflow();
+    stubFetch(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([buildCaseSummary({ currentStage: "D2" })]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(urgentWorkflow), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+
+    expect(screen.getByText("当前建议整理")).toBeInTheDocument();
+    expect(screen.getAllByText("24h 初版 8D").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("当前先把已确认事实、围堵状态和风险窗口整理成 24h 初版 8D，再继续补验证。").length).toBeGreaterThan(0);
+    expect(screen.getByText("已知事实")).toBeInTheDocument();
+    expect(screen.getByText("待验证假设")).toBeInTheDocument();
+    expect(screen.getByText("来源：当前对话材料")).toBeInTheDocument();
   });
 
   it("shows an action-plan recommendation card after fresh evidence makes the case actionable", async () => {
@@ -1798,8 +1883,10 @@ describe("Workspace", () => {
     expect(screen.getByText("我现在怎么看")).toBeInTheDocument();
     expect(screen.getByText("这是客户停线级异常，当前先控住影响范围。")).toBeInTheDocument();
     expect(screen.getByText("当前建议整理")).toBeInTheDocument();
-    expect(screen.getAllByText("分析结论").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("当前更适合先把已确认事实和风险窗口整理出来，不要抢跑 8D。").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("24h 初版 8D").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("当前先把已确认事实、围堵状态和风险窗口整理成 24h 初版 8D，再继续补验证。").length).toBeGreaterThan(0);
+    expect(screen.getByText("待验证假设")).toBeInTheDocument();
+    expect(screen.getByText("来源：当前对话材料")).toBeInTheDocument();
     expect(screen.queryByTestId("summary-strip")).not.toBeInTheDocument();
   });
 

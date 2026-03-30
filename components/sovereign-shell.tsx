@@ -12,12 +12,12 @@ type SovereignShellProps = {
 };
 
 const navItems: Array<{
-  label: "总览" | "调查" | "方法助手";
+  label: "总览" | "调查" | "方法问题";
   href: string;
 }> = [
   { label: "总览", href: "/" },
   { label: "调查", href: "/investigations" },
-  { label: "方法助手", href: "/copilot" },
+  { label: "方法问题", href: "/copilot" },
 ];
 
 const railItems = [
@@ -38,7 +38,7 @@ export function SovereignShell({
   const pathname = usePathname();
   const activeSection =
     pathname?.startsWith("/copilot")
-      ? "方法助手"
+      ? "方法问题"
       : pathname?.startsWith("/investigations")
         ? "调查"
         : "总览";

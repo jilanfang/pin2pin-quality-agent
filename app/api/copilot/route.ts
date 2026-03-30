@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { postCopilotHandler } from "@/lib/server/api";
+import { handleApiRouteError } from "@/lib/server/api-error";
 import { assertAuthenticated, getServerAuthState } from "@/lib/server/auth";
 
 export async function POST(request: Request) {
@@ -11,10 +12,6 @@ export async function POST(request: Request) {
     const payload = await postCopilotHandler(body);
     return NextResponse.json(payload);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unexpected error";
-    return NextResponse.json(
-      { error: message },
-      { status: message === "Authentication required" ? 401 : 400 }
-    );
+    return handleApiRouteError(error);
   }
 }

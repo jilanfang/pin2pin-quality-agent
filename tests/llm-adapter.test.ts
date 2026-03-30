@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { buildConversationLlmResponse } from "@/tests/test-helpers/conversation-llm";
+
 afterEach(() => {
   vi.restoreAllMocks();
   delete process.env.AI_QUALITY_LLM_ENABLED;
@@ -641,5 +643,44 @@ describe("llm adapter", () => {
 
     expect(result).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("analyzes conversation turns through the conversation capability and validates schema", async () => {
+    process.env.AI_QUALITY_LLM_ENABLED = "true";
+    process.env.AI_QUALITY_LLM_PROVIDER = "qwen";
+    process.env.AI_QUALITY_LLM_BASE_URL = "https://api.vectorengine.ai/v1";
+    process.env.AI_QUALITY_LLM_API_KEY = "generic-key";
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        buildConversationLlmResponse({
+          content: "客户补充 B19 先别放，现场已经停线了。现在先给客户怎么说？",
+          contextStage: "D2",
+          currentCaseTitle: "微信碎片补充",
+          currentKnownFacts: [],
+          knownFacts: [{ field: "batch", value: "B19", confidence: 0.96 }],
+        }),
+        { status: 200 }
+      );
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { analyzeConversationTurnWithLlm } = await import("@/lib/server/llm");
+    const result = await analyzeConversationTurnWithLlm(
+      {
+        content: "客户补充 B19 先别放，现场已经停线了。现在先给客户怎么说？",
+        contextStage: "D2",
+      },
+      {
+        currentCaseTitle: "微信碎片补充",
+        currentKnownFacts: [],
+        hasCurrentCase: true,
+      }
+    );
+
+    expect(result.intents).toEqual(["evidence", "question"]);
+    expect(result.sourceShape).toBe("mixed_input");
+    expect(result.knownFacts.find((item) => item.field === "batch")?.value).toBe("B19");
   });
 });

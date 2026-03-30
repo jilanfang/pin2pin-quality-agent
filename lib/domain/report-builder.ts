@@ -1,6 +1,7 @@
 import type {
   ActionPlan,
   AnalysisSummary,
+  CasePresentation,
   CaseAggregate,
   ExportCapabilities,
   OutputDocument,
@@ -239,6 +240,7 @@ export function buildResultReadiness(aggregate: CaseAggregate): ResultReadiness 
 
 export function buildResultRecommendation(aggregate: CaseAggregate): ResultRecommendation {
   const readiness = buildResultReadiness(aggregate);
+  const urgentComplaint = isUrgentComplaint(aggregate);
 
   if (readiness.eightD) {
     return {
@@ -247,6 +249,18 @@ export function buildResultRecommendation(aggregate: CaseAggregate): ResultRecom
       rationale: "当前关键阶段已闭环，可以整理成正式 8D。",
       primaryActionLabel: "生成 8D",
       secondaryActionLabel: "预览 8D",
+      displayKindLabel: "8D",
+    };
+  }
+
+  if (urgentComplaint && readiness.analysisSummary) {
+    return {
+      kind: "analysis_summary",
+      title: "建议先生成 24h 初版 8D",
+      rationale: "当前先交出快速响应版，把已确认事实、围堵状态和风险窗口站稳，再继续补验证。",
+      primaryActionLabel: "生成 24h 初版 8D",
+      secondaryActionLabel: "继续补信息",
+      displayKindLabel: "24h 初版 8D",
     };
   }
 
@@ -257,6 +271,7 @@ export function buildResultRecommendation(aggregate: CaseAggregate): ResultRecom
       rationale: "当前围堵和纠正方向已经成形，先把行动方案收口，再决定何时进入 8D。",
       primaryActionLabel: "整理行动方案",
       secondaryActionLabel: "继续补信息",
+      displayKindLabel: "行动方案",
     };
   }
 
@@ -267,6 +282,7 @@ export function buildResultRecommendation(aggregate: CaseAggregate): ResultRecom
       rationale: "当前还没有稳定事实，先补现象、时间、批次和影响范围，再整理分析结论。",
       primaryActionLabel: "继续补信息",
       secondaryActionLabel: "稍后整理",
+      displayKindLabel: "分析结论",
     };
   }
 
@@ -276,6 +292,31 @@ export function buildResultRecommendation(aggregate: CaseAggregate): ResultRecom
     rationale: "当前已具备稳定事实，可以先沉淀分析结论；根因仍待验证，不建议直接生成 8D。",
     primaryActionLabel: "整理分析结论",
     secondaryActionLabel: "继续补信息",
+    displayKindLabel: "分析结论",
+  };
+}
+
+export function buildCasePresentation(aggregate: CaseAggregate): CasePresentation {
+  if (isUrgentComplaint(aggregate)) {
+    return {
+      isUrgentCustomerComplaint: true,
+      primaryNarrative: "导入客诉材料，生成 24h 初版 8D",
+      primaryArtifactLabel: "24h 初版 8D / 快速响应版",
+      primaryArtifactShortLabel: "24h 初版 8D",
+      factSectionLabel: "已知事实",
+      assumptionSectionLabel: "待验证假设",
+      sourceLabel: "来源：当前对话材料",
+    };
+  }
+
+  return {
+    isUrgentCustomerComplaint: false,
+    primaryNarrative: "把现场碎片，推进成可交付调查",
+    primaryArtifactLabel: "分析结论",
+    primaryArtifactShortLabel: "分析结论",
+    factSectionLabel: "已知事实",
+    assumptionSectionLabel: "待验证假设",
+    sourceLabel: "来源：当前对话材料",
   };
 }
 

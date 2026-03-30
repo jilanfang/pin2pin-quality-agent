@@ -126,6 +126,17 @@ export interface ResultRecommendation {
   primaryActionLabel: string;
   secondaryActionLabel?: string;
   deferActionLabel?: string;
+  displayKindLabel?: string;
+}
+
+export interface CasePresentation {
+  isUrgentCustomerComplaint: boolean;
+  primaryNarrative: string;
+  primaryArtifactLabel: string;
+  primaryArtifactShortLabel: string;
+  factSectionLabel: string;
+  assumptionSectionLabel: string;
+  sourceLabel: string;
 }
 
 export interface OutputSection {
@@ -205,6 +216,8 @@ export interface ReportPreview {
     | OutputDocument
     | {
         artifactKind: ResultArtifactKind;
+        displayArtifactLabel?: string;
+        trustSummary?: string;
         title: string;
         caseStatus: CaseStatus;
         generatedAt: string;
@@ -249,6 +262,11 @@ export interface ConversationThinkingState {
   steps: string[];
 }
 
+export interface ConversationThinkingPlan {
+  mode: ThinkingMode;
+  steps: string[];
+}
+
 export interface ConversationMeta {
   intents: ConversationIntent[];
   primaryStage: WorkflowStage;
@@ -258,6 +276,23 @@ export interface ConversationMeta {
   caseOperation: ConversationCaseOperation;
   responseMode: ConversationResponseMode;
   thinking: ConversationThinkingState;
+  analysisSource?: "llm";
+  analysisVersion?: string;
+}
+
+export interface ConversationTurnAnalysis {
+  intents: ConversationIntent[];
+  sourceShape: ConversationSourceShape;
+  caseOperation: ConversationCaseOperation;
+  responseMode: ConversationResponseMode;
+  thinking: ConversationThinkingPlan;
+  knownFacts: FactItem[];
+  assumptions: AssumptionItem[];
+  riskFlags: string[];
+  summaryRequested: boolean;
+  assistantReplyDraft?: string | null;
+  suggestedCaseTitle?: string | null;
+  reasoningNotes?: string | null;
 }
 
 export interface ConversationInputContext {

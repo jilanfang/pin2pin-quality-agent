@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { postEvidenceHandler } from "@/lib/server/api";
+import { handleApiRouteError } from "@/lib/server/api-error";
 import { assertAuthenticated, getServerAuthState } from "@/lib/server/auth";
 
 export async function POST(
@@ -15,10 +16,6 @@ export async function POST(
     const payload = await postEvidenceHandler(caseId, body, auth);
     return NextResponse.json(payload);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unexpected error";
-    return NextResponse.json(
-      { error: message },
-      { status: message === "Authentication required" ? 401 : 400 }
-    );
+    return handleApiRouteError(error);
   }
 }

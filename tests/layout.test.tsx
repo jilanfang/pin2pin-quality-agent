@@ -16,7 +16,7 @@ describe("RootLayout", () => {
     expect(markup).toContain('aria-label="工具侧栏"');
     expect(markup).toContain("总览");
     expect(markup).toContain("调查");
-    expect(markup).toContain("方法助手");
+    expect(markup).toContain("方法问题");
     expect(markup).toContain("layout-child");
     expect(markup).not.toContain("Workspace");
     expect(markup).not.toContain("CASE + CHAT ONLY");

@@ -35,7 +35,7 @@ describe("server api overview and copilot", () => {
     expect(payload.stats.activeInvestigations).toBe(1);
   });
 
-  it("returns a stable fallback answer from copilot api when llm is unavailable", async () => {
+  it("returns a 503 error from copilot api when llm is unavailable", async () => {
     vi.doMock("@/lib/server/auth", () => ({
       getServerAuthState: async () => ({
         authEnabled: true,
@@ -47,9 +47,12 @@ describe("server api overview and copilot", () => {
     }));
 
     vi.doMock("@/lib/server/api", () => ({
-      postCopilotHandler: async () => ({
-        answer: "当前未接通在线模型，请先根据既有质量体系与内部规范进行判断。",
-      }),
+      postCopilotHandler: async () => {
+        throw Object.assign(new Error("当前模型服务不可用，本次调查输入未被处理，请稍后重试。"), {
+          code: "llm_required_unavailable",
+          status: 503,
+        });
+      },
     }));
 
     const route = await import("@/app/api/copilot/route");
@@ -61,7 +64,8 @@ describe("server api overview and copilot", () => {
     );
     const payload = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(payload.answer).toContain("当前未接通在线模型");
+    expect(response.status).toBe(503);
+    expect(payload.code).toBe("llm_required_unavailable");
+    expect(payload.error).toContain("当前模型服务不可用");
   });
 });

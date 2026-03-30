@@ -34,7 +34,7 @@ function stubHomePageFetch(hasItems = true) {
                     caseId: "case-1",
                     caseTitle: "钽电容反向贴装客诉",
                     artifactKind: "analysis_summary",
-                    artifactLabel: "分析结论",
+                    artifactLabel: "24h 初版 8D / 快速响应版",
                     href: "/investigations/case-1?preview=analysis_summary",
                   },
                 ]
@@ -55,15 +55,16 @@ describe("HomePage", () => {
     const page = await HomePage();
     render(page);
 
-    await screen.findByRole("heading", { name: "把现场碎片，推进成可交付调查" });
+    await screen.findByRole("heading", { name: "导入客诉材料，生成 24h 初版 8D" });
 
-    expect(screen.getByRole("button", { name: "开始新调查" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "开始快速响应" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "继续最近调查" })).toHaveAttribute(
       "href",
       "/investigations/case-1"
     );
     expect(screen.getByText("最近调查")).toBeInTheDocument();
-    expect(screen.getByText("方法助手")).toBeInTheDocument();
+    expect(screen.getByText("补充方法问题")).toBeInTheDocument();
+    expect(screen.getByText("24h 初版 8D / 快速响应版")).toBeInTheDocument();
     expect(screen.queryByText("Fireline Workspace")).not.toBeInTheDocument();
   });
 
@@ -73,10 +74,10 @@ describe("HomePage", () => {
     const page = await HomePage();
     render(page);
 
-    await screen.findByRole("heading", { name: "把现场碎片，推进成可交付调查" });
+    await screen.findByRole("heading", { name: "导入客诉材料，生成 24h 初版 8D" });
 
-    expect(screen.getByText("还没有调查，先开始新调查。")).toBeInTheDocument();
+    expect(screen.getByText("还没有异常响应，先开始快速响应。")).toBeInTheDocument();
     expect(screen.queryByText("钽电容反向贴装客诉")).not.toBeInTheDocument();
-    expect(screen.queryByText("分析结论")).not.toBeInTheDocument();
+    expect(screen.queryByText("24h 初版 8D / 快速响应版")).not.toBeInTheDocument();
   });
 });

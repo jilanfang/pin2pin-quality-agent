@@ -89,11 +89,11 @@ export function Overview() {
       <section className="overview-hero overview-panel">
         <div className="overview-hero-copy">
           <span className="overview-eyebrow">总览</span>
-          <h1>把现场碎片，推进成可交付调查</h1>
-          <p>围绕异常响应、调查推进和结果输出，先把第一步做对，再让 AI 带着往前走。</p>
+          <h1>导入客诉材料，生成 24h 初版 8D</h1>
+          <p>先把投诉邮件、会议纪要、照片和现场碎片收拢成一版能交差的快速响应版，再继续补验证。</p>
           <div className="overview-hero-actions">
             <button type="button" className="overview-primary" onClick={() => void startNewInvestigation()} disabled={creating}>
-              {creating ? "创建中…" : "开始新调查"}
+              {creating ? "创建中…" : "开始快速响应"}
             </button>
             <a
               className="overview-secondary"
@@ -142,8 +142,8 @@ export function Overview() {
             </div>
           ) : (
             <div className="overview-empty">
-              <strong>还没有调查，先开始新调查。</strong>
-              <p>从一条真实异常开始，先把问题定义和当前边界跑通。</p>
+              <strong>还没有异常响应，先开始快速响应。</strong>
+              <p>从一条真实客诉或现场异常开始，先把 24h 初版站稳。</p>
             </div>
           )}
         </section>
@@ -166,19 +166,19 @@ export function Overview() {
           ) : (
             <div className="overview-empty">
               <strong>还没有可直接查看的结果产物。</strong>
-              <p>先推进一条调查，随后再回到这里查看分析结论或行动方案。</p>
+              <p>先推进一条异常响应，随后再回到这里查看 24h 初版 8D 或行动方案。</p>
             </div>
           )}
         </section>
 
         <section className="overview-panel overview-copilot-card">
           <div className="overview-section-head">
-            <h2>方法助手</h2>
+            <h2>补充方法问题</h2>
             <a href="/copilot">进入</a>
           </div>
-          <p>脱离具体调查也能直接提问，适合快速确认 8D、CAPA、5Why、FMEA 等方法问题。</p>
+          <p>需要脱离具体 case 补问 8D、CAPA、5Why、FMEA 等方法问题时，再进这里。</p>
           <a className="overview-secondary" href="/copilot">
-            打开 8D / 质量方法助手
+            打开方法助手
           </a>
         </section>
       </section>

@@ -71,6 +71,17 @@ type ResultRecommendation = {
   primaryActionLabel: string;
   secondaryActionLabel?: string;
   deferActionLabel?: string;
+  displayKindLabel?: string;
+};
+
+type CasePresentation = {
+  isUrgentCustomerComplaint: boolean;
+  primaryNarrative: string;
+  primaryArtifactLabel: string;
+  primaryArtifactShortLabel: string;
+  factSectionLabel: string;
+  assumptionSectionLabel: string;
+  sourceLabel: string;
 };
 
 type ConversationMeta = {
@@ -126,11 +137,14 @@ type CaseWorkflow = {
   resultReadiness: ResultReadiness;
   resultRecommendation: ResultRecommendation;
   conversationMeta: ConversationMeta;
+  presentation?: CasePresentation;
 };
 
 type ReportPreview = {
   document: {
     artifactKind?: string;
+    displayArtifactLabel?: string;
+    trustSummary?: string;
     reportStage?: string;
     styleMode?: string;
     title?: string;
@@ -478,7 +492,7 @@ function WorkspaceContextHeader({
     <header className="workspace-context" aria-label="调查上下文">
       <div className="workspace-context-main">
         <div className="workspace-context-copy">
-          <strong>质量调查工作台</strong>
+          <strong>{currentCase?.presentation?.isUrgentCustomerComplaint ? "客诉快速响应工作台" : "质量调查工作台"}</strong>
           <span className="workspace-context-meta">
             {currentCaseId ? `当前调查 #${currentCaseId.toUpperCase()}` : "当前调查未初始化"}
           </span>
@@ -539,6 +553,7 @@ function AssistantStageCard({
   currentCase,
   pendingCaseConfirmation,
   selectedStage,
+  presentation,
   summaryItems,
   impactSummary,
   rebuildReviewCard,
@@ -560,6 +575,7 @@ function AssistantStageCard({
   currentCase: CaseWorkflow | null;
   pendingCaseConfirmation: PendingCaseConfirmation | null;
   selectedStage: StageRecord | null;
+  presentation: CasePresentation | null;
   summaryItems: SummaryItem[];
   impactSummary: string | null;
   rebuildReviewCard: RebuildReviewCard | null;
@@ -679,7 +695,7 @@ function AssistantStageCard({
       ) : null}
       <div className="copilot-grid">
         <section className="copilot-panel copilot-panel-primary">
-          <span className="copilot-label">已知事实</span>
+          <span className="copilot-label">{presentation?.factSectionLabel ?? "已知事实"}</span>
           {guidanceFactsList.length ? (
             <ul className="list compact-list">
               {guidanceFactsList.map((item) => (
@@ -689,10 +705,11 @@ function AssistantStageCard({
           ) : (
             <p className="copilot-empty">还没有稳定事实，先补现象、时间、批次和影响范围。</p>
           )}
+          <div className="mini-note">{presentation?.sourceLabel ?? "来源：当前对话材料"}</div>
         </section>
 
         <section className="copilot-panel">
-          <span className="copilot-label">当前缺口</span>
+          <span className="copilot-label">{presentation?.assumptionSectionLabel ?? "待验证假设"}</span>
           {currentCase?.missingFields.length ? (
             <ul className="list compact-list">
               {currentCase.missingFields.slice(0, 3).map((item) => (
@@ -736,13 +753,14 @@ function AssistantStageCard({
 
         {resultRecommendation ? (
           <section className="copilot-panel">
-            <span className="copilot-label">当前建议整理</span>
-            <p className="copilot-next">
-              {resultRecommendation.kind === "analysis_summary"
-                ? "分析结论"
-                : resultRecommendation.kind === "action_plan"
-                  ? "行动方案"
-                  : "8D"}
+              <span className="copilot-label">当前建议整理</span>
+              <p className="copilot-next">
+              {resultRecommendation.displayKindLabel ??
+                (resultRecommendation.kind === "analysis_summary"
+                  ? "分析结论"
+                  : resultRecommendation.kind === "action_plan"
+                    ? "行动方案"
+                    : "8D")}
             </p>
             <div className="mini-note">{resultRecommendation.rationale}</div>
           </section>
@@ -1015,8 +1033,8 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
     [currentCase]
   );
   const nextQuestion = currentCase?.guidedThinking?.suggestedQuestions[0] ?? null;
-  const isUrgentComplaint =
-    factValue(currentCase?.knownFacts ?? [], "mode") === "customer_complaint_urgent";
+  const presentation = currentCase?.presentation ?? null;
+  const isUrgentComplaint = presentation?.isUrgentCustomerComplaint ?? false;
   const resultRecommendation = currentCase?.resultRecommendation ?? null;
   const expertReviewSnapshot = buildExpertReviewSnapshot(currentCase);
   const impactSummary = currentImpactSummary(currentCase);
@@ -1054,11 +1072,12 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
               key: "output",
               label: "当前建议",
               value:
-                resultRecommendation.kind === "analysis_summary"
+                resultRecommendation.displayKindLabel ??
+                (resultRecommendation.kind === "analysis_summary"
                   ? "分析结论"
                   : resultRecommendation.kind === "action_plan"
                     ? "行动方案"
-                    : "8D",
+                    : "8D"),
               tone: "signal" as const,
             },
           ]
@@ -1639,6 +1658,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
                   currentCase={currentCase}
                   pendingCaseConfirmation={pendingCaseConfirmation}
                   selectedStage={selectedStage}
+                  presentation={presentation}
                   summaryItems={summaryItems}
                   impactSummary={impactSummary}
                   rebuildReviewCard={rebuildReviewCard}
@@ -1711,9 +1731,10 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
               <strong>{preview.document.title ?? "HTML 预览"}</strong>
             </div>
             <div className="preview-meta">
-              <span>类型：{preview.document.artifactKind ?? preview.document.reportStage ?? "analysis_summary"}</span>
+              <span>类型：{preview.document.displayArtifactLabel ?? preview.document.artifactKind ?? preview.document.reportStage ?? "analysis_summary"}</span>
               <span>状态：{preview.document.caseStatus}</span>
             </div>
+            {preview.document.trustSummary ? <div className="mini-note">{preview.document.trustSummary}</div> : null}
             <div className="preview-body">
               <iframe
                 className="html-preview"

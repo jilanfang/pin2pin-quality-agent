@@ -51,9 +51,9 @@ export function Copilot() {
   return (
     <main className="copilot-page" aria-label="方法助手页">
       <section className="copilot-hero copilot-panel">
-        <span className="copilot-eyebrow">方法助手</span>
-        <h1>8D / 质量方法助手</h1>
-        <p>脱离具体调查也能直接提问，适合快速确认 8D、CAPA、5Why、FMEA、控制计划等方法问题。</p>
+        <span className="copilot-eyebrow">方法问题</span>
+        <h1>补充问 8D / 质量方法</h1>
+        <p>脱离具体 case 也能直接提问，适合补问 8D、CAPA、5Why、FMEA、控制计划等方法问题。</p>
       </section>
 
       <section className="copilot-panel">

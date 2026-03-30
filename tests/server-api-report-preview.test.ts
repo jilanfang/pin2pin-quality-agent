@@ -41,6 +41,42 @@ describe("server api report preview", () => {
     expect(payload.html).not.toContain("完整 8D");
   });
 
+  it("keeps internal artifact kind but exposes 24h initial 8D display wording for urgent complaints", async () => {
+    delete process.env.DATABASE_URL;
+
+    const { createCaseAggregate, applyEvidence, confirmStage } = await import("@/lib/domain/workflow-engine");
+    const { getCaseStore } = await import("@/lib/server/case-store");
+    const { reportPreviewHandler } = await import("@/lib/server/api");
+
+    const store = getCaseStore();
+    let aggregate = createCaseAggregate("客户停线 24h 回复");
+    aggregate = applyEvidence(aggregate, {
+      content:
+        "客户大麦科技反馈 MCU-800 上电冒烟并停线，要求立刻停止发货并在24小时内回复，客户现场已封存待检。",
+      contextStage: "D2",
+    });
+    aggregate = confirmStage(aggregate, { stage: "D2" });
+    aggregate = applyEvidence(aggregate, {
+      content: "已冻结已发货批次、扣留库存、暂停在制品投线。",
+      contextStage: "D3",
+    });
+    aggregate = applyEvidence(aggregate, {
+      content: "怀疑连接器处短路，但仍需继续验证失效位置和原因链。",
+      contextStage: "D4",
+    });
+    await store.saveCase(aggregate);
+
+    const payload = await reportPreviewHandler(
+      aggregate.caseRecord.id,
+      new URLSearchParams({ artifact: "analysis_summary" })
+    );
+
+    expect(payload.document.artifactKind).toBe("analysis_summary");
+    expect(payload.document.displayArtifactLabel).toBe("24h 初版 8D / 快速响应版");
+    expect(payload.document.title).toBe("24h 初版 8D");
+    expect(payload.document.trustSummary).toBe("已确认事实需继续回看原材料，待验证项不能直接写成结论。");
+  });
+
   it("returns interim html without persisting a final 8D document", async () => {
     delete process.env.DATABASE_URL;
 

@@ -42,6 +42,7 @@ async (page) => {
   const pageErrors = [];
   const failedResponses = [];
   const staticResponses = [];
+  let currentStep = "boot";
 
   async function fillComposerAndWait(text) {
     const composer = page.getByLabel("证据输入框");
@@ -79,6 +80,8 @@ async (page) => {
   });
 
   page.setDefaultTimeout(30000);
+
+  try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
 
   if (page.url().includes("/login")) {
@@ -98,17 +101,22 @@ async (page) => {
   }
 
   const smokeTitle = "browser-smoke-" + Date.now();
+  currentStep = "overview_loaded";
+  console.log("STEP: overview_loaded");
   await page.getByRole("heading", { name: "把现场碎片，推进成可交付调查" }).waitFor({ timeout: 30000 });
   await Promise.all([
     page.waitForURL((url) => url.pathname.startsWith("/investigations/"), { timeout: 30000 }),
     page.getByRole("button", { name: "开始新调查" }).click(),
   ]);
 
+  console.log("STEP: investigation_created");
   await page.getByText("AI 协作区").waitFor({ timeout: 30000 });
   await page.getByLabel("证据输入框").waitFor({ timeout: 30000 });
   await page.getByText(/当前调查 #/).waitFor({ timeout: 30000 });
 
   await fillComposerAndWait(evidenceText);
+  currentStep = "first_evidence_waiting_response";
+  console.log("STEP: first_evidence_ready");
 
   await Promise.all([
     page.waitForResponse(
@@ -120,9 +128,12 @@ async (page) => {
     ),
     page.getByRole("button", { name: "发送证据" }).click(),
   ]);
+  console.log("STEP: first_evidence_sent");
   await page.getByText("我先帮你接下这个案件").waitFor({ timeout: 30000 });
 
   await fillComposerAndWait(correctionText);
+  currentStep = "correction_waiting_response";
+  console.log("STEP: correction_ready");
   await Promise.all([
     page.waitForResponse(
       (response) =>
@@ -134,9 +145,12 @@ async (page) => {
     page.getByRole("button", { name: "发送证据" }).click(),
   ]);
 
+  console.log("STEP: correction_sent");
   await page.getByText("正在回看前序判断").waitFor({ timeout: 30000 });
 
   await fillComposerAndWait(summaryText);
+  currentStep = "summary_waiting_response";
+  console.log("STEP: summary_ready");
   await Promise.all([
     page.waitForResponse(
       (response) =>
@@ -148,6 +162,7 @@ async (page) => {
     page.getByRole("button", { name: "发送证据" }).click(),
   ]);
 
+  console.log("STEP: summary_sent");
   await page.getByText("当前情况总结").first().waitFor({ timeout: 30000 });
   await page.getByRole("button", { name: "整理分析结论" }).waitFor({ timeout: 30000 });
   await page.getByRole("button", { name: "整理分析结论" }).click();
@@ -155,6 +170,7 @@ async (page) => {
   await page.getByTitle("分析结论预览").waitFor({ timeout: 30000 });
   await page.getByRole("button", { name: "关闭预览" }).click();
   await page.getByLabel("报告预览抽屉").waitFor({ state: "hidden", timeout: 30000 });
+  console.log("STEP: analysis_preview_closed");
 
   const caseRailButton = page.getByRole("button", { name: "调查" });
   if (await caseRailButton.isVisible().catch(() => false)) {
@@ -171,8 +187,11 @@ async (page) => {
   await page.getByRole("button", { name: "创建调查" }).click();
   await page.getByRole("heading", { name: "钽电容反向贴装客诉案例" }).waitFor({ timeout: 30000 });
   await page.getByText("AI 协作区").waitFor({ timeout: 30000 });
+  console.log("STEP: seeded_case_created");
 
   await fillComposerAndWait(actionPlanText);
+  currentStep = "action_plan_waiting_response";
+  console.log("STEP: action_plan_ready");
   await Promise.all([
     page.waitForResponse(
       (response) =>
@@ -184,14 +203,18 @@ async (page) => {
     page.getByRole("button", { name: "发送证据" }).click(),
   ]);
 
+  console.log("STEP: action_plan_sent");
   await page.getByRole("button", { name: "整理行动方案" }).waitFor({ timeout: 30000 });
   await page.getByRole("button", { name: "整理行动方案" }).click();
   await page.getByLabel("报告预览抽屉").waitFor({ timeout: 30000 });
   await page.getByText("类型：action_plan").waitFor({ timeout: 30000 });
   await page.getByRole("button", { name: "关闭预览" }).click();
   await page.getByLabel("报告预览抽屉").waitFor({ state: "hidden", timeout: 30000 });
+  console.log("STEP: action_plan_preview_closed");
 
   await fillComposerAndWait(caseConfirmText);
+  currentStep = "case_confirm_waiting_response";
+  console.log("STEP: case_confirm_ready");
   await Promise.all([
     page.waitForResponse(
       (response) =>
@@ -203,6 +226,7 @@ async (page) => {
     page.getByRole("button", { name: "发送证据" }).click(),
   ]);
 
+  console.log("STEP: case_confirm_prompted");
   await page.getByTestId("new-case-confirmation-card").waitFor({ timeout: 30000 });
   await page.getByText("我判断这更像另一条新调查").first().waitFor({ timeout: 30000 });
   await Promise.all([
@@ -215,6 +239,7 @@ async (page) => {
     ),
     page.getByRole("button", { name: "继续当前调查" }).click(),
   ]);
+  console.log("STEP: case_confirm_resolved");
 
   if (!staticResponses.some((item) => item.status === 200)) {
     throw new Error("No successful _next/static response captured");
@@ -240,6 +265,9 @@ async (page) => {
     consoleErrorCount: consoleErrors.length,
     pageErrorCount: pageErrors.length,
   };
+  } catch (error) {
+    throw new Error(`STEP=${currentStep} :: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 EOF
 

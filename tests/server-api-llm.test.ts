@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { buildConversationLlmResponse } from "@/tests/test-helpers/conversation-llm";
+
 describe("server api llm integration", () => {
   const previousDatabaseUrl = process.env.DATABASE_URL;
   const previousStorePath = process.env.AI_QUALITY_STORE_PATH;
   const previousLlmEnabled = process.env.AI_QUALITY_LLM_ENABLED;
+  const previousRuleBaseline = process.env.AI_QUALITY_LLM_RULE_BASELINE;
   const previousProvider = process.env.AI_QUALITY_LLM_PROVIDER;
   const previousDashscopeKey = process.env.DASHSCOPE_API_KEY;
   const previousModel = process.env.AI_QUALITY_LLM_MODEL_EXTRACT;
@@ -15,6 +18,8 @@ describe("server api llm integration", () => {
     else process.env.AI_QUALITY_STORE_PATH = previousStorePath;
     if (previousLlmEnabled === undefined) delete process.env.AI_QUALITY_LLM_ENABLED;
     else process.env.AI_QUALITY_LLM_ENABLED = previousLlmEnabled;
+    if (previousRuleBaseline === undefined) delete process.env.AI_QUALITY_LLM_RULE_BASELINE;
+    else process.env.AI_QUALITY_LLM_RULE_BASELINE = previousRuleBaseline;
     if (previousProvider === undefined) delete process.env.AI_QUALITY_LLM_PROVIDER;
     else process.env.AI_QUALITY_LLM_PROVIDER = previousProvider;
     if (previousDashscopeKey === undefined) delete process.env.DASHSCOPE_API_KEY;
@@ -37,18 +42,12 @@ describe("server api llm integration", () => {
       const url = String(input);
       if (url === "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions") {
         return new Response(
-          JSON.stringify({
-            choices: [
-              {
-                message: {
-                  content: JSON.stringify({
-                    knownFacts: [{ field: "customer", value: "大麦科技", confidence: 0.96 }],
-                    assumptions: [],
-                    riskFlags: [],
-                  }),
-                },
-              },
-            ],
+          buildConversationLlmResponse({
+            content: "客户那边又炸了，情况很急。",
+            contextStage: "D2",
+            currentCaseTitle: "LLM API",
+            currentKnownFacts: [],
+            knownFacts: [{ field: "customer", value: "大麦科技", confidence: 0.96 }],
           }),
           { status: 200 }
         );
@@ -57,7 +56,7 @@ describe("server api llm integration", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { createCaseAggregate, applyEvidence } = await import("@/lib/domain/workflow-engine");
+    const { createCaseAggregate } = await import("@/lib/domain/workflow-engine");
     const { getCaseStore } = await import("@/lib/server/case-store");
     const { postEvidenceHandler } = await import("@/lib/server/api");
 
@@ -75,12 +74,42 @@ describe("server api llm integration", () => {
       expect.any(Object)
     );
     expect(payload.knownFacts.find((item) => item.field === "customer")?.value).toBe("大麦科技");
+    expect(payload.conversationMeta?.analysisSource).toBe("llm");
+    expect(payload.conversationMeta?.analysisVersion).toBeTruthy();
   }, 15000);
+
+  it("fails closed without mutating the case when conversation llm is disabled", async () => {
+    delete process.env.DATABASE_URL;
+    process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-server-api-llm-${Date.now()}-blocked.json`;
+    process.env.AI_QUALITY_LLM_ENABLED = "false";
+
+    const { createCaseAggregate } = await import("@/lib/domain/workflow-engine");
+    const { getCaseStore } = await import("@/lib/server/case-store");
+    const { postEvidenceHandler } = await import("@/lib/server/api");
+
+    const store = getCaseStore();
+    const aggregate = createCaseAggregate("LLM blocked");
+    await store.saveCase(aggregate);
+
+    await expect(
+      postEvidenceHandler(aggregate.caseRecord.id, {
+        content: "客户大麦科技反馈 MCU-800 产线停线。",
+        contextStage: "D2",
+      })
+    ).rejects.toMatchObject({
+      code: "llm_required_unavailable",
+    });
+
+    const reloaded = await store.getCase(aggregate.caseRecord.id);
+    expect(reloaded?.messages).toHaveLength(0);
+    expect(reloaded?.knownFacts).toHaveLength(0);
+  });
 
   it("returns a current-state summary when the user asks for a summary mid-conversation", async () => {
     delete process.env.DATABASE_URL;
     process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-server-api-llm-${Date.now()}-2.json`;
     process.env.AI_QUALITY_LLM_ENABLED = "false";
+    process.env.AI_QUALITY_LLM_RULE_BASELINE = "true";
 
     const { getCaseStore } = await import("@/lib/server/case-store");
     const { buildSeedCase } = await import("@/lib/domain/seed-cases");
@@ -113,6 +142,7 @@ describe("server api llm integration", () => {
     delete process.env.DATABASE_URL;
     process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-server-api-llm-${Date.now()}-3.json`;
     process.env.AI_QUALITY_LLM_ENABLED = "false";
+    process.env.AI_QUALITY_LLM_RULE_BASELINE = "true";
 
     const { getCaseStore } = await import("@/lib/server/case-store");
     const { createCaseAggregate } = await import("@/lib/domain/workflow-engine");
@@ -139,6 +169,7 @@ describe("server api llm integration", () => {
     delete process.env.DATABASE_URL;
     process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-server-api-llm-${Date.now()}-4.json`;
     process.env.AI_QUALITY_LLM_ENABLED = "false";
+    process.env.AI_QUALITY_LLM_RULE_BASELINE = "true";
 
     const { getCaseStore } = await import("@/lib/server/case-store");
     const { buildSeedCase } = await import("@/lib/domain/seed-cases");
@@ -164,6 +195,7 @@ describe("server api llm integration", () => {
     delete process.env.DATABASE_URL;
     process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-server-api-llm-${Date.now()}-5.json`;
     process.env.AI_QUALITY_LLM_ENABLED = "false";
+    process.env.AI_QUALITY_LLM_RULE_BASELINE = "true";
 
     const { getCaseStore } = await import("@/lib/server/case-store");
     const { buildSeedCase } = await import("@/lib/domain/seed-cases");
@@ -190,6 +222,7 @@ describe("server api llm integration", () => {
     delete process.env.DATABASE_URL;
     process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-server-api-llm-${Date.now()}-6.json`;
     process.env.AI_QUALITY_LLM_ENABLED = "false";
+    process.env.AI_QUALITY_LLM_RULE_BASELINE = "true";
 
     const { getCaseStore } = await import("@/lib/server/case-store");
     const { createCaseAggregate } = await import("@/lib/domain/workflow-engine");
@@ -222,6 +255,7 @@ describe("server api llm integration", () => {
     delete process.env.DATABASE_URL;
     process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-server-api-llm-${Date.now()}-7.json`;
     process.env.AI_QUALITY_LLM_ENABLED = "false";
+    process.env.AI_QUALITY_LLM_RULE_BASELINE = "true";
 
     const { getCaseStore } = await import("@/lib/server/case-store");
     const { createCaseAggregate } = await import("@/lib/domain/workflow-engine");
@@ -246,6 +280,7 @@ describe("server api llm integration", () => {
     delete process.env.DATABASE_URL;
     process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-server-api-llm-${Date.now()}-8.json`;
     process.env.AI_QUALITY_LLM_ENABLED = "false";
+    process.env.AI_QUALITY_LLM_RULE_BASELINE = "true";
 
     const { getCaseStore } = await import("@/lib/server/case-store");
     const { createCaseAggregate } = await import("@/lib/domain/workflow-engine");
@@ -275,6 +310,7 @@ describe("server api llm integration", () => {
     delete process.env.DATABASE_URL;
     process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-server-api-llm-${Date.now()}-9.json`;
     process.env.AI_QUALITY_LLM_ENABLED = "false";
+    process.env.AI_QUALITY_LLM_RULE_BASELINE = "true";
 
     const { getCaseStore } = await import("@/lib/server/case-store");
     const { buildSeedCase } = await import("@/lib/domain/seed-cases");

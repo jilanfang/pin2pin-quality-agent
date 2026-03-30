@@ -1,23 +1,22 @@
 import { z } from "zod";
 
 import type {
-  ConversationCaseOperation,
   ConversationIntent,
+  ConversationTurnAnalysis,
   ConversationMeta,
-  ConversationResponseMode,
-  ConversationSourceShape,
   ConversationThinkingState,
   ReportBuildOptions,
   ResultArtifactKind,
   StyleMode,
   WorkflowStage,
 } from "@/lib/domain/types";
-import { buildActionPlan, buildAnalysisSummary, buildOutputDocument } from "@/lib/domain/report-builder";
 import {
-  detectConversationCaseOperation,
-  detectConversationIntents,
-  detectConversationSourceShape,
-} from "@/lib/domain/conversation-input";
+  buildActionPlan,
+  buildAnalysisSummary,
+  buildCasePresentation,
+  buildOutputDocument,
+  buildResultRecommendation,
+} from "@/lib/domain/report-builder";
 import {
   applyEvidence,
   confirmStage,
@@ -26,7 +25,12 @@ import {
 } from "@/lib/domain/workflow-engine";
 import { type SeedCaseKey } from "@/lib/domain/seed-cases";
 import { getCaseStore } from "@/lib/server/case-store";
-import { askCopilotWithLlm, extractEvidenceWithLlm } from "@/lib/server/llm";
+import {
+  analyzeConversationTurnWithLlm,
+  askCopilotWithLlm,
+  conversationAnalysisVersion,
+  ruleBaselineConversationAnalysisVersion,
+} from "@/lib/server/llm";
 import {
   serializeCaseSummary,
   serializeCaseWorkflow,
@@ -159,29 +163,10 @@ function buildThinkingState(intents: ConversationIntent[]): ConversationThinking
   };
 }
 
-function determineResponseMode(
-  intents: ConversationIntent[],
-  _next: ReturnType<typeof applyEvidence>
-): ConversationResponseMode {
-  if (intents.includes("decision_signal") || intents.includes("summary_request")) {
-    return "result_action";
-  }
-
-  if (intents.includes("question") && !intents.includes("evidence")) {
-    return "inform";
-  }
-
-  return "guide";
-}
-
 function buildConversationMeta(
-  intents: ConversationIntent[],
   primaryStage: WorkflowStage,
   next: ReturnType<typeof applyEvidence>,
-  options: {
-    sourceShape: ConversationSourceShape;
-    caseOperation: ConversationCaseOperation;
-  }
+  analysis: ConversationTurnAnalysis
 ): ConversationMeta {
   const impactedStages = (["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8"] as WorkflowStage[]).filter(
     (stage) => next.stages[stage].impacted
@@ -191,14 +176,23 @@ function buildConversationMeta(
   );
 
   return {
-    intents,
+    intents: analysis.intents,
     primaryStage,
     relatedStages,
     impactedStages,
-    sourceShape: options.sourceShape,
-    caseOperation: options.caseOperation,
-    responseMode: determineResponseMode(intents, next),
-    thinking: buildThinkingState(intents),
+    sourceShape: analysis.sourceShape,
+    caseOperation: analysis.caseOperation,
+    responseMode: analysis.responseMode,
+    thinking: {
+      ...buildThinkingState(analysis.intents),
+      mode: analysis.thinking.mode,
+      steps: analysis.thinking.steps,
+    },
+    analysisSource: "llm",
+    analysisVersion:
+      analysis.reasoningNotes === "rule_baseline"
+        ? ruleBaselineConversationAnalysisVersion()
+        : conversationAnalysisVersion(),
   };
 }
 
@@ -265,13 +259,15 @@ export async function getOverviewHandler(context?: RequestUserContext) {
   for (const item of activeCases.slice(0, 3)) {
     const aggregate = await store.getCase(item.id, context?.userId ?? undefined);
     if (!aggregate) continue;
-    const analysisSummary = buildAnalysisSummary(aggregate);
-    if (analysisSummary.confirmedFacts.length > 0) {
+    const presentation = buildCasePresentation(aggregate);
+    const recommendation = buildResultRecommendation(aggregate);
+
+    if (recommendation.kind === "analysis_summary") {
       artifactHighlights.push({
         caseId: item.id,
         caseTitle: item.title,
         artifactKind: "analysis_summary" as const,
-        artifactLabel: "分析结论",
+        artifactLabel: presentation.primaryArtifactLabel,
         href: `/investigations/${item.id}?preview=analysis_summary`,
       });
       continue;
@@ -347,39 +343,37 @@ export async function postEvidenceHandler(caseId: string, payload: unknown, cont
   if (!aggregate) {
     throw new Error("Case not found");
   }
-  const intents = detectConversationIntents(parsed.content);
-  const sourceShape = detectConversationSourceShape(parsed.content, intents);
   const isFirstTurn = aggregate.messages.filter((item) => item.role === "user").length === 0;
-  const caseOperation = detectConversationCaseOperation({
-    content: parsed.content,
+  const analysis = await analyzeConversationTurnWithLlm(parsed, {
     currentCaseTitle: aggregate.caseRecord.title,
     currentKnownFacts: aggregate.knownFacts,
-    sourceShape,
     hasCurrentCase: true,
   });
+  const primaryStage = parsed.contextStage ?? aggregate.caseRecord.currentStage;
   const shouldHoldForConfirmation =
-    caseOperation === "needs_case_confirmation" && parsed.forceCaseConfirmation !== "attach_to_current_case";
+    analysis.caseOperation === "needs_case_confirmation" &&
+    parsed.forceCaseConfirmation !== "attach_to_current_case";
   if (shouldHoldForConfirmation) {
-    const conversationMeta = buildConversationMeta(
-      intents,
-      parsed.contextStage ?? aggregate.caseRecord.currentStage,
-      aggregate,
-      {
-        sourceShape,
-        caseOperation,
-      }
-    );
+    const conversationMeta = buildConversationMeta(primaryStage, aggregate, analysis);
     return serializeCaseWorkflow(aggregate, conversationMeta);
   }
-  const llmExtraction = await extractEvidenceWithLlm(parsed);
   const next = applyEvidence(aggregate, parsed, {
-    llmExtraction,
+    llmExtraction: {
+      knownFacts: analysis.knownFacts,
+      assumptions: analysis.assumptions,
+      riskFlags: analysis.riskFlags,
+    },
     inputContext: {
-      sourceShape,
+      sourceShape: analysis.sourceShape,
       isFirstTurn,
     },
   });
-  if (intents.includes("summary_request")) {
+  const latestAssistantIndex = [...next.messages]
+    .map((item, index) => ({ item, index }))
+    .reverse()
+    .find(({ item }) => item.role === "assistant" && item.messageType === "assistant_note")?.index;
+
+  if (analysis.summaryRequested) {
     next.messages.push({
       id: `msg-${Math.random().toString(36).slice(2, 10)}`,
       role: "assistant",
@@ -387,6 +381,11 @@ export async function postEvidenceHandler(caseId: string, payload: unknown, cont
       messageType: "assistant_note",
       createdAt: new Date().toISOString(),
     });
+  } else if (analysis.assistantReplyDraft && latestAssistantIndex !== undefined) {
+    next.messages[latestAssistantIndex] = {
+      ...next.messages[latestAssistantIndex],
+      content: analysis.assistantReplyDraft,
+    };
   }
   await store.saveCase(next);
   await safeRecordEvent({
@@ -394,15 +393,7 @@ export async function postEvidenceHandler(caseId: string, payload: unknown, cont
     caseId,
     metadata: { contextStage: parsed.contextStage ?? "D2" },
   });
-  const conversationMeta = buildConversationMeta(
-    intents,
-    parsed.contextStage ?? next.caseRecord.currentStage,
-    next,
-    {
-      sourceShape,
-      caseOperation,
-    }
-  );
+  const conversationMeta = buildConversationMeta(primaryStage, next, analysis);
   return serializeCaseWorkflow(next, conversationMeta);
 }
 
@@ -411,9 +402,7 @@ export async function postCopilotHandler(payload: unknown) {
   const answer = await askCopilotWithLlm(parsed.prompt);
 
   return {
-    answer:
-      answer ??
-      "当前未接通在线模型，请先根据既有质量体系与内部规范进行判断。建议你优先确认问题定义、临时遏制、根因链路和验证方式，再继续推进 8D。",
+    answer,
   };
 }
 

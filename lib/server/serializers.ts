@@ -1,6 +1,7 @@
 import {
   buildActionPlan,
   buildAnalysisSummary,
+  buildCasePresentation,
   buildOutputDocument,
   buildReportCapabilities,
   buildResultReadiness,
@@ -38,6 +39,7 @@ export function serializeCaseWorkflow(aggregate: CaseAggregate, conversationMeta
     ...view,
     analysisSummary: buildAnalysisSummary(aggregate),
     actionPlan: buildActionPlan(aggregate),
+    presentation: buildCasePresentation(aggregate),
     resultReadiness: buildResultReadiness(aggregate),
     resultRecommendation: buildResultRecommendation(aggregate),
     reportCapabilities: buildReportCapabilities(aggregate),
@@ -51,10 +53,13 @@ export function serializeReportPreview(
 ) {
   if (options.reportStage === "initial_24h") {
     const summary = buildAnalysisSummary(aggregate);
+    const presentation = buildCasePresentation(aggregate);
     return {
       document: {
         artifactKind: "analysis_summary" as const,
-        title: summary.title,
+        displayArtifactLabel: presentation.primaryArtifactLabel,
+        trustSummary: "已确认事实需继续回看原材料，待验证项不能直接写成结论。",
+        title: presentation.isUrgentCustomerComplaint ? "24h 初版 8D" : summary.title,
         caseStatus: aggregate.caseRecord.status,
         generatedAt: new Date().toISOString(),
       },
