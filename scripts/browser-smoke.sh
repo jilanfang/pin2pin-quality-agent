@@ -284,7 +284,7 @@ playwright-cli -s="$SESSION" open about:blank >/dev/null
 SMOKE_OUTPUT="$(playwright-cli -s="$SESSION" run-code "$SMOKE_CODE" 2>&1)"
 printf '%s\n' "$SMOKE_OUTPUT"
 
-if printf '%s\n' "$SMOKE_OUTPUT" | rg -q '^### Error$|^Error: |^TimeoutError:'; then
+if printf '%s\n' "$SMOKE_OUTPUT" | grep -Eq '^### Error$|^Error: |^TimeoutError:'; then
   echo "Browser smoke failed." >&2
   exit 1
 fi
