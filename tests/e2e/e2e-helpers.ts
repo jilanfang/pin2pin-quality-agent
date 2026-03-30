@@ -6,8 +6,12 @@ export const E2E_DATABASE_URL =
 export async function truncateAllTables(): Promise<void> {
   const postgres = (await import("postgres")).default;
   const sql = postgres(E2E_DATABASE_URL, { max: 1 });
-  await sql`TRUNCATE cases, case_messages, case_stages, fact_snapshots, report_versions, artifacts CASCADE`;
-  await sql.end();
+  try {
+    // Keep in sync with lib/db/schema.ts table definitions
+    await sql`TRUNCATE cases, case_messages, case_stages, fact_snapshots, report_versions, artifacts CASCADE`;
+  } finally {
+    await sql.end();
+  }
 }
 
 export function assertFactExtracted(
