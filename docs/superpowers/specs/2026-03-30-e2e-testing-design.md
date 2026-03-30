@@ -34,19 +34,39 @@
 - 数据库: `ai_quality_test`
 - 用户/密码: `test_user` / `test_pass`
 - 连接串: `postgres://test_user:test_pass@localhost:5433/ai_quality_test`
+- 需要 Docker Compose v2（`docker compose` 插件，非 legacy `docker-compose`）
 
 ### LLM Configuration
 
 - 直接读取当前 `.env` 中已配置的真实 API key
 - 测试启动时检查必要的 key 是否存在，缺失则跳过全部 E2E 并输出清晰提示
-- 超时配置: E2E 专用 `AI_QUALITY_LLM_CONVERSATION_TIMEOUT_MS=15000`
+- E2E setup 必须显式设置 `AI_QUALITY_LLM_ENABLED=true`（区别于单元测试的 `false` 约定）
+- 超时配置:
+  - `AI_QUALITY_LLM_CONVERSATION_TIMEOUT_MS=20000`（conversation 能力）
+  - `AI_QUALITY_LLM_COPILOT_TIMEOUT_MS=20000`（copilot 能力）
 - 不创建单独的 `.env.test`，使用 `.env` + 环境变量覆盖 `DATABASE_URL`
 
 ### Schema Setup
 
-- `npm run db:push` 对 test database 执行 schema 同步
+- Schema push 必须通过 shell 环境变量注入 `DATABASE_URL`，确保 drizzle.config.ts 不会回退到默认的 localhost:5432:
+  ```bash
+  DATABASE_URL=postgres://test_user:test_pass@localhost:5433/ai_quality_test npm run db:push
+  ```
 - 每个测试文件 `beforeAll` 验证连接可用
-- 每个测试用例 `afterEach` 清理自己创建的 case 数据
+- 每个测试文件 `beforeEach` 执行 `TRUNCATE ... CASCADE` 清空所有测试表，保证测试间完全隔离（不依赖 `afterEach` 逐条清理，避免测试中途失败导致残留数据）
+
+### Database Connection Singleton 处理
+
+`lib/db/client.ts` 中的 `getDb()` 将连接缓存到 `globalThis.__aiQualitySql`。E2E 测试必须使用与现有测试相同的 `vi.resetModules()` + 动态 import 模式，确保每个测试文件在正确的 `DATABASE_URL` 下重新初始化连接:
+
+```typescript
+// 每个 E2E 测试文件的 beforeAll
+process.env.DATABASE_URL = getTestDatabaseUrl();
+process.env.AI_QUALITY_LLM_ENABLED = "true";
+vi.resetModules();
+const { postEvidenceHandler } = await import("@/lib/server/api");
+const { getCaseStore } = await import("@/lib/server/case-store");
+```
 
 ## Layer 1: API Integration E2E
 
@@ -68,6 +88,7 @@ tests/e2e/
   test: {
     include: ["tests/e2e/**/*.e2e.test.ts"],
     testTimeout: 30_000,         // LLM 调用可能需要 5-15 秒
+    retry: 2,                    // LLM 调用存在不确定性，允许重试
     maxWorkers: 1,               // 串行，避免 DB 竞争
     globalSetup: ["tests/e2e/e2e-setup.ts"],
     setupFiles: [],              // 不需要 jsdom
@@ -76,22 +97,38 @@ tests/e2e/
 }
 ```
 
+同时，主 `vitest.config.ts` 需要排除 E2E 文件，防止 `npm test` 误跑:
+```typescript
+exclude: ["tests/e2e/**", "tests/e2e-browser/**"]
+```
+
 ### e2e-setup.ts
 
 职责:
-1. **Docker Postgres lifecycle**: `docker compose -f docker-compose.test.yml up -d --wait`
-2. **Schema push**: 设置 `DATABASE_URL` → `drizzle-kit push`
-3. **LLM key 验证**: 检查 `AI_QUALITY_LLM_ENABLED`、provider key 是否存在
-4. **teardown**: `docker compose -f docker-compose.test.yml down -v`
+1. **前置检查**: 验证 Docker Compose v2 可用，LLM API key 存在
+2. **Docker Postgres lifecycle**: `docker compose -f docker-compose.test.yml up -d --wait`
+3. **Schema push**: `DATABASE_URL=<test_url> npm run db:push`（通过 shell 环境变量，不是 Node process.env）
+4. **LLM provider 健康检查**: 发一个极简 prompt 验证 LLM 可达，不可达则跳过整个 suite 并输出清晰提示
+5. **teardown**: `docker compose -f docker-compose.test.yml down -v`
 
 ### e2e-helpers.ts
 
 ```typescript
-export function getTestDatabaseUrl(): string
-export async function createTestCase(title: string): Promise<CaseAggregate>
-export async function cleanupTestCase(caseId: string): Promise<void>
-export function assertFactExtracted(facts: FactItem[], field: string, expectedValuePattern: string | RegExp): void
-export function assertChineseText(text: string, minLength?: number): void
+export const E2E_DATABASE_URL = "postgres://test_user:test_pass@localhost:5433/ai_quality_test";
+
+export function getTestDatabaseUrl(): string;
+
+// 通过 getCaseStore()（自动使用 PostgresCaseStore，因为 DATABASE_URL 已设置）
+export async function createTestCase(title: string): Promise<CaseAggregate>;
+
+// TRUNCATE 所有测试相关表
+export async function truncateAllTables(): Promise<void>;
+
+// 严格内容断言工具
+export function assertFactExtracted(
+  facts: FactItem[], field: string, expectedValuePattern: string | RegExp
+): void;
+export function assertChineseText(text: string, minLength?: number): void;
 ```
 
 ### evidence-llm.e2e.test.ts
@@ -161,20 +198,38 @@ tests/e2e-browser/
 
 ### Playwright 配置
 
+使用端口 3099（避免与开发服务器 3001 冲突，防止 `reuseExistingServer` 复用连接到错误数据库的 dev 实例）:
+
 ```typescript
 {
   testDir: ".",
   timeout: 60_000,
   retries: 1,
   workers: 1,
-  use: { baseURL: "http://127.0.0.1:3001" },
+  use: { baseURL: "http://127.0.0.1:3099" },
   webServer: {
-    command: "DATABASE_URL=postgres://test_user:test_pass@localhost:5433/ai_quality_test npm run dev",
-    url: "http://127.0.0.1:3001/api/health",
+    command: [
+      "DATABASE_URL=postgres://test_user:test_pass@localhost:5433/ai_quality_test",
+      "AI_QUALITY_LLM_ENABLED=true",
+      "AI_QUALITY_LLM_CONVERSATION_TIMEOUT_MS=20000",
+      "AI_QUALITY_LLM_COPILOT_TIMEOUT_MS=20000",
+      "WATCHPACK_POLLING=true",
+      "next dev --hostname 127.0.0.1 --port 3099",
+    ].join(" "),
+    url: "http://127.0.0.1:3099/api/health",
     timeout: 30_000,
     reuseExistingServer: !process.env.CI,
   }
 }
+```
+
+注: Next.js dev 模式会自动加载 `.env` 文件，因此 LLM provider API key（如 `DASHSCOPE_API_KEY`）不需要在此重复设置。
+
+### Playwright 浏览器安装
+
+首次使用前需要安装浏览器:
+```bash
+npx playwright install chromium
 ```
 
 ### investigation.spec.ts
@@ -194,7 +249,7 @@ tests/e2e-browser/
 
 ```json
 {
-  "test:e2e:setup": "docker compose -f docker-compose.test.yml up -d --wait",
+  "test:e2e:setup": "docker compose -f docker-compose.test.yml up -d --wait && DATABASE_URL=postgres://test_user:test_pass@localhost:5433/ai_quality_test npm run db:push",
   "test:e2e:teardown": "docker compose -f docker-compose.test.yml down -v",
   "test:e2e": "vitest run --config vitest.e2e.config.ts",
   "test:e2e:browser": "npx playwright test --config tests/e2e-browser/playwright.config.ts"
@@ -203,10 +258,10 @@ tests/e2e-browser/
 
 正常运行流程:
 ```bash
-npm run test:e2e:setup      # 启动 Docker Postgres
-npm run test:e2e             # API 集成测试
-npm run test:e2e:browser     # 浏览器 E2E (会自动启动 Next.js)
-npm run test:e2e:teardown    # 清理
+npm run test:e2e:setup           # 启动 Docker Postgres + schema push
+npm run test:e2e                  # API 集成测试
+npm run test:e2e:browser          # 浏览器 E2E (自动启动 Next.js on :3099)
+npm run test:e2e:teardown         # 清理
 ```
 
 ## Assertion Strategy (严格内容断言)
@@ -219,7 +274,27 @@ LLM 输出有不确定性，但对于结构化输入（客诉邮件包含明确�
 4. **结构字段**: `thinking.steps` 非空数组, `confidence` 在 0-1 范围内
 5. **持久化一致性**: Postgres 写入后重新读取，验证关键字段一致
 
-对于不稳定的断言，使用 `expect.soft()` 标记为 soft assertion，失败时报告但不中断测试。
+**不稳定性缓解**:
+- Vitest E2E 配置 `retry: 2`，每个用例最多重试 2 次
+- Playwright 配置 `retries: 1`
+- 对于语义级别的文本断言（如"回答包含 5Why"），使用 `expect.soft()` 标记为 soft assertion
+- 枚举字段和结构字段使用 hard assertion
+- E2E global setup 先发一个极简 LLM 健康检查 prompt，不可达则跳过全 suite
+
+## CI Integration
+
+**当前阶段**: E2E 测试仅在本地手动触发，不加入 CI pipeline。
+
+原因:
+- 需要 Docker、真实 LLM API key，CI runner 需要相应配置
+- LLM 调用有费用，每次运行预计消耗 ~0.01-0.05 元
+- 需要先在本地验证稳定性后再考虑 CI 集成
+
+**后续 CI 集成方案**（本次不实现）:
+- API key 通过 CI secrets 注入
+- 仅在手动触发或定时调度（如每日凌晨）时运行，不在每个 PR 上运行
+- Docker Compose 启动 Postgres（CI runner 需支持 Docker）
+- 测试结果和 Playwright report 作为 CI artifacts 上传
 
 ## New Dependencies
 
@@ -230,6 +305,8 @@ LLM 输出有不确定性，但对于结构化输入（客诉邮件包含明确�
   }
 }
 ```
+
+安装后需执行: `npx playwright install chromium`
 
 ## Files to Create/Modify
 
@@ -248,6 +325,7 @@ LLM 输出有不确定性，但对于结构化输入（客诉邮件包含明确�
 
 **修改**:
 - `package.json` — 添加 scripts 和 devDependency
+- `vitest.config.ts` — 添加 `exclude: ["tests/e2e/**", "tests/e2e-browser/**"]`
 - `.gitignore` — 添加 Playwright artifacts (test-results/, playwright-report/)
 
 ## Verification
