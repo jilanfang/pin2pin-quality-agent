@@ -46,7 +46,7 @@ test.describe("investigation workflow", () => {
     // Step 7: Verify copilot brief (AI analysis card) is visible
     // data-testid="copilot-brief" (workspace.tsx:631)
     const copilotBrief = page.getByTestId("copilot-brief");
-    if (await copilotBrief.isVisible({ timeout: 3000 }).catch(() => false)) {
+    if (await copilotBrief.waitFor({ state: "visible", timeout: 3000 }).then(() => true).catch(() => false)) {
       await expect(copilotBrief).not.toBeEmpty();
     }
   });
