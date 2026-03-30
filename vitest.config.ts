@@ -6,6 +6,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+    exclude: ["tests/e2e/**", "tests/e2e-browser/**"],
     maxWorkers: 1,
   },
   resolve: {

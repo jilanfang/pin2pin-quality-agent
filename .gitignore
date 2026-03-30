@@ -30,3 +30,7 @@ __pycache__/
 .gstack/
 .vercel
 .env*.local
+
+# Playwright
+test-results/
+playwright-report/
