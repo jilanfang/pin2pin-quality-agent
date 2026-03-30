@@ -17,8 +17,11 @@ export default async function globalSetup() {
   // Truncate before browser tests
   const postgres = (await import("postgres")).default;
   const sql = postgres(E2E_DATABASE_URL, { max: 1 });
-  await sql`TRUNCATE cases, case_messages, case_stages, fact_snapshots, report_versions, artifacts CASCADE`;
-  await sql.end();
+  try {
+    await sql`TRUNCATE cases, case_messages, case_stages, fact_snapshots, report_versions, artifacts CASCADE`;
+  } finally {
+    await sql.end();
+  }
 
   console.log("[e2e-browser] Ready.");
 }
