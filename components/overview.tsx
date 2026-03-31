@@ -2,6 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 
+import {
+  createInvestigationFromInput,
+  InvestigationEntryError,
+} from "@/lib/client/investigation-entry";
+
 type OverviewPayload = {
   stats: {
     activeInvestigations: number;
@@ -25,24 +30,23 @@ type OverviewPayload = {
   }>;
 };
 
-async function readJson(response: Response) {
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: "请求失败" }));
-    throw new Error(payload.error || "请求失败");
-  }
-  return response.json();
-}
-
 export function Overview() {
   const [payload, setPayload] = useState<OverviewPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [heroInput, setHeroInput] = useState("");
+  const [resumeCaseId, setResumeCaseId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     async function loadOverview() {
       try {
-        const nextPayload = (await readJson(await fetch("/api/overview"))) as OverviewPayload;
+        const response = await fetch("/api/overview");
+        if (!response.ok) {
+          const nextPayload = await response.json().catch(() => ({ error: "加载总览失败" }));
+          throw new Error(nextPayload.error || "加载总览失败");
+        }
+        const nextPayload = (await response.json()) as OverviewPayload;
         if (!cancelled) {
           setPayload(nextPayload);
           setError(null);
@@ -60,22 +64,20 @@ export function Overview() {
     };
   }, []);
 
-  async function startNewInvestigation() {
+  async function startInvestigationFromHero() {
+    if (!heroInput.trim()) return;
+
     try {
       setCreating(true);
-      const response = await fetch("/api/cases", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title: "新的调查",
-        }),
-      });
-      const created = await readJson(response);
-      window.location.href = `/investigations/${created.id}`;
+      setError(null);
+      setResumeCaseId(null);
+      const created = await createInvestigationFromInput(heroInput);
+      window.location.assign(`/investigations/${created.caseSummary.id}`);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "创建调查失败");
+      if (nextError instanceof InvestigationEntryError) {
+        setResumeCaseId(nextError.createdCaseId);
+      }
     } finally {
       setCreating(false);
     }
@@ -89,19 +91,39 @@ export function Overview() {
       <section className="overview-hero overview-panel">
         <div className="overview-hero-copy">
           <span className="overview-eyebrow">总览</span>
-          <h1>导入客诉材料，生成 24h 初版 8D</h1>
-          <p>先把投诉邮件、会议纪要、照片和现场碎片收拢成一版能交差的快速响应版，再继续补验证。</p>
+          <h1>把客户投诉或异常情况贴进来</h1>
+          <p>不用先学流程。先把投诉邮件、测试结论、现场观察或会议纪要贴进来，我先帮你起一条调查，再带着往前推。</p>
+          <label className="overview-hero-input" htmlFor="overview-hero-input">
+            <span>可直接粘贴原始材料</span>
+            <textarea
+              id="overview-hero-input"
+              aria-label="首页异常输入框"
+              autoFocus
+              placeholder="贴入客户投诉、测试结论、批次 / 工单、现场观察、邮件或会议纪要。"
+              value={heroInput}
+              onChange={(event) => setHeroInput(event.target.value)}
+            />
+          </label>
           <div className="overview-hero-actions">
-            <button type="button" className="overview-primary" onClick={() => void startNewInvestigation()} disabled={creating}>
-              {creating ? "创建中…" : "开始快速响应"}
-            </button>
-            <a
-              className="overview-secondary"
-              href={recentInvestigations[0]?.href ?? "/investigations"}
+            <button
+              type="button"
+              className="overview-primary"
+              onClick={() => void startInvestigationFromHero()}
+              disabled={creating || !heroInput.trim()}
             >
-              继续最近调查
-            </a>
+              {creating ? "开始分析中…" : "开始分析"}
+            </button>
+            {recentInvestigations[0] ? (
+              <a className="overview-secondary" href={recentInvestigations[0].href}>
+                继续最近调查
+              </a>
+            ) : null}
           </div>
+          {resumeCaseId ? (
+            <a className="overview-secondary overview-recovery-link" href={`/investigations/${resumeCaseId}`}>
+              进入已建调查继续处理
+            </a>
+          ) : null}
         </div>
         <div className="overview-stats" aria-label="状态卡">
           <article className="overview-stat-card">
@@ -234,6 +256,39 @@ export function Overview() {
           font-size: 15px;
         }
 
+        .overview-hero-input {
+          display: grid;
+          gap: 10px;
+          margin-top: 6px;
+        }
+
+        .overview-hero-input span {
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .overview-hero-input textarea {
+          width: 100%;
+          min-height: 164px;
+          padding: 18px 20px;
+          border-radius: 20px;
+          border: 1px solid rgba(182, 196, 220, 0.88);
+          background: rgba(255, 255, 255, 0.94);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+          color: var(--text);
+          font: inherit;
+          font-size: 15px;
+          line-height: 1.7;
+          resize: vertical;
+        }
+
+        .overview-hero-input textarea:focus {
+          outline: 2px solid rgba(0, 99, 153, 0.16);
+          outline-offset: 0;
+          border-color: rgba(0, 99, 153, 0.34);
+        }
+
         .overview-hero-actions {
           display: flex;
           gap: 12px;
@@ -264,6 +319,11 @@ export function Overview() {
           border: 1px solid var(--line);
           background: rgba(255, 255, 255, 0.76);
           color: var(--text);
+        }
+
+        .overview-recovery-link {
+          margin-top: 6px;
+          width: fit-content;
         }
 
         .overview-stats {
@@ -395,6 +455,10 @@ export function Overview() {
           .overview-hero-actions {
             flex-direction: column;
             align-items: stretch;
+          }
+
+          .overview-recovery-link {
+            width: 100%;
           }
         }
       `}</style>

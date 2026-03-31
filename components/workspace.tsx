@@ -4,6 +4,10 @@ import React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import {
+  createInvestigationFromInput,
+  InvestigationEntryError,
+} from "@/lib/client/investigation-entry";
 import { inferCaseTitleFromInput } from "@/lib/domain/conversation-input";
 
 type CaseSummary = {
@@ -208,6 +212,9 @@ const seedCases = [
     description: "模拟现场信息零碎、逐步补充且会推翻前序判断的异常处理过程。",
   },
 ] as const;
+
+const EVIDENCE_INPUT_PLACEHOLDER =
+  "输入客户投诉、测试结论、批次、工单、现场观察，系统会按当前阶段推进。";
 
 function formatTime(value: string) {
   return new Date(value).toLocaleString("zh-CN", {
@@ -880,7 +887,7 @@ function ComposerDock({
           aria-label="证据输入框"
           className="composer"
           rows={isExpanded ? 4 : 1}
-          placeholder="输入客户投诉、测试结论、批次、工单、现场观察，系统会按当前阶段推进。"
+          placeholder={EVIDENCE_INPUT_PLACEHOLDER}
           value={composer}
           onChange={(event) => onChange(event.target.value)}
           onInput={(event) => onChange((event.target as HTMLTextAreaElement).value)}
@@ -902,6 +909,61 @@ function ComposerDock({
   }
 
   return createPortal(dock, document.body);
+}
+
+function EntryComposerCard({
+  title,
+  description,
+  helper,
+  composer,
+  loading,
+  primaryLabel,
+  secondaryLabel,
+  onChange,
+  onSend,
+  onSecondaryAction,
+}: {
+  title: string;
+  description: string;
+  helper: string;
+  composer: string;
+  loading: boolean;
+  primaryLabel: string;
+  secondaryLabel?: string;
+  onChange: (value: string) => void;
+  onSend: () => void;
+  onSecondaryAction?: () => void;
+}) {
+  return (
+    <article className="entry-composer-card" data-testid="entry-composer-card">
+      <span className="entry-eyebrow">Paste First</span>
+      <h3>{title}</h3>
+      <p>{description}</p>
+      <label className="entry-composer-field" htmlFor="workspace-entry-composer">
+        <span>{helper}</span>
+        <textarea
+          id="workspace-entry-composer"
+          aria-label="证据输入框"
+          autoFocus
+          className="entry-composer"
+          rows={6}
+          placeholder={EVIDENCE_INPUT_PLACEHOLDER}
+          value={composer}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </label>
+      <div className="entry-composer-actions">
+        <button className="primary-button" type="button" onClick={onSend} disabled={!composer.trim() || loading}>
+          {primaryLabel}
+        </button>
+        {secondaryLabel && onSecondaryAction ? (
+          <button className="ghost-button" type="button" onClick={onSecondaryAction} disabled={loading}>
+            {secondaryLabel}
+          </button>
+        ) : null}
+      </div>
+    </article>
+  );
 }
 
 function inferPendingThinking(content: string): NonNullable<ConversationMeta>["thinking"] {
@@ -1324,9 +1386,40 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
       impactedStages: [],
     });
     try {
-      const targetCaseId = currentCaseId ?? (await createBlankCaseForConversation(pendingContent));
-      await sendEvidenceToCase(targetCaseId, pendingContent, Boolean(currentCaseId));
+      if (!currentCaseId) {
+        const { caseSummary, workflow } = await createInvestigationFromInput<CaseWorkflow>(pendingContent);
+
+        currentCaseIdRef.current = caseSummary.id;
+        setCurrentCaseId(caseSummary.id);
+        setPreview(null);
+        setCurrentCase(workflow);
+        setCases((items) => {
+          const nextCases = [caseSummary as CaseSummary, ...items.filter((item) => item.id !== caseSummary.id)];
+          casesRef.current = nextCases;
+          return nextCases;
+        });
+        setComposer("");
+        setIsComposerExpanded(false);
+        setPendingThinking(null);
+        setPendingCaseConfirmation(null);
+        await refreshCases({
+          preferredCaseId: caseSummary.id,
+          fallbackSummary: caseSummary as CaseSummary,
+        });
+      } else {
+        await sendEvidenceToCase(currentCaseId, pendingContent, true);
+      }
     } catch (nextError) {
+      if (!currentCaseId && nextError instanceof InvestigationEntryError && nextError.createdCaseId) {
+        try {
+          currentCaseIdRef.current = nextError.createdCaseId;
+          setCurrentCaseId(nextError.createdCaseId);
+          await refreshCurrentCase(nextError.createdCaseId);
+          await refreshCases({ preferredCaseId: nextError.createdCaseId });
+        } catch {
+          // Best effort recovery only.
+        }
+      }
       setPendingThinking(null);
       setError(messageFromError(nextError, "提交证据失败"));
     } finally {
@@ -1398,6 +1491,8 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
 
   const currentSeedDescription = seedCases.find((item) => item.key === seedCase)?.description;
   const hasCases = cases.length > 0;
+  const isBlankCaseEntryState = Boolean(currentCaseId && currentCase && currentCase.messages.length === 0);
+  const isEntryState = !currentCaseId || isBlankCaseEntryState;
 
   useEffect(() => {
     writeHasCasesCookie(hasCases);
@@ -1604,27 +1699,49 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         <section className="conversation-shell panel">
           <div className="conversation-head">
             <strong>AI 协作区</strong>
-            <span>{loading ? "处理中…" : currentCaseId ? "推进当前调查" : "先开始一条调查，再录入第一条证据"}</span>
+            <span>
+              {loading
+                ? "处理中…"
+                : isEntryState
+                  ? "先贴第一段材料，我来起调查"
+                  : "推进当前调查"}
+            </span>
           </div>
 
-          <div className="conversation-feed" data-testid="conversation-feed" data-has-floating-dock="true">
-            {!currentCaseId ? (
-              <article className="message-card message-assistant message-empty">
-                <span className="message-role">AI 协作</span>
-              <h3>先开始一条调查，再继续补证据和出稿。</h3>
-              <p>先按开始新调查，我会直接带你进入分析。</p>
-              <p>
-                  推荐先加载一个种子案例，3 分钟内看到第一版结果。也可以直接录入真实异常，随后把客户投诉、测试结论、批次工单或现场观察发进来，我会继续往前推进。
-                </p>
-                <div className="empty-actions">
-                  <button className="primary-button" type="button" onClick={() => startWithSeedCase(seedCases[0].key)}>
-                    开始新调查
-                  </button>
-                  <button className="ghost-button" type="button" onClick={startWithBlankCase}>
-                    直接新建空白调查
-                  </button>
-                </div>
-              </article>
+          <div
+            className="conversation-feed"
+            data-testid="conversation-feed"
+            data-has-floating-dock={isEntryState ? "false" : "true"}
+          >
+            {isEntryState ? (
+              <>
+                {pendingThinking ? (
+                  <ThinkingStatusCard
+                    thinking={pendingThinking.thinking}
+                    impactedStages={pendingThinking.impactedStages}
+                  />
+                ) : null}
+                <EntryComposerCard
+                  title={
+                    currentCaseId
+                      ? "把第一段情况贴进来，我先帮你接住这条调查"
+                      : "把异常情况贴进来，我先帮你起调查"
+                  }
+                  description={
+                    currentCaseId
+                      ? "当前这条调查还是空白的。先贴第一段客户投诉、测试结论或现场描述，后面再继续补证据。"
+                      : "可以直接粘贴客户投诉、测试结论、批次工单、现场观察或会议纪要，不用先整理成标准格式。"
+                  }
+                  helper={currentCaseId ? "先给我一段最原始的情况描述。" : "支持直接粘贴原始材料。"}
+                  composer={composer}
+                  loading={loading}
+                  primaryLabel="发送证据"
+                  secondaryLabel={!currentCaseId ? "加载演示案例" : undefined}
+                  onChange={setComposer}
+                  onSend={() => void sendEvidence()}
+                  onSecondaryAction={!currentCaseId ? () => startWithSeedCase(seedCases[0].key) : undefined}
+                />
+              </>
             ) : (
               <>
                 {pendingThinking ? (
@@ -1704,16 +1821,18 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
             )}
           </div>
 
-          <ComposerDock
-            focusArea={currentCase?.guidedThinking?.focusArea}
-            composer={composer}
-            isExpanded={isComposerExpanded}
-            loading={loading}
-            currentCaseId={currentCaseId}
-            onChange={setComposer}
-            onToggleExpanded={() => setIsComposerExpanded((value) => !value)}
-            onSend={() => void sendEvidence()}
-          />
+          {!isEntryState ? (
+            <ComposerDock
+              focusArea={currentCase?.guidedThinking?.focusArea}
+              composer={composer}
+              isExpanded={isComposerExpanded}
+              loading={loading}
+              currentCaseId={currentCaseId}
+              onChange={setComposer}
+              onToggleExpanded={() => setIsComposerExpanded((value) => !value)}
+              onSend={() => void sendEvidence()}
+            />
+          ) : null}
         </section>
 
         {preview ? (
@@ -1900,6 +2019,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
 
         .first-run-card,
         .message-card,
+        .entry-composer-card,
         .copilot-panel,
         .copilot-brief-item,
         .rebuild-review-item,
@@ -1916,7 +2036,35 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           background: linear-gradient(180deg, rgba(248, 250, 255, 0.94), rgba(241, 245, 255, 0.92));
         }
 
+        .entry-composer-card {
+          max-width: 760px;
+          margin: 20px auto 28px;
+          padding: 24px;
+          gap: 12px;
+          border-radius: 24px;
+          background:
+            radial-gradient(circle at top left, rgba(255, 249, 241, 0.96), transparent 38%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.94));
+          box-shadow: 0 22px 48px rgba(17, 24, 39, 0.08);
+        }
+
+        .entry-eyebrow {
+          display: inline-flex;
+          width: fit-content;
+          align-items: center;
+          min-height: 24px;
+          padding: 0 9px;
+          border-radius: 999px;
+          background: rgba(193, 124, 46, 0.12);
+          color: #8a4b14;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+
         .first-run-card h3,
+        .entry-composer-card h3,
         .message-empty h3,
         .report-action-copy h3 {
           margin: 0;
@@ -1926,6 +2074,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         }
 
         .first-run-card p,
+        .entry-composer-card p,
         .message-empty p,
         .message-content,
         .stage-detail-card p,
@@ -1942,6 +2091,44 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           display: flex;
           flex-wrap: wrap;
           gap: 8px;
+        }
+
+        .entry-composer-field {
+          display: grid;
+          gap: 8px;
+        }
+
+        .entry-composer-field span {
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .entry-composer {
+          width: 100%;
+          min-height: 184px;
+          border-radius: 18px;
+          border: 1px solid rgba(205, 214, 230, 0.9);
+          background: rgba(255, 255, 255, 0.96);
+          padding: 16px 18px;
+          font: inherit;
+          font-size: 15px;
+          line-height: 1.68;
+          color: var(--text);
+          resize: vertical;
+        }
+
+        .entry-composer:focus {
+          outline: 2px solid rgba(25, 73, 203, 0.14);
+          outline-offset: 0;
+          border-color: rgba(25, 73, 203, 0.34);
+        }
+
+        .entry-composer-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          align-items: center;
         }
 
         .workspace-context {

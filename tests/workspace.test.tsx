@@ -340,13 +340,13 @@ describe("Workspace", () => {
 
     render(<Workspace />);
 
-    await screen.findByText("先开始一条调查，再继续补证据和出稿。");
-    expect(screen.getByText(/推荐先加载一个种子案例，3 分钟内看到第一版结果/)).toBeInTheDocument();
-    expect(screen.getAllByText("先按开始新调查，我会直接带你进入分析。").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "开始新调查" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "直接新建空白调查" })).toBeInTheDocument();
-    expect(screen.getByTestId("composer-dock")).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "把异常情况贴进来，我先帮你起调查" });
+    expect(screen.getByText(/可以直接粘贴客户投诉、测试结论、批次工单、现场观察或会议纪要/)).toBeInTheDocument();
+    expect(screen.getByTestId("entry-composer-card")).toBeInTheDocument();
     expect(screen.getByLabelText("证据输入框")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "加载演示案例" })).toBeInTheDocument();
+    expect(screen.queryByText("先开始一条调查，再继续补证据和出稿。")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("composer-dock")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "快速新建调查" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "反馈" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "打开报告面板" })).not.toBeInTheDocument();
@@ -408,6 +408,7 @@ describe("Workspace", () => {
         },
       },
     };
+    let latestCase2Payload: Record<string, unknown> = blankWorkflow;
 
     const fetchMock = stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -418,9 +419,10 @@ describe("Workspace", () => {
         return new Response(JSON.stringify(blankSummary), { status: 200 });
       }
       if (url === "/api/cases/case-2" && !init?.method) {
-        return new Response(JSON.stringify(blankWorkflow), { status: 200 });
+        return new Response(JSON.stringify(latestCase2Payload), { status: 200 });
       }
       if (url === "/api/cases/case-2/evidence") {
+        latestCase2Payload = afterEvidenceWorkflow;
         return new Response(JSON.stringify(afterEvidenceWorkflow), { status: 200 });
       }
       throw new Error(`Unexpected request: ${url}`);
@@ -428,7 +430,7 @@ describe("Workspace", () => {
 
     render(<Workspace />);
 
-    await screen.findByRole("button", { name: "发送证据" });
+    await screen.findByTestId("entry-composer-card");
     fireEvent.change(screen.getByLabelText("证据输入框"), {
       target: { value: "客户现场发现上电冒烟，批次 B19，已暂停出货。" },
     });
@@ -455,6 +457,8 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "华星科技上电冒烟客诉" });
     expect(screen.getByText("当前调查 #CASE-2")).toBeInTheDocument();
+    expect(screen.queryByTestId("entry-composer-card")).not.toBeInTheDocument();
+    expect(screen.getByTestId("composer-dock")).toBeInTheDocument();
   });
 
   it("keeps the shell chrome minimal even after cases exist", async () => {
@@ -531,8 +535,8 @@ describe("Workspace", () => {
 
     render(<Workspace />);
 
-    await screen.findByRole("button", { name: "开始新调查" });
-    fireEvent.click(screen.getByRole("button", { name: "开始新调查" }));
+    await screen.findByRole("button", { name: "加载演示案例" });
+    fireEvent.click(screen.getByRole("button", { name: "加载演示案例" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -636,6 +640,9 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "新的空白调查" });
     expect(screen.getByText("当前调查 #CASE-2")).toBeInTheDocument();
+    expect(screen.getByTestId("entry-composer-card")).toBeInTheDocument();
+    expect(screen.queryByTestId("copilot-brief")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("composer-dock")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("调查列表抽屉")).not.toBeInTheDocument();
   });
 
@@ -914,7 +921,7 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "新的空白调查" });
     expect(screen.queryByTestId("preview-drawer")).not.toBeInTheDocument();
-    expect(screen.getByText("当前建议整理")).toBeInTheDocument();
+    expect(screen.getByTestId("entry-composer-card")).toBeInTheDocument();
     expect(screen.queryByTestId("result-recommendation-card")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "继续补信息" })).not.toBeInTheDocument();
   });
@@ -1913,7 +1920,7 @@ describe("Workspace", () => {
     render(<Workspace />);
 
     expect(await screen.findByText("数据库查询失败")).toBeInTheDocument();
-    expect(screen.getByText("先开始一条调查，再继续补证据和出稿。")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "把异常情况贴进来，我先帮你起调查" })).toBeInTheDocument();
   });
 
   it("submits the 8D action from the conversation area and updates the case state", async () => {
@@ -2000,7 +2007,7 @@ describe("Workspace", () => {
 
     render(<Workspace />);
 
-    await screen.findByText("先开始一条调查，再继续补证据和出稿。");
+    await screen.findByRole("heading", { name: "把异常情况贴进来，我先帮你起调查" });
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(

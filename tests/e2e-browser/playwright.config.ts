@@ -1,7 +1,10 @@
+import path from "node:path";
+
 import { defineConfig } from "@playwright/test";
 
 const E2E_DATABASE_URL =
   "postgres://test_user:test_pass@localhost:5433/ai_quality_test";
+const PROJECT_ROOT = path.resolve(__dirname, "../..");
 
 export default defineConfig({
   testDir: ".",
@@ -24,6 +27,7 @@ export default defineConfig({
       "WATCHPACK_POLLING=true",
       "next dev --hostname 127.0.0.1 --port 3099",
     ].join(" "),
+    cwd: PROJECT_ROOT,
     url: "http://127.0.0.1:3099/api/health",
     timeout: 60_000,
     reuseExistingServer: !process.env.CI,

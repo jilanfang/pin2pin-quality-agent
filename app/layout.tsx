@@ -33,7 +33,7 @@ export default async function RootLayout({
           hasCases={hasCasesCookie}
           authEnabled={auth.authEnabled}
           isAuthenticated={auth.isAuthenticated}
-          userEmail={auth.email}
+          username={auth.username}
         >
           {children}
         </SovereignShell>

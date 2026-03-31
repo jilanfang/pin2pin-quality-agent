@@ -2,11 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildConversationLlmResponse } from "@/tests/test-helpers/conversation-llm";
 
+const mutableEnv = process.env as Record<string, string | undefined>;
+
 describe("server api llm integration", () => {
   const previousDatabaseUrl = process.env.DATABASE_URL;
   const previousStorePath = process.env.AI_QUALITY_STORE_PATH;
   const previousLlmEnabled = process.env.AI_QUALITY_LLM_ENABLED;
   const previousRuleBaseline = process.env.AI_QUALITY_LLM_RULE_BASELINE;
+  const previousNodeEnv = process.env.NODE_ENV;
   const previousProvider = process.env.AI_QUALITY_LLM_PROVIDER;
   const previousDashscopeKey = process.env.DASHSCOPE_API_KEY;
   const previousModel = process.env.AI_QUALITY_LLM_MODEL_EXTRACT;
@@ -20,6 +23,8 @@ describe("server api llm integration", () => {
     else process.env.AI_QUALITY_LLM_ENABLED = previousLlmEnabled;
     if (previousRuleBaseline === undefined) delete process.env.AI_QUALITY_LLM_RULE_BASELINE;
     else process.env.AI_QUALITY_LLM_RULE_BASELINE = previousRuleBaseline;
+    if (previousNodeEnv === undefined) delete mutableEnv.NODE_ENV;
+    else mutableEnv.NODE_ENV = previousNodeEnv;
     if (previousProvider === undefined) delete process.env.AI_QUALITY_LLM_PROVIDER;
     else process.env.AI_QUALITY_LLM_PROVIDER = previousProvider;
     if (previousDashscopeKey === undefined) delete process.env.DASHSCOPE_API_KEY;
@@ -103,6 +108,31 @@ describe("server api llm integration", () => {
     const reloaded = await store.getCase(aggregate.caseRecord.id);
     expect(reloaded?.messages).toHaveLength(0);
     expect(reloaded?.knownFacts).toHaveLength(0);
+  });
+
+  it("uses rule baseline by default in development when no llm flags are configured", async () => {
+    delete process.env.DATABASE_URL;
+    process.env.AI_QUALITY_STORE_PATH = `/tmp/ai-quality-server-api-llm-${Date.now()}-dev-default.json`;
+    delete process.env.AI_QUALITY_LLM_ENABLED;
+    delete process.env.AI_QUALITY_LLM_RULE_BASELINE;
+    mutableEnv.NODE_ENV = "development";
+
+    const { getCaseStore } = await import("@/lib/server/case-store");
+    const { createCaseAggregate } = await import("@/lib/domain/workflow-engine");
+    const { postEvidenceHandler } = await import("@/lib/server/api");
+
+    const aggregate = createCaseAggregate("Development default");
+    const store = getCaseStore();
+    await store.saveCase(aggregate);
+
+    const payload = await postEvidenceHandler(aggregate.caseRecord.id, {
+      content: "客户华星科技反馈 B19 批次上电冒烟，先帮我接住这条调查。",
+      contextStage: "D2",
+    });
+
+    expect(payload.conversationMeta?.analysisSource).toBe("llm");
+    expect(payload.conversationMeta?.analysisVersion).toBeTruthy();
+    expect(payload.messages.at(-1)?.content).toContain("我先帮你接下这个案件");
   });
 
   it("returns a current-state summary when the user asks for a summary mid-conversation", async () => {

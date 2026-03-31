@@ -20,6 +20,16 @@ STAMP=$(date +%s)
 STORE_PATH="${AI_QUALITY_STORE_PATH:-/tmp/ai-quality-browser-smoke-$STAMP.json}"
 SERVER_LOG="/tmp/ai-quality-local-prod-smoke-$STAMP.log"
 SERVER_PID=""
+DATABASE_URL_VALUE="${DATABASE_URL:-}"
+
+if [ -z "$DATABASE_URL_VALUE" ] && [ -f ".env.local" ]; then
+  DATABASE_URL_VALUE="$(sed -n 's/^DATABASE_URL="\{0,1\}\(.*\)"\{0,1\}$/\1/p' .env.local | head -n 1)"
+fi
+
+if [ -z "$DATABASE_URL_VALUE" ]; then
+  echo "Smoke local requires DATABASE_URL." >&2
+  exit 1
+fi
 
 cleanup() {
   if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" >/dev/null 2>&1; then
@@ -36,7 +46,7 @@ echo "Using store: $STORE_PATH"
 npm run build
 
 env \
-  DATABASE_URL= \
+  DATABASE_URL="$DATABASE_URL_VALUE" \
   NEXT_PUBLIC_SUPABASE_URL= \
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY= \
   AI_QUALITY_STORE_PATH="$STORE_PATH" \

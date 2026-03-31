@@ -12,9 +12,31 @@
 - Do not describe no-db mode as pure memory mode.
 - The real no-db behavior is local file storage.
 - Read `AI_QUALITY_STORE_PATH` first, then fall back to `/tmp/ai-quality-demo-store.json`.
+- The current formal product path is `DATABASE_URL`-backed Postgres plus local username/password auth, not no-db demo mode.
 - Do not run `next dev` and `next start` in the same working directory at the same time unless you isolate build output.
 - Production verification must include homepage load, `_next/static` assets, and browser console state, not only API health.
 - Small console errors still matter before demos. Keep the console clean.
+
+### Deployment Lessons
+
+- For `Supabase + Vercel`, do not blindly use `db.<project-ref>.supabase.co` as `DATABASE_URL` host.
+- First read `supabase/.temp/pooler-url` after `supabase link`; treat it as the first local source of truth for the pooler host.
+- Build the final Supabase URL by adding the password and `?sslmode=require` to that pooler URL.
+- `vercel env pull` can show sensitive variables as blank. Blank output there is not proof the env value is actually empty.
+- Prefer non-interactive env writes for production:
+
+```bash
+printf '%s' "$DATABASE_URL" | vercel env add DATABASE_URL production --sensitive --force
+```
+
+- When production login fails with `Failed query: select ... from users ...`, check connectivity and the deployed `DATABASE_URL` first, before changing auth code.
+- Local DNS results on this machine can be distorted by proxy or network setup. Do not treat them as decisive evidence for production DNS health.
+- Final truth for deployment issues is end-to-end verification against the real deployed URL.
+- Production auth verification must include:
+  - real login with an issued account
+  - session cookie issuance
+  - authenticated homepage load
+  - unauthenticated business API returns `401` JSON instead of HTML
 
 ### Dev Environment Lessons
 

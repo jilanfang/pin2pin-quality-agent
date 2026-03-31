@@ -20,6 +20,8 @@
   - `docs/mvp-hardening-checklist.md`
 - `index.html -> Next.js` differences and migration decisions:
   - `docs/index-html-to-nextjs-migration-ledger.md`
+- Deployment path, auth rollout notes, and production verification:
+  - `docs/deployment-and-demo.md`
 - Visual system baseline:
   - `DESIGN.md`
 - Default localhost app port comes from the global registry:
@@ -36,6 +38,8 @@
   - `curl http://127.0.0.1:3001/api/health`
 - For page-path verification, also confirm:
   - homepage loads
+  - login succeeds with a real issued account
+  - unauthenticated business API returns `401` JSON instead of HTML
   - case creation succeeds
   - case list is readable
   - browser console is clean

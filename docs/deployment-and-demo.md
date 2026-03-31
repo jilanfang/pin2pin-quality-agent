@@ -75,17 +75,18 @@ npm run smoke:browser
 
 ## 3. 数据存储模式
 
-当前支持两种模式。
+当前代码里仍保留两种存储路径，但它们的用途已经不同。
 
 ### 模式 A：本地文件存储（无数据库）
 
-只适合本机演示、自测、无数据库时快速启动。
+只适合本机调试、临时自测、没有账号体系要求的离线演示。
 
 - 不设置 `DATABASE_URL`
 - 案件数据保存在本地文件
 - 默认路径是 `AI_QUALITY_STORE_PATH`，未设置时回落到 `/tmp/ai-quality-demo-store.json`
 - 同一台机器上重启服务后可继续读到之前的案件
 - 不适合任何外部试用、Vercel 预览部署或 `serverless` 场景，因为实例切换后本地文件不可靠
+- 不支持当前正式的“手工发账号密码 + 登录后进入工作台”产品路径
 - `/tmp/ai-quality-demo-store.json` 只用于本机临时演示，不应被描述成对外试用方案
 
 `.env.example` 当前内容：
@@ -94,20 +95,34 @@ npm run smoke:browser
 DATABASE_URL=
 ```
 
-### 模式 B：Postgres
+### 模式 B：Postgres + 本地账号密码认证
 
-适合 Vercel 预览、外部试用、多人试用、需要跨重启保留数据的环境。
+这是当前正式产品路径，也是 Vercel 预览、生产、外部邀测的必选模式。
 
 - 设置 `DATABASE_URL`
-- 应用自动切换到 Postgres store
-- 推荐接 Neon 或 Supabase
+- 应用切换到 Postgres store，并启用正式账号密码登录链路
 - 外部试用 / 预览部署必须使用 Postgres，不再允许以本地文件模式对外演示
+- 当前已验证可用的是 `Supabase Postgres + Vercel`
 
-示例：
+通用格式示例：
 
 ```env
-DATABASE_URL=postgres://user:password@host:5432/dbname
+DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require
 ```
+
+本项目当前已验证的 Supabase pooler 格式是：
+
+```env
+DATABASE_URL=postgresql://postgres.<project-ref>:<password>@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require
+```
+
+关键规则：
+
+- 不要在 Vercel 上想当然地使用 `db.<project-ref>.supabase.co`
+- 这个项目的真实故障就是生产环境使用了错误主机，最终报 `Failed query: select ... from users ...`
+- 实际根因不是 SQL 或登录逻辑，而是运行时连不上数据库主机
+- 对已经 `supabase link` 的项目，本地第一信源是 `supabase/.temp/pooler-url`
+- 先从 `supabase/.temp/pooler-url` 取出 host，再补上密码和 `?sslmode=require`
 
 如果首次接数据库，需要执行：
 
@@ -120,9 +135,14 @@ npm run db:push
 对外预览 / 试用至少准备：
 
 ```env
-DATABASE_URL=postgres://user:password@host:5432/dbname
+DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require
 AI_QUALITY_LLM_ENABLED=false
 ```
+
+说明：
+
+- 现在 `DATABASE_URL` 不只是数据存储开关，也是正式认证链路前提
+- 没有数据库时，不能再把项目描述成“可正常登录的完整产品”
 
 可选的在线模型配置统一使用 `AI_QUALITY_LLM_*`：
 
@@ -150,6 +170,40 @@ AI_QUALITY_LLM_EXTRACT_FALLBACK_MODEL=ark-code-latest
 4. 首次建库后执行一次 `npm run db:push`
 5. 触发部署
 
+### Supabase + Vercel 的已验证做法
+
+这部分是这次线上事故后沉淀出来的标准做法。
+
+1. 先确认 Supabase 项目已经 link 成功。
+2. 优先读取 `supabase/.temp/pooler-url`，不要先手写数据库 host。
+3. 按下面的形式组装最终 `DATABASE_URL`：
+
+```env
+postgresql://postgres.<project-ref>:<password>@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require
+```
+
+4. 用非交互方式写入 Vercel 环境变量，避免 CLI 交互态输错、漏环境、或值被截断：
+
+```bash
+printf '%s' "$DATABASE_URL" | vercel env add DATABASE_URL production --sensitive --force
+printf '%s' "$DATABASE_URL" | vercel env add DATABASE_URL preview --sensitive --force
+printf '%s' "$DATABASE_URL" | vercel env add DATABASE_URL development --force
+```
+
+5. 再执行正式部署。
+
+### 这次部署事故的结论
+
+- `vercel env pull` 不能作为敏感变量是否为空的证据。它可能把敏感值拉成空字符串展示。
+- 本机网络代理或 DNS 劫持会让 `dig`、`nslookup` 结果失真，这台机器上出现过 `198.18.x.x` 之类结果，不能据此判断公网 DNS 真正状态。
+- 对生产问题，优先做真实端到端验证，不要被本机 DNS 现象带偏。
+- 这次真正有效的验证不是“本机能不能解析某个 host”，而是：
+  - 生产登录接口是否返回 `200`
+  - 是否成功下发 `HttpOnly` session cookie
+  - 带 cookie 访问首页是否 `200`
+  - 未登录访问业务 API 是否返回 `401` JSON
+  - `GET /api/health` 是否正常
+
 ### 本地联调注意事项
 
 - 保持 `npm run dev` 使用 polling，不要随手改脚本
@@ -164,9 +218,21 @@ AI_QUALITY_LLM_EXTRACT_FALLBACK_MODEL=ark-code-latest
 
 ### 推荐演示配置
 
-- 预览 / 演示环境：使用 Neon 或 Supabase 的 Postgres
-- 生产前阶段先不开登录、不做多租户
-- 用种子案例直接展示完整路径，再补真实碎片输入
+- 预览 / 演示环境：使用 Supabase 或 Neon 的 Postgres
+- 登录方式：本地用户名密码认证，不做前端注册
+- 建号方式：后台脚本手工发测试账号密码
+- 演示路径：登录后进入首页与工作台，再用种子案例或真实碎片输入演示完整链路
+
+### 生产验证清单
+
+上线前至少完成一次真实环境验证：
+
+1. 用后台发出的真实测试账号执行登录。
+2. 确认响应返回 `200`，并且浏览器拿到 session cookie。
+3. 登录后访问首页，确认返回 `200`。
+4. 未登录访问业务 API，例如 `GET /api/cases`，确认返回 `401` JSON，而不是 HTML 重定向页。
+5. 已登录访问 `GET /api/cases`，确认接口正常返回。
+6. `GET /api/health` 返回 `{"status":"ok"}`。
 
 ## 6. LLM 接入边界
 
@@ -183,6 +249,8 @@ AI_QUALITY_LLM_EXTRACT_FALLBACK_MODEL=ark-code-latest
 
 ### 已具备
 
+- 用户名 + 密码登录
+- 后台脚本手工创建 / 禁用 / 改密测试账号
 - 新建空白案件
 - 一键载入种子案例
 - 通过对话式输入补充零碎证据
@@ -198,7 +266,9 @@ AI_QUALITY_LLM_EXTRACT_FALLBACK_MODEL=ark-code-latest
 
 ### 现阶段刻意不做
 
-- 用户登录
+- 前端注册
+- 邮箱验证码 / 邮件找回
+- 后台用户管理界面
 - 团队协作权限
 - 多租户
 - 多模板报告商城
@@ -211,6 +281,7 @@ AI_QUALITY_LLM_EXTRACT_FALLBACK_MODEL=ark-code-latest
 - 当前在线模型路由主要接在 `extract`，`copilot` / `report` 仍默认以规则和模板为主。
 - PDF 仍建议先用浏览器打印正式 HTML。
 - Postgres schema 当前通过 `drizzle-kit push` 直接同步，尚未沉淀正式 migration 流程。
+- 生产数据库配置对 host 形式敏感，Vercel 上不要盲信 Supabase 直连 host，先核对 pooler URL。
 - 旧目录 `backend/` 仍保留作迁移参考，不是当前上线主链路。
 - 根目录 `index.html` 仍可运行，适合作离线演示、交互试验和报告展示对照，但不应替代当前产品主线。
 
@@ -220,9 +291,9 @@ AI_QUALITY_LLM_EXTRACT_FALLBACK_MODEL=ark-code-latest
 
 1. 先继续把 `lib/server/llm.ts` 这层统一入口与路由层用到更多能力，再决定是否给 `copilot` / `report` 接真实服务方。
 2. 增加 benchmark case 的 API/页面级回归测试。
-3. 接通真实 Postgres 并完成一次 Vercel 预览部署。
+3. 把本地账号管理脚本再补一层最小运维说明。
 4. 优化正式报告页面，补 `打印为 PDF` 的演示路径。
-5. 再考虑登录、案例库、经验库、暗知识沉淀。
+5. 再考虑案例库、经验库、协作权限等平台能力。
 
 ## 10. 相关文档
 

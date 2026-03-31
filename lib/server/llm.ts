@@ -118,7 +118,10 @@ function isEnabled() {
 }
 
 function useRuleBaselineForConversation() {
-  return process.env.AI_QUALITY_LLM_RULE_BASELINE === "true";
+  const configuredValue = process.env.AI_QUALITY_LLM_RULE_BASELINE;
+  if (configuredValue === "true") return true;
+  if (configuredValue === "false") return false;
+  return process.env.NODE_ENV === "development" && process.env.AI_QUALITY_LLM_ENABLED !== "true";
 }
 
 function parseProvider(value: string | undefined): SupportedProvider | null {

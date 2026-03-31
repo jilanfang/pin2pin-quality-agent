@@ -3,7 +3,7 @@ set -euo pipefail
 
 BASE_URL="${SMOKE_BASE_URL:-http://127.0.0.1:3001}"
 SESSION="bs-$$"
-SMOKE_AUTH_EMAIL="${SMOKE_AUTH_EMAIL:-}"
+SMOKE_AUTH_USERNAME="${SMOKE_AUTH_USERNAME:-${SMOKE_AUTH_EMAIL:-}}"
 SMOKE_AUTH_PASSWORD="${SMOKE_AUTH_PASSWORD:-}"
 EVIDENCE_TEXT="客户现场发现 3 片上电冒烟，批次 B12，已暂停出货并隔离库存。"
 CORRECTION_TEXT="等下，刚补到的新信息是并非全部冒烟，而是低温条件下偶发，这会影响前面的判断。"
@@ -36,7 +36,7 @@ async (page) => {
   const summaryText = "__SUMMARY_TEXT__";
   const actionPlanText = "__ACTION_PLAN_TEXT__";
   const caseConfirmText = "__CASE_CONFIRM_TEXT__";
-  const authEmail = "__SMOKE_AUTH_EMAIL__";
+  const authUsername = "__SMOKE_AUTH_USERNAME__";
   const authPassword = "__SMOKE_AUTH_PASSWORD__";
   const consoleErrors = [];
   const pageErrors = [];
@@ -85,10 +85,10 @@ async (page) => {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
 
   if (page.url().includes("/login")) {
-    if (!authEmail || !authPassword) {
-      throw new Error("Auth is enabled but SMOKE_AUTH_EMAIL/SMOKE_AUTH_PASSWORD are not set.");
+    if (!authUsername || !authPassword) {
+      throw new Error("Auth is enabled but SMOKE_AUTH_USERNAME/SMOKE_AUTH_PASSWORD are not set.");
     }
-    await page.getByLabel("邮箱").fill(authEmail);
+    await page.getByLabel("用户名").fill(authUsername);
     await page.getByLabel("密码").fill(authPassword);
     await page.getByRole("button", { name: "登录" }).click();
     await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 30000 }).catch(() => {});
@@ -103,33 +103,31 @@ async (page) => {
   const smokeTitle = "browser-smoke-" + Date.now();
   currentStep = "overview_loaded";
   console.log("STEP: overview_loaded");
-  await page.getByRole("heading", { name: "把现场碎片，推进成可交付调查" }).waitFor({ timeout: 30000 });
+  await page.getByRole("heading", { name: "把客户投诉或异常情况贴进来" }).waitFor({ timeout: 30000 });
+  await page.getByLabel("首页异常输入框").waitFor({ timeout: 30000 });
+  await page.getByLabel("首页异常输入框").fill(evidenceText);
+  await page.waitForFunction(() => {
+    const buttons = Array.from(document.querySelectorAll("button"));
+    const target = buttons.find((button) => button.textContent?.includes("开始分析"));
+    return target instanceof HTMLButtonElement && !target.disabled;
+  });
   await Promise.all([
     page.waitForURL((url) => url.pathname.startsWith("/investigations/"), { timeout: 30000 }),
-    page.getByRole("button", { name: "开始新调查" }).click(),
+    page.getByRole("button", { name: "开始分析" }).click(),
   ]);
 
   console.log("STEP: investigation_created");
   await page.getByText("AI 协作区").waitFor({ timeout: 30000 });
-  await page.getByLabel("证据输入框").waitFor({ timeout: 30000 });
   await page.getByText(/当前调查 #/).waitFor({ timeout: 30000 });
+  await page.getByTestId("composer-dock").waitFor({ timeout: 30000 });
 
-  await fillComposerAndWait(evidenceText);
-  currentStep = "first_evidence_waiting_response";
-  console.log("STEP: first_evidence_ready");
-
-  await Promise.all([
-    page.waitForResponse(
-      (response) =>
-        response.url().includes("/evidence") &&
-        response.request().method() === "POST" &&
-        response.ok(),
-      { timeout: 30000 }
-    ),
-    page.getByRole("button", { name: "发送证据" }).click(),
-  ]);
+  await page.waitForFunction(() => {
+    const feed = document.querySelector('[data-testid="conversation-feed"]');
+    const messages = feed?.querySelectorAll(".message-card");
+    return Boolean(messages && messages.length >= 2);
+  }, { timeout: 30000 });
+  await page.getByRole("button", { name: "整理分析结论" }).waitFor({ timeout: 30000 });
   console.log("STEP: first_evidence_sent");
-  await page.getByText("我先帮你接下这个案件").waitFor({ timeout: 30000 });
 
   await fillComposerAndWait(correctionText);
   currentStep = "correction_waiting_response";
@@ -277,7 +275,7 @@ SMOKE_CODE=${SMOKE_CODE//__CORRECTION_TEXT__/$CORRECTION_TEXT}
 SMOKE_CODE=${SMOKE_CODE//__SUMMARY_TEXT__/$SUMMARY_TEXT}
 SMOKE_CODE=${SMOKE_CODE//__ACTION_PLAN_TEXT__/$ACTION_PLAN_TEXT}
 SMOKE_CODE=${SMOKE_CODE//__CASE_CONFIRM_TEXT__/$CASE_CONFIRM_TEXT}
-SMOKE_CODE=${SMOKE_CODE//__SMOKE_AUTH_EMAIL__/$SMOKE_AUTH_EMAIL}
+SMOKE_CODE=${SMOKE_CODE//__SMOKE_AUTH_USERNAME__/$SMOKE_AUTH_USERNAME}
 SMOKE_CODE=${SMOKE_CODE//__SMOKE_AUTH_PASSWORD__/$SMOKE_AUTH_PASSWORD}
 
 playwright-cli -s="$SESSION" open about:blank >/dev/null

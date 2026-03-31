@@ -1,10 +1,25 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import RootLayout from "@/app/layout";
-
 describe("RootLayout", () => {
+  beforeEach(() => {
+    vi.doMock("@/lib/server/auth", () => ({
+      getServerAuthState: async () => ({
+        authEnabled: true,
+        userId: "user-1",
+        isAuthenticated: true,
+        username: "alice",
+      }),
+    }));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
   it("provides the sovereign shell as the global app frame", async () => {
+    const { default: RootLayout } = await import("@/app/layout");
     const layout = await RootLayout({
       children: <div>layout-child</div>,
     });

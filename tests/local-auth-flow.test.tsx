@@ -1,13 +1,13 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-describe("auth flow", () => {
+describe("local auth flow", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.resetModules();
   });
 
-  it("renders the login page when auth is enabled and the user is not authenticated", async () => {
+  it("renders username/password login without any sign-up entry", async () => {
     vi.doMock("@/lib/server/auth", () => ({
       getServerAuthState: async () => ({
         authEnabled: true,
@@ -23,6 +23,8 @@ describe("auth flow", () => {
 
     expect(markup).toContain("登录后继续处理调查");
     expect(markup).toContain("用户名");
-    expect(markup).not.toContain("没有账号？创建一个");
+    expect(markup).toContain("密码");
+    expect(markup).not.toContain("创建账号");
+    expect(markup).not.toContain("没有账号");
   });
 });

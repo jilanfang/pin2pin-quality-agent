@@ -10,7 +10,7 @@ describe("server api overview and copilot", () => {
         authEnabled: true,
         userId: "user-1",
         isAuthenticated: true,
-        email: "ops@example.com",
+        username: "ops",
       }),
       assertAuthenticated: () => undefined,
     }));
@@ -41,7 +41,7 @@ describe("server api overview and copilot", () => {
         authEnabled: true,
         userId: "user-1",
         isAuthenticated: true,
-        email: "ops@example.com",
+        username: "ops",
       }),
       assertAuthenticated: () => undefined,
     }));

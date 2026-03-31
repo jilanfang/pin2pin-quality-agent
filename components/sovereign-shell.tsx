@@ -7,7 +7,7 @@ type SovereignShellProps = {
   hasCases?: boolean;
   authEnabled?: boolean;
   isAuthenticated?: boolean;
-  userEmail?: string | null;
+  username?: string | null;
   children: React.ReactNode;
 };
 
@@ -32,7 +32,7 @@ function dispatchShellEvent(name: string) {
 export function SovereignShell({
   authEnabled = false,
   isAuthenticated = false,
-  userEmail = null,
+  username = null,
   children,
 }: SovereignShellProps) {
   const pathname = usePathname();
@@ -73,7 +73,7 @@ export function SovereignShell({
             isAuthenticated ? (
               <form action="/auth/sign-out" method="post">
                 <button className="shell-auth-button" type="submit">
-                  {userEmail ? `退出 ${userEmail}` : "退出"}
+                  {username ? `退出 ${username}` : "退出"}
                 </button>
               </form>
             ) : (

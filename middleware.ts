@@ -1,13 +1,37 @@
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
-import { updateSupabaseSession } from "@/lib/supabase/middleware";
+import { AUTH_COOKIE_NAME } from "@/lib/server/auth-config";
 
 export async function middleware(request: NextRequest) {
-  return updateSupabaseSession(request);
+  const { pathname } = request.nextUrl;
+
+  if (
+    pathname === "/login" ||
+    pathname === "/api/auth/login" ||
+    pathname === "/api/health" ||
+    pathname.startsWith("/_next/") ||
+    pathname === "/favicon.ico" ||
+    pathname === "/icon.svg"
+  ) {
+    return NextResponse.next();
+  }
+
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.next();
+  }
+
+  const hasSessionCookie = Boolean(request.cookies.get(AUTH_COOKIE_NAME)?.value);
+  if (hasSessionCookie) {
+    return NextResponse.next();
+  }
+
+  const loginUrl = new URL("/login", request.url);
+  return NextResponse.redirect(loginUrl);
 }
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|.*\\.(?:png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

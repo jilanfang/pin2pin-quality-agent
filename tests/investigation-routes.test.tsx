@@ -85,6 +85,17 @@ function buildCaseWorkflow() {
 }
 
 describe("investigation routes", () => {
+  beforeEach(() => {
+    vi.doMock("@/lib/server/auth", () => ({
+      getServerAuthState: async () => ({
+        authEnabled: true,
+        userId: "user-1",
+        isAuthenticated: true,
+        username: "alice",
+      }),
+    }));
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     vi.resetModules();

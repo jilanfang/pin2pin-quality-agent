@@ -2,12 +2,9 @@
 
 import React, { useState } from "react";
 
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-
 export function AuthPanel() {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"sign_in" | "sign_up">("sign_in");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -15,13 +12,17 @@ export function AuthPanel() {
     setLoading(true);
     setError(null);
     try {
-      const supabase = createSupabaseBrowserClient();
-      const action =
-        mode === "sign_in"
-          ? supabase.auth.signInWithPassword({ email, password })
-          : supabase.auth.signUp({ email, password });
-      const { error: authError } = await action;
-      if (authError) throw authError;
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ username, password }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "认证失败");
+      }
       window.location.href = "/";
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "认证失败");
@@ -34,18 +35,19 @@ export function AuthPanel() {
     <section className="auth-panel" aria-label="登录面板">
       <div className="auth-copy">
         <span className="auth-kicker">Pin2pin Fireline</span>
-        <h1>{mode === "sign_in" ? "登录后继续处理调查" : "创建账号开始试用"}</h1>
-        <p>只保留最小登录能力，进入后直接回到总览与调查工作台。</p>
+        <h1>登录后继续处理调查</h1>
+        <p>输入后台分配的用户名和密码，进入总览与调查工作台。</p>
       </div>
 
       <div className="auth-form">
         <label>
-          邮箱
+          用户名
           <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@company.com"
+            type="text"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            placeholder="alice"
+            autoComplete="username"
           />
         </label>
         <label>
@@ -54,20 +56,13 @@ export function AuthPanel() {
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            placeholder="至少 6 位"
+            placeholder="输入登录密码"
+            autoComplete="current-password"
           />
         </label>
         {error ? <div className="auth-error">{error}</div> : null}
-        <button type="button" onClick={() => void submit()} disabled={loading || !email || !password}>
-          {loading ? "处理中..." : mode === "sign_in" ? "登录" : "创建账号"}
-        </button>
-        <button
-          type="button"
-          className="auth-switch"
-          onClick={() => setMode((value) => (value === "sign_in" ? "sign_up" : "sign_in"))}
-          disabled={loading}
-        >
-          {mode === "sign_in" ? "没有账号？创建一个" : "已有账号？直接登录"}
+        <button type="button" onClick={() => void submit()} disabled={loading || !username || !password}>
+          {loading ? "处理中..." : "登录"}
         </button>
       </div>
     </section>

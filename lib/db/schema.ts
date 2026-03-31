@@ -6,6 +6,24 @@ import {
   timestamp,
 } from "drizzle-orm/pg-core";
 
+export const usersTable = pgTable("users", {
+  id: text("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  email: text("email"),
+  status: text("status").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+});
+
+export const authSessionsTable = pgTable("auth_sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+});
+
 export const casesTable = pgTable("cases", {
   id: text("id").primaryKey(),
   ownerUserId: text("owner_user_id"),

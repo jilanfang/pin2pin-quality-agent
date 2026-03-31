@@ -1,11 +1,21 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import CopilotPage from "@/app/copilot/page";
-
 describe("CopilotPage", () => {
+  beforeEach(() => {
+    vi.doMock("@/lib/server/auth", () => ({
+      getServerAuthState: async () => ({
+        authEnabled: true,
+        userId: "user-1",
+        isAuthenticated: true,
+        username: "alice",
+      }),
+    }));
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.resetModules();
   });
 
   it("renders the method-question copilot entrypoint", async () => {
@@ -14,6 +24,7 @@ describe("CopilotPage", () => {
       vi.fn(async () => new Response(JSON.stringify({ answer: "", suggestions: [] }), { status: 200 }))
     );
 
+    const { default: CopilotPage } = await import("@/app/copilot/page");
     const page = await CopilotPage();
     render(page);
 
@@ -37,6 +48,7 @@ describe("CopilotPage", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
+    const { default: CopilotPage } = await import("@/app/copilot/page");
     const page = await CopilotPage();
     render(page);
 
@@ -75,6 +87,7 @@ describe("CopilotPage", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
+    const { default: CopilotPage } = await import("@/app/copilot/page");
     const page = await CopilotPage();
     render(page);
 
