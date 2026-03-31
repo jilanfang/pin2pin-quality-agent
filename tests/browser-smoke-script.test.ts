@@ -1,4 +1,4 @@
-import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
@@ -20,9 +20,8 @@ describe("browser smoke script", () => {
     }
   });
 
-  it("fails when playwright reports an error even if run-code exits zero", async () => {
+  it("fails when the delegated Playwright runner exits non-zero", async () => {
     const binDir = join(tempDir, "bin");
-    const logPath = join(tempDir, "playwright.log");
     await mkdir(binDir, { recursive: true });
 
     const curlPath = join(binDir, "curl");
@@ -33,28 +32,17 @@ describe("browser smoke script", () => {
     );
     await chmod(curlPath, 0o755);
 
-    const playwrightPath = join(binDir, "playwright-cli");
+    const nodePath = join(binDir, "node");
     await writeFile(
-      playwrightPath,
+      nodePath,
       `#!/usr/bin/env bash
 set -euo pipefail
-printf '%s\\n' "$*" >> "${logPath}"
-if [ "$2" = "open" ]; then
-  exit 0
-fi
-if [ "$2" = "run-code" ]; then
-  printf '### Error\\n'
-  printf 'TimeoutError: simulated\\n'
-  exit 0
-fi
-if [ "$2" = "close" ]; then
-  exit 0
-fi
-exit 0
+printf 'runner failed\\n' >&2
+exit 1
 `,
       "utf8"
     );
-    await chmod(playwrightPath, 0o755);
+    await chmod(nodePath, 0o755);
 
     await expect(
       execFileAsync("bash", ["./scripts/browser-smoke.sh"], {
@@ -70,44 +58,28 @@ exit 0
     });
   });
 
-  it("uses a resilient post-login handoff for preview auth flows", async () => {
+  it("passes the smoke environment through to the delegated runner", async () => {
     const binDir = join(tempDir, "bin");
-    const logPath = join(tempDir, "playwright.log");
+    const logPath = join(tempDir, "node-env.log");
     await mkdir(binDir, { recursive: true });
 
     const curlPath = join(binDir, "curl");
     await writeFile(curlPath, "#!/usr/bin/env bash\nexit 0\n", "utf8");
     await chmod(curlPath, 0o755);
 
-    const playwrightPath = join(binDir, "playwright-cli");
+    const nodePath = join(binDir, "node");
     await writeFile(
-      playwrightPath,
+      nodePath,
       `#!/usr/bin/env bash
 set -euo pipefail
-printf '%s\\n' "$*" >> "${logPath}"
-if [ "$2" = "open" ]; then
-  exit 0
-fi
-if [ "$2" = "run-code" ]; then
-  if printf '%s' "$3" | grep -Fq 'await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 30000 }).catch(() => {});' && \
-     printf '%s' "$3" | grep -Fq 'if (page.url().includes("/login")) {' && \
-     printf '%s' "$3" | grep -Fq 'await page.goto(baseUrl, { waitUntil: "networkidle" });'; then
-    printf '### Result\\n'
-    printf '{"ok":true}\\n'
-    exit 0
-  fi
-  printf '### Error\\n'
-  printf 'TimeoutError: login redirect never completed\\n'
-  exit 0
-fi
-if [ "$2" = "close" ]; then
-  exit 0
-fi
-exit 0
+printf 'SMOKE_BASE_URL=%s\\n' "$SMOKE_BASE_URL" > "${logPath}"
+printf 'SMOKE_AUTH_USERNAME=%s\\n' "$SMOKE_AUTH_USERNAME" >> "${logPath}"
+printf 'SMOKE_AUTH_PASSWORD=%s\\n' "$SMOKE_AUTH_PASSWORD" >> "${logPath}"
+printf '{"ok":true}\\n'
 `,
       "utf8"
     );
-    await chmod(playwrightPath, 0o755);
+    await chmod(nodePath, 0o755);
 
     await expect(
       execFileAsync("bash", ["./scripts/browser-smoke.sh"], {
@@ -116,12 +88,53 @@ exit 0
           ...process.env,
           PATH: `${binDir}:${process.env.PATH ?? ""}`,
           SMOKE_BASE_URL: "http://127.0.0.1:3001",
-          SMOKE_AUTH_EMAIL: "codex.smoke.20260329@gmail.com",
+          SMOKE_AUTH_USERNAME: "fireline-demo-01",
           SMOKE_AUTH_PASSWORD: "Pin2pin!2026",
         },
       })
     ).resolves.toMatchObject({
       stdout: expect.stringContaining('{"ok":true}'),
     });
+
+    await expect(readFile(logPath, "utf8")).resolves.toContain("SMOKE_AUTH_USERNAME=fireline-demo-01");
+  });
+
+  it("delegates to the repo Playwright runner even when playwright-cli is unavailable", async () => {
+    const binDir = join(tempDir, "bin");
+    const logPath = join(tempDir, "node.log");
+    await mkdir(binDir, { recursive: true });
+
+    const curlPath = join(binDir, "curl");
+    await writeFile(curlPath, "#!/usr/bin/env bash\nexit 0\n", "utf8");
+    await chmod(curlPath, 0o755);
+
+    const nodePath = join(binDir, "node");
+    await writeFile(
+      nodePath,
+      `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" > "${logPath}"
+printf '{"ok":true,"runner":"native-playwright"}\\n'
+`,
+      "utf8"
+    );
+    await chmod(nodePath, 0o755);
+
+    await expect(
+      execFileAsync("bash", ["./scripts/browser-smoke.sh"], {
+        cwd: "/Users/jilanfang/ai-quality",
+        env: {
+          ...process.env,
+          PATH: `${binDir}:${process.env.PATH ?? ""}`,
+          SMOKE_BASE_URL: "http://127.0.0.1:3001",
+          SMOKE_AUTH_USERNAME: "fireline-demo-01",
+          SMOKE_AUTH_PASSWORD: "Pin2pin!2026",
+        },
+      })
+    ).resolves.toMatchObject({
+      stdout: expect.stringContaining('"runner":"native-playwright"'),
+    });
+
+    await expect(readFile(logPath, "utf8")).resolves.toContain("scripts/browser-smoke.mjs");
   });
 });
