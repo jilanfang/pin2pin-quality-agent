@@ -33,6 +33,7 @@ __pycache__/
 
 # local worktrees
 .worktrees/
+.claude/
 
 # Playwright
 test-results/
