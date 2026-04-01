@@ -2,7 +2,6 @@
 
 import React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 
 import {
   createInvestigationFromInput,
@@ -223,6 +222,26 @@ function formatTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function splitAssistantMessage(content: string) {
+  const normalized = content.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return [];
+
+  const lines = normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const chunks = lines.flatMap((line) => {
+    const sentences = line
+      .split(/(?<=[。！？!?；;])/u)
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+    return sentences.length ? sentences : [line];
+  });
+
+  return chunks.length ? chunks : [normalized];
 }
 
 function writeHasCasesCookie(hasCases: boolean) {
@@ -490,50 +509,95 @@ function WorkspaceContextHeader({
   currentCaseId,
   currentCase,
   impactedStageNames,
+  isEditingTitle,
+  titleDraft,
+  titleSaving,
+  onTitleDraftChange,
+  onTitleStartEdit,
+  onTitleCommit,
+  onTitleBlur,
+  onTitleCancel,
 }: {
   currentCaseId: string | null;
   currentCase: CaseWorkflow | null;
   impactedStageNames: string[];
+  isEditingTitle: boolean;
+  titleDraft: string;
+  titleSaving: boolean;
+  onTitleDraftChange: (value: string) => void;
+  onTitleStartEdit: () => void;
+  onTitleCommit: () => void;
+  onTitleBlur: () => void;
+  onTitleCancel: () => void;
 }) {
+  const currentIndex = Number((currentCase?.currentStage ?? "D1").replace("D", ""));
+
   return (
     <header className="workspace-context" aria-label="调查上下文">
-      <div className="workspace-context-main">
-        <div className="workspace-context-copy">
-          <strong>{currentCase?.presentation?.isUrgentCustomerComplaint ? "客诉快速响应工作台" : "质量调查工作台"}</strong>
-          <span className="workspace-context-meta">
-            {currentCaseId ? `当前调查 #${currentCaseId.toUpperCase()}` : "当前调查未初始化"}
-          </span>
-          <h2>{currentCase?.title ?? "先开始第一条调查"}</h2>
-          <p>
-            {currentCaseId
-              ? currentCase?.guidedThinking?.thinkingGoal ?? "继续补证据，再让 AI 带着往前推。"
-              : "先开始一条调查，我再带着你把第一步跑通。"}
-          </p>
-        </div>
+      <div className="workspace-track-row">
+        <span className="workspace-context-meta">
+          {currentCaseId ? `当前调查 #${currentCaseId.toUpperCase()}` : "当前调查未初始化"}
+        </span>
+        <div className="workspace-stage-dots" aria-hidden="true">
+          {(currentCase?.stages ?? []).map((stage) => {
+            const stageIndex = Number(stage.stage.replace("D", ""));
+            const isActive = stage.stage === currentCase?.currentStage;
+            const isComplete = stageIndex < currentIndex;
 
-        <div className="workspace-track-block">
-          <div className="workspace-stage-dots" aria-hidden="true">
-            {(currentCase?.stages ?? []).map((stage) => {
-              const stageIndex = Number(stage.stage.replace("D", ""));
-              const currentIndex = Number((currentCase?.currentStage ?? "D1").replace("D", ""));
-              const isActive = stage.stage === currentCase?.currentStage;
-              const isComplete = stageIndex < currentIndex;
-
-              return (
-                <span
-                  key={stage.stage}
-                  className={`workspace-stage-dot${isActive ? " active" : ""}${isComplete ? " complete" : ""}${
-                    stage.impacted ? " impacted" : ""
-                  }`}
-                />
-              );
-            })}
-          </div>
-          <span className="workspace-track-label">
-            {currentCaseId ? stageLabel(currentCase?.currentStage ?? "D2") : stageLabel("D1")}
-          </span>
+            return (
+              <span
+                key={stage.stage}
+                className={`workspace-stage-dot${isActive ? " active" : ""}${isComplete ? " complete" : ""}${
+                  stage.impacted ? " impacted" : ""
+                }`}
+              />
+            );
+          })}
         </div>
       </div>
+
+      <div className="workspace-title-row">
+        <h1 className="workspace-title-heading">
+          {isEditingTitle ? (
+            <input
+              className="workspace-title-input"
+              aria-label="调查标题输入框"
+              value={titleDraft}
+              disabled={titleSaving}
+              onChange={(event) => onTitleDraftChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  onTitleCommit();
+                  return;
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  onTitleCancel();
+                }
+              }}
+              onBlur={onTitleBlur}
+              autoFocus
+            />
+          ) : (
+            <button
+              type="button"
+              className="workspace-title-button"
+              aria-label="编辑调查标题"
+              onClick={onTitleStartEdit}
+              disabled={!currentCaseId || titleSaving}
+            >
+              {currentCase?.title ?? "先开始第一条调查"}
+            </button>
+          )}
+        </h1>
+      </div>
+
+      <p className="workspace-title-helper">
+        {currentCaseId
+          ? currentCase?.guidedThinking?.thinkingGoal ?? "继续补证据，再让 AI 带着往前推。"
+          : "先开始一条调查，我再带着你把第一步跑通。"}
+      </p>
 
       <div className="topbar-chips">
         {currentCaseId ? (
@@ -872,11 +936,11 @@ function ComposerDock({
   onToggleExpanded: () => void;
   onSend: () => void;
 }) {
-  const dock = (
+  return (
     <div
-      className={`composer-dock${isExpanded ? " expanded" : ""}`}
+      className={`composer-dock composer-pane${isExpanded ? " expanded" : ""}`}
       data-testid="composer-dock"
-      data-dock-position="viewport-fixed"
+      data-dock-position="column-bottom"
       aria-label="证据输入停靠区"
     >
       <span className="helper-inline">
@@ -886,7 +950,7 @@ function ComposerDock({
         <textarea
           aria-label="证据输入框"
           className="composer"
-          rows={isExpanded ? 4 : 1}
+          rows={3}
           placeholder={EVIDENCE_INPUT_PLACEHOLDER}
           value={composer}
           onChange={(event) => onChange(event.target.value)}
@@ -903,12 +967,6 @@ function ComposerDock({
       </div>
     </div>
   );
-
-  if (typeof document === "undefined") {
-    return dock;
-  }
-
-  return createPortal(dock, document.body);
 }
 
 function EntryComposerCard({
@@ -1038,6 +1096,11 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
   const [caseSearch, setCaseSearch] = useState("");
   const [isStageRailExpanded, setIsStageRailExpanded] = useState(false);
   const [isComposerExpanded, setIsComposerExpanded] = useState(false);
+  const [composerHeight, setComposerHeight] = useState(112);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [titleSaving, setTitleSaving] = useState(false);
+  const [animatedAssistantCounts, setAnimatedAssistantCounts] = useState<Record<string, number>>({});
   const [pendingThinking, setPendingThinking] = useState<{
     thinking: NonNullable<ConversationMeta>["thinking"];
     impactedStages: string[];
@@ -1047,6 +1110,11 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
   const lastTrackedErrorRef = useRef<string | null>(null);
   const casesRef = useRef<CaseSummary[]>([]);
   const currentCaseIdRef = useRef<string | null>(null);
+  const composerPaneRef = useRef<HTMLDivElement | null>(null);
+  const titleCommitFromKeyboardRef = useRef(false);
+  const activeAnimatedCaseRef = useRef<string | null>(null);
+  const seenAssistantMessageIdsRef = useRef<Record<string, Set<string>>>({});
+  const animationTimersRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     casesRef.current = cases;
@@ -1055,6 +1123,34 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
   useEffect(() => {
     currentCaseIdRef.current = currentCaseId;
   }, [currentCaseId]);
+
+  useEffect(() => {
+    if (isEditingTitle) return;
+    setTitleDraft(currentCase?.title ?? "");
+  }, [currentCase?.caseId, currentCase?.title, isEditingTitle]);
+
+  useEffect(() => {
+    if (!composerPaneRef.current) return;
+    const node = composerPaneRef.current;
+    if (typeof ResizeObserver === "undefined") {
+      setComposerHeight(Math.round(node.getBoundingClientRect().height) || 112);
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setComposerHeight(Math.round(entry.contentRect.height));
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [currentCaseId, currentCase?.messages.length, composer, isComposerExpanded]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(animationTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+      animationTimersRef.current = {};
+    };
+  }, []);
 
   const currentStageRecord = useMemo(() => {
     if (!currentCase) return null;
@@ -1113,6 +1209,115 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
     ["在制品", factValue(currentCase?.knownFacts ?? [], "containment_wip")],
   ];
   const actionFacts = actionFactEntries.filter(hasActionFact);
+
+  function clearAssistantAnimationTimers() {
+    Object.values(animationTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+    animationTimersRef.current = {};
+  }
+
+  useEffect(() => {
+    if (!currentCase) return;
+
+    const caseId = currentCase.caseId;
+    const assistantMessages = currentCase.messages.filter((message) => message.role === "assistant");
+    const caseChanged = activeAnimatedCaseRef.current !== caseId;
+
+    if (!seenAssistantMessageIdsRef.current[caseId]) {
+      seenAssistantMessageIdsRef.current[caseId] = new Set<string>();
+    }
+
+    const seen = seenAssistantMessageIdsRef.current[caseId];
+
+    if (caseChanged) {
+      clearAssistantAnimationTimers();
+      const initialCounts: Record<string, number> = {};
+      assistantMessages.forEach((message) => {
+        seen.add(message.id);
+        initialCounts[message.id] = splitAssistantMessage(message.content).length || 1;
+      });
+      setAnimatedAssistantCounts(initialCounts);
+      activeAnimatedCaseRef.current = caseId;
+      return;
+    }
+
+    assistantMessages.forEach((message) => {
+      if (seen.has(message.id)) return;
+      seen.add(message.id);
+
+      const chunks = splitAssistantMessage(message.content);
+      const targetCount = chunks.length || 1;
+
+      if (targetCount <= 1) {
+        setAnimatedAssistantCounts((prev) => ({
+          ...prev,
+          [message.id]: 1,
+        }));
+        return;
+      }
+
+      setAnimatedAssistantCounts((prev) => ({
+        ...prev,
+        [message.id]: 1,
+      }));
+
+      const animateStep = (index: number) => {
+        setAnimatedAssistantCounts((prev) => ({
+          ...prev,
+          [message.id]: Math.min(index + 1, targetCount),
+        }));
+
+        if (index + 1 < targetCount) {
+          animationTimersRef.current[message.id] = window.setTimeout(() => animateStep(index + 1), 300);
+        }
+      };
+
+      animationTimersRef.current[message.id] = window.setTimeout(() => animateStep(1), 300);
+    });
+  }, [currentCase]);
+
+  const renderedMessages = useMemo(() => {
+    if (!currentCase) return [];
+
+    return currentCase.messages.flatMap((message) => {
+      if (message.role !== "assistant") {
+        return [
+          {
+            segmentKey: message.id,
+            role: message.role,
+            createdAt: message.createdAt,
+            content: message.content,
+            showMeta: true,
+          },
+        ];
+      }
+
+      const chunks = splitAssistantMessage(message.content);
+      if (!chunks.length) {
+        return [
+          {
+            segmentKey: message.id,
+            role: message.role,
+            createdAt: message.createdAt,
+            content: message.content,
+            showMeta: true,
+          },
+        ];
+      }
+
+      const visibleCount = Math.max(
+        1,
+        Math.min(animatedAssistantCounts[message.id] ?? chunks.length, chunks.length)
+      );
+
+      return chunks.slice(0, visibleCount).map((chunk, index) => ({
+        segmentKey: `${message.id}-${index}`,
+        role: message.role,
+        createdAt: message.createdAt,
+        content: chunk,
+        showMeta: index === 0,
+      }));
+    });
+  }, [animatedAssistantCounts, currentCase]);
 
   const summaryItems = useMemo<SummaryItem[]>(() => {
     if (!currentCase) return [];
@@ -1270,6 +1475,66 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
       hasCase: Boolean(currentCaseId),
     });
   }, [currentCaseId, error]);
+
+  async function saveCaseTitle(nextTitleRaw: string) {
+    if (!currentCaseId) return;
+    const nextTitle = nextTitleRaw.trim();
+    if (!nextTitle) {
+      setError("标题不能为空");
+      setTitleDraft(currentCase?.title ?? "");
+      setIsEditingTitle(false);
+      return;
+    }
+
+    if (nextTitle === (currentCase?.title ?? "")) {
+      setIsEditingTitle(false);
+      return;
+    }
+
+    setTitleSaving(true);
+    setError(null);
+    try {
+      const payload = (await readJson(
+        await fetch(`/api/cases/${currentCaseId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: nextTitle }),
+        })
+      )) as CaseSummary;
+
+      setCurrentCase((prev) => (prev ? { ...prev, title: payload.title } : prev));
+      setCases((items) =>
+        items.map((item) => (item.id === payload.id ? { ...item, title: payload.title } : item))
+      );
+      setTitleDraft(payload.title);
+      setIsEditingTitle(false);
+    } catch (nextError) {
+      setError(messageFromError(nextError, "标题更新失败"));
+      setTitleDraft(currentCase?.title ?? "");
+      setIsEditingTitle(false);
+    } finally {
+      setTitleSaving(false);
+    }
+  }
+
+  function cancelTitleEdit() {
+    setTitleDraft(currentCase?.title ?? "");
+    setIsEditingTitle(false);
+    titleCommitFromKeyboardRef.current = false;
+  }
+
+  function commitTitleEditFromKeyboard() {
+    titleCommitFromKeyboardRef.current = true;
+    void saveCaseTitle(titleDraft);
+  }
+
+  function commitTitleEditFromBlur() {
+    if (titleCommitFromKeyboardRef.current) {
+      titleCommitFromKeyboardRef.current = false;
+      return;
+    }
+    void saveCaseTitle(titleDraft);
+  }
 
   async function createCase() {
     await createCaseFromTemplate({
@@ -1572,16 +1837,19 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
   return (
     <div className="workspace-shell">
       {isCaseDrawerOpen ? <button className="drawer-scrim" type="button" aria-label="关闭抽屉遮罩" onClick={() => setIsCaseDrawerOpen(false)} /> : null}
-
-      {isCaseDrawerOpen ? (
-        <section className="case-drawer panel" aria-label="调查列表抽屉">
+      <div className="workspace-grid">
+        <section
+          className={`case-sidebar panel${isCaseDrawerOpen ? " open" : ""}`}
+          aria-label="调查列表侧栏"
+          data-testid="case-sidebar"
+        >
           <div className="drawer-head">
             <div className="drawer-copy">
               <strong>调查列表</strong>
-              <span>缩起来只留主会话，展开时再切换调查或新建。</span>
+              <span>固定三栏模式下，左栏用于切换调查与新建。</span>
             </div>
-            <button className="ghost-button ghost-button-tight" type="button" onClick={() => setIsCaseDrawerOpen(false)}>
-              收起调查列表
+            <button className="ghost-button ghost-button-tight mobile-only" type="button" onClick={() => setIsCaseDrawerOpen(false)}>
+              收起
             </button>
           </div>
 
@@ -1592,11 +1860,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
               <p>推荐先加载一个种子案例，3 分钟内看到第一版结果。</p>
               <p>如果你手头已经有真实异常，也可以直接新建空白调查开始录入。</p>
               <div className="first-run-actions">
-                <button
-                  className="primary-button"
-                  type="button"
-                  onClick={() => startWithSeedCase(seedCases[0].key)}
-                >
+                <button className="primary-button" type="button" onClick={() => startWithSeedCase(seedCases[0].key)}>
                   开始新调查
                 </button>
                 <button className="ghost-button" type="button" onClick={startWithBlankCase}>
@@ -1679,195 +1943,206 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
               </button>
             ))}
             {!visibleCases.length ? (
-              <div className="empty-inline-hint">
-                没有匹配的调查，试试换个关键词。
-              </div>
+              <div className="empty-inline-hint">没有匹配的调查，试试换个关键词。</div>
             ) : null}
           </div>
         </section>
-      ) : null}
 
-      <main className="main-panel">
-        <WorkspaceContextHeader
-          currentCaseId={currentCaseId}
-          currentCase={currentCase}
-          impactedStageNames={impactedStageNames}
-        />
+        <main className="main-panel">
+          <WorkspaceContextHeader
+            currentCaseId={currentCaseId}
+            currentCase={currentCase}
+            impactedStageNames={impactedStageNames}
+            isEditingTitle={isEditingTitle}
+            titleDraft={titleDraft}
+            titleSaving={titleSaving}
+            onTitleDraftChange={setTitleDraft}
+            onTitleStartEdit={() => setIsEditingTitle(true)}
+            onTitleCommit={commitTitleEditFromKeyboard}
+            onTitleBlur={commitTitleEditFromBlur}
+            onTitleCancel={cancelTitleEdit}
+          />
 
-        {error ? <div className="alert error">{error}</div> : null}
+          {error ? <div className="alert error">{error}</div> : null}
 
-        <section className="conversation-shell panel">
-          <div className="conversation-head">
-            <strong>AI 协作区</strong>
-            <span>
-              {loading
-                ? "处理中…"
-                : isEntryState
-                  ? "先贴第一段材料，我来起调查"
-                  : "推进当前调查"}
-            </span>
-          </div>
-
-          <div
-            className="conversation-feed"
-            data-testid="conversation-feed"
-            data-has-floating-dock={isEntryState ? "false" : "true"}
-          >
-            {isEntryState ? (
-              <>
-                {pendingThinking ? (
-                  <ThinkingStatusCard
-                    thinking={pendingThinking.thinking}
-                    impactedStages={pendingThinking.impactedStages}
-                  />
-                ) : null}
-                <EntryComposerCard
-                  title={
-                    currentCaseId
-                      ? "把第一段情况贴进来，我先帮你接住这条调查"
-                      : "把异常情况贴进来，我先帮你起调查"
-                  }
-                  description={
-                    currentCaseId
-                      ? "当前这条调查还是空白的。先贴第一段客户投诉、测试结论或现场描述，后面再继续补证据。"
-                      : "可以直接粘贴客户投诉、测试结论、批次工单、现场观察或会议纪要，不用先整理成标准格式。"
-                  }
-                  helper={currentCaseId ? "先给我一段最原始的情况描述。" : "支持直接粘贴原始材料。"}
-                  composer={composer}
-                  loading={loading}
-                  primaryLabel="发送证据"
-                  secondaryLabel={!currentCaseId ? "加载演示案例" : undefined}
-                  onChange={setComposer}
-                  onSend={() => void sendEvidence()}
-                  onSecondaryAction={!currentCaseId ? () => startWithSeedCase(seedCases[0].key) : undefined}
-                />
-              </>
-            ) : (
-              <>
-                {pendingThinking ? (
-                  <ThinkingStatusCard
-                    thinking={pendingThinking.thinking}
-                    impactedStages={pendingThinking.impactedStages}
-                  />
-                ) : null}
-                {!pendingThinking && currentCase?.conversationMeta ? (
-                  <ThinkingStatusCard
-                    thinking={currentCase.conversationMeta.thinking}
-                    impactedStages={currentCase.conversationMeta.impactedStages}
-                  />
-                ) : null}
-                {(currentCase?.messages.length ? currentCase.messages : []).map((message) => (
-                  <article
-                    key={message.id}
-                    className={`message-card ${
-                      message.role === "user" ? "message-user" : "message-assistant"
-                    }`}
-                  >
-                    <div className="message-meta">
-                      <span className="message-role">{message.role === "user" ? "你" : "AI 助手"}</span>
-                      <span>{formatTime(message.createdAt)}</span>
-                    </div>
-                    <div className="message-content">{message.content}</div>
-                  </article>
-                ))}
-
-                <AssistantStageCard
-                  currentCase={currentCase}
-                  pendingCaseConfirmation={pendingCaseConfirmation}
-                  selectedStage={selectedStage}
-                  presentation={presentation}
-                  summaryItems={summaryItems}
-                  impactSummary={impactSummary}
-                  rebuildReviewCard={rebuildReviewCard}
-                  copilotBrief={copilotBrief}
-                  guidanceFactsList={guidanceFactsList}
-                  guidanceAssumptions={guidanceAssumptions}
-                  nextQuestion={nextQuestion}
-                  isUrgentComplaint={isUrgentComplaint}
-                  actionFacts={actionFacts}
-                  resultRecommendation={resultRecommendation}
-                  expertReviewSnapshot={expertReviewSnapshot}
-                  visibleStages={visibleStages}
-                  isStageRailExpanded={isStageRailExpanded}
-                  loading={loading}
-                  onToggleStageRail={() => setIsStageRailExpanded((value) => !value)}
-                  onSelectStage={setFocusedStage}
-                  onPrimaryRecommendation={() => {
-                    if (resultRecommendation?.kind === "eight_d") {
-                      void closeCaseWithFinalReport();
-                      return;
-                    }
-                    void openPreview(artifactForRecommendation(resultRecommendation?.kind));
-                  }}
-                />
-                {pendingCaseConfirmation ? (
-                  <div className="report-action-card" data-testid="new-case-confirmation-card">
-                    <div className="report-action-copy">
-                      <span className="section-label">调查挂载确认</span>
-                      <p className="report-action-lead">我判断这更像另一条新调查</p>
-                      <p>{`建议按“${pendingCaseConfirmation.suggestedTitle}”新建。如果你确定它只是当前调查的新补充，也可以继续挂在当前调查里。`}</p>
-                    </div>
-                    <div className="report-action-row report-action-row-inline">
-                      <button className="primary-button" type="button" onClick={() => void confirmPendingCaseAsNew()} disabled={loading}>
-                        新建调查
-                      </button>
-                      <button className="ghost-button" type="button" onClick={() => void confirmPendingCaseAsCurrent()} disabled={loading}>
-                        继续当前调查
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </>
-            )}
-          </div>
-
-          {!isEntryState ? (
-            <ComposerDock
-              focusArea={currentCase?.guidedThinking?.focusArea}
-              composer={composer}
-              isExpanded={isComposerExpanded}
-              loading={loading}
-              currentCaseId={currentCaseId}
-              onChange={setComposer}
-              onToggleExpanded={() => setIsComposerExpanded((value) => !value)}
-              onSend={() => void sendEvidence()}
-            />
-          ) : null}
-        </section>
-
-        {preview ? (
-          <aside className="preview-drawer panel" data-testid="preview-drawer" aria-label="报告预览抽屉">
-            <div className="drawer-head">
-              <div className="drawer-copy">
-                <strong>结果预览</strong>
-                <span>默认折叠，只有在需要查看整理结果时才展开。</span>
+          <section className="conversation-shell panel">
+            <div className="conversation-layout" style={{ "--composer-height": `${composerHeight}px` } as React.CSSProperties}>
+              <div className="conversation-head">
+                <strong>AI 协作区</strong>
+                <span>
+                  {loading
+                    ? "处理中…"
+                    : isEntryState
+                      ? "先贴第一段材料，我来起调查"
+                      : "推进当前调查"}
+                </span>
               </div>
-              <button className="ghost-button ghost-button-tight" type="button" onClick={() => setPreview(null)}>
-                关闭预览
-              </button>
+
+              <div className="conversation-feed messages-scroll" data-testid="conversation-feed" data-has-floating-dock="false">
+                {isEntryState ? (
+                  <>
+                    {pendingThinking ? (
+                      <ThinkingStatusCard thinking={pendingThinking.thinking} impactedStages={pendingThinking.impactedStages} />
+                    ) : null}
+                    <EntryComposerCard
+                      title={currentCaseId ? "把第一段情况贴进来，我先帮你接住这条调查" : "把异常情况贴进来，我先帮你起调查"}
+                      description={
+                        currentCaseId
+                          ? "当前这条调查还是空白的。先贴第一段客户投诉、测试结论或现场描述，后面再继续补证据。"
+                          : "可以直接粘贴客户投诉、测试结论、批次工单、现场观察或会议纪要，不用先整理成标准格式。"
+                      }
+                      helper={currentCaseId ? "先给我一段最原始的情况描述。" : "支持直接粘贴原始材料。"}
+                      composer={composer}
+                      loading={loading}
+                      primaryLabel="发送证据"
+                      secondaryLabel={!currentCaseId ? "加载演示案例" : undefined}
+                      onChange={setComposer}
+                      onSend={() => void sendEvidence()}
+                      onSecondaryAction={!currentCaseId ? () => startWithSeedCase(seedCases[0].key) : undefined}
+                    />
+                  </>
+                ) : (
+                  <>
+                    {pendingThinking ? (
+                      <ThinkingStatusCard thinking={pendingThinking.thinking} impactedStages={pendingThinking.impactedStages} />
+                    ) : null}
+                    {!pendingThinking && currentCase?.conversationMeta ? (
+                      <ThinkingStatusCard
+                        thinking={currentCase.conversationMeta.thinking}
+                        impactedStages={currentCase.conversationMeta.impactedStages}
+                      />
+                    ) : null}
+                    {renderedMessages.map((message) => (
+                      <article
+                        key={message.segmentKey}
+                        className={`message-card ${message.role === "user" ? "message-user" : "message-assistant"}`}
+                      >
+                        {message.showMeta ? (
+                          <div className="message-meta">
+                            <span className="message-role">{message.role === "user" ? "你" : "AI 助手"}</span>
+                            <span>{formatTime(message.createdAt)}</span>
+                          </div>
+                        ) : null}
+                        <div className="message-content">{message.content}</div>
+                      </article>
+                    ))}
+                  </>
+                )}
+              </div>
+
+              {!isEntryState ? (
+                <div className="composer-pane-wrap" ref={composerPaneRef}>
+                  <ComposerDock
+                    focusArea={currentCase?.guidedThinking?.focusArea}
+                    composer={composer}
+                    isExpanded={isComposerExpanded}
+                    loading={loading}
+                    currentCaseId={currentCaseId}
+                    onChange={setComposer}
+                    onToggleExpanded={() => setIsComposerExpanded((value) => !value)}
+                    onSend={() => void sendEvidence()}
+                  />
+                </div>
+              ) : null}
             </div>
-            <div className="panel-head">
-              <strong>{preview.document.title ?? "HTML 预览"}</strong>
+          </section>
+        </main>
+
+        <aside className="insight-panel panel" data-testid="insight-column">
+          {isEntryState ? (
+            <div className="insight-placeholder">
+              <strong>分析区将在首条证据后出现</strong>
+              <p>先把客户投诉或异常描述贴到中栏，我会在这里持续更新阶段判断与建议动作。</p>
             </div>
-            <div className="preview-meta">
-              <span>类型：{preview.document.displayArtifactLabel ?? preview.document.artifactKind ?? preview.document.reportStage ?? "analysis_summary"}</span>
-              <span>状态：{preview.document.caseStatus}</span>
-            </div>
-            {preview.document.trustSummary ? <div className="mini-note">{preview.document.trustSummary}</div> : null}
-            <div className="preview-body">
-              <iframe
-                className="html-preview"
-                title={preview.document.title ? `${preview.document.title}预览` : "分析结论预览"}
-                srcDoc={preview.html}
+          ) : (
+            <>
+              <div className="insight-head">
+                <strong>推进当前调查</strong>
+                <span>{stageLabel(selectedStage?.stage ?? currentCase?.currentStage ?? "D2")}</span>
+              </div>
+              <AssistantStageCard
+                currentCase={currentCase}
+                pendingCaseConfirmation={pendingCaseConfirmation}
+                selectedStage={selectedStage}
+                presentation={presentation}
+                summaryItems={summaryItems}
+                impactSummary={impactSummary}
+                rebuildReviewCard={rebuildReviewCard}
+                copilotBrief={copilotBrief}
+                guidanceFactsList={guidanceFactsList}
+                guidanceAssumptions={guidanceAssumptions}
+                nextQuestion={nextQuestion}
+                isUrgentComplaint={isUrgentComplaint}
+                actionFacts={actionFacts}
+                resultRecommendation={resultRecommendation}
+                expertReviewSnapshot={expertReviewSnapshot}
+                visibleStages={visibleStages}
+                isStageRailExpanded={isStageRailExpanded}
+                loading={loading}
+                onToggleStageRail={() => setIsStageRailExpanded((value) => !value)}
+                onSelectStage={setFocusedStage}
+                onPrimaryRecommendation={() => {
+                  if (resultRecommendation?.kind === "eight_d") {
+                    void closeCaseWithFinalReport();
+                    return;
+                  }
+                  void openPreview(artifactForRecommendation(resultRecommendation?.kind));
+                }}
               />
-              <details className="text-preview-wrap">
-                <summary>查看文本预览</summary>
-                <pre className="text-preview">{preview.text}</pre>
-              </details>
+              {pendingCaseConfirmation ? (
+                <div className="report-action-card" data-testid="new-case-confirmation-card">
+                  <div className="report-action-copy">
+                    <span className="section-label">调查挂载确认</span>
+                    <p className="report-action-lead">我判断这更像另一条新调查</p>
+                    <p>{`建议按“${pendingCaseConfirmation.suggestedTitle}”新建。如果你确定它只是当前调查的新补充，也可以继续挂在当前调查里。`}</p>
+                  </div>
+                  <div className="report-action-row report-action-row-inline">
+                    <button className="primary-button" type="button" onClick={() => void confirmPendingCaseAsNew()} disabled={loading}>
+                      新建调查
+                    </button>
+                    <button className="ghost-button" type="button" onClick={() => void confirmPendingCaseAsCurrent()} disabled={loading}>
+                      继续当前调查
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )}
+        </aside>
+      </div>
+
+      {preview ? (
+        <aside className="preview-drawer panel" data-testid="preview-drawer" aria-label="报告预览抽屉">
+          <div className="drawer-head">
+            <div className="drawer-copy">
+              <strong>结果预览</strong>
+              <span>默认折叠，只有在需要查看整理结果时才展开。</span>
             </div>
-          </aside>
-        ) : null}
-      </main>
+            <button className="ghost-button ghost-button-tight" type="button" onClick={() => setPreview(null)}>
+              关闭预览
+            </button>
+          </div>
+          <div className="panel-head">
+            <strong>{preview.document.title ?? "HTML 预览"}</strong>
+          </div>
+          <div className="preview-meta">
+            <span>类型：{preview.document.displayArtifactLabel ?? preview.document.artifactKind ?? preview.document.reportStage ?? "analysis_summary"}</span>
+            <span>状态：{preview.document.caseStatus}</span>
+          </div>
+          {preview.document.trustSummary ? <div className="mini-note">{preview.document.trustSummary}</div> : null}
+          <div className="preview-body">
+            <iframe
+              className="html-preview"
+              title={preview.document.title ? `${preview.document.title}预览` : "分析结论预览"}
+              srcDoc={preview.html}
+            />
+            <details className="text-preview-wrap">
+              <summary>查看文本预览</summary>
+              <pre className="text-preview">{preview.text}</pre>
+            </details>
+          </div>
+        </aside>
+      ) : null}
 
       <style>{`
         .workspace-shell {
@@ -2973,11 +3248,276 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           min-height: 520px;
         }
 
+        .workspace-grid {
+          display: grid;
+          grid-template-columns: 292px minmax(0, 1fr) 392px;
+          gap: 12px;
+          height: 100%;
+          min-height: 0;
+        }
+
+        .case-sidebar {
+          min-height: 0;
+          display: grid;
+          grid-template-rows: auto auto auto auto 1fr;
+          gap: 10px;
+          padding: 12px;
+        }
+
+        .main-panel {
+          min-height: 0;
+          width: 100%;
+          max-width: none;
+          margin: 0;
+        }
+
+        .insight-panel {
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          overflow: auto;
+          padding: 12px;
+        }
+
+        .insight-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          color: var(--muted);
+          font-size: 12px;
+          padding: 2px 2px 0;
+        }
+
+        .insight-placeholder {
+          margin: auto 0;
+          display: grid;
+          gap: 8px;
+          padding: 14px;
+          border-radius: 14px;
+          border: 1px dashed rgba(215, 221, 234, 0.9);
+          background: rgba(255, 255, 255, 0.74);
+          color: var(--muted);
+          line-height: 1.6;
+        }
+
+        .insight-placeholder strong {
+          color: var(--text);
+          font-size: 14px;
+        }
+
+        .insight-placeholder p {
+          margin: 0;
+        }
+
+        .drawer-scrim {
+          display: none;
+        }
+
+        .mobile-only {
+          display: none;
+        }
+
+        .workspace-context {
+          gap: 9px;
+          padding: 6px 10px 2px;
+        }
+
+        .workspace-track-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .workspace-title-row {
+          display: flex;
+          justify-content: center;
+        }
+
+        .workspace-title-heading {
+          margin: 0;
+          width: min(100%, 720px);
+        }
+
+        .workspace-title-button,
+        .workspace-title-input {
+          width: 100%;
+          border-radius: 12px;
+          text-align: center;
+          font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+          font-size: clamp(20px, 1.8vw, 30px);
+          letter-spacing: -0.03em;
+          font-weight: 700;
+          line-height: 1.2;
+          min-height: 48px;
+        }
+
+        .workspace-title-button {
+          border: 1px solid transparent;
+          background: transparent;
+          color: var(--text);
+          padding: 6px 12px;
+        }
+
+        .workspace-title-button:hover {
+          border-color: rgba(25, 73, 203, 0.14);
+          background: rgba(25, 73, 203, 0.04);
+        }
+
+        .workspace-title-input {
+          border: 1px solid rgba(25, 73, 203, 0.22);
+          background: rgba(255, 255, 255, 0.96);
+          color: var(--text);
+          padding: 6px 14px;
+          outline: none;
+        }
+
+        .workspace-title-helper {
+          margin: 0;
+          text-align: center;
+          color: var(--muted);
+          font-size: 12px;
+          line-height: 1.55;
+        }
+
+        .conversation-shell {
+          min-height: 0;
+          padding: 10px 12px 10px;
+        }
+
+        .conversation-layout {
+          --composer-height: 112px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          min-height: 0;
+          height: 100%;
+        }
+
+        .conversation-head {
+          width: 100%;
+          max-width: none;
+          margin: 0;
+          padding: 2px 2px 0;
+        }
+
+        .messages-scroll {
+          min-height: 0;
+          flex: 1;
+          overflow: auto;
+          overscroll-behavior: contain;
+          padding: 4px 0 12px;
+          scroll-padding-bottom: calc(var(--composer-height) + 20px);
+        }
+
+        .conversation-feed {
+          width: 100%;
+          max-width: none;
+          margin: 0;
+          padding-right: 4px;
+          padding-left: 2px;
+        }
+
+        .composer-pane-wrap {
+          flex-shrink: 0;
+          border-top: 1px solid rgba(215, 221, 234, 0.9);
+          background: rgba(251, 253, 255, 0.96);
+          border-radius: 14px;
+          padding-top: 10px;
+        }
+
+        .composer-dock {
+          position: static;
+          inset: auto;
+          z-index: auto;
+          gap: 8px;
+          width: 100%;
+          padding: 0;
+          pointer-events: auto;
+        }
+
+        .helper-inline {
+          width: 100%;
+          max-width: none;
+          margin: 0;
+          padding: 0 2px;
+          pointer-events: auto;
+        }
+
+        .composer-frame {
+          width: 100%;
+          max-width: none;
+          margin: 0;
+          align-items: flex-end;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.98);
+          border: 1px solid rgba(215, 221, 234, 0.9);
+          box-shadow: 0 8px 20px rgba(24, 32, 44, 0.06);
+          padding: 10px;
+        }
+
+        .composer {
+          min-height: 96px;
+          height: 112px;
+          max-height: 240px;
+          resize: vertical;
+          border-radius: 12px;
+          border-color: rgba(197, 207, 223, 0.72);
+          line-height: 1.58;
+          padding-top: 10px;
+          padding-bottom: 10px;
+        }
+
+        .composer-dock.expanded .composer {
+          height: 180px;
+        }
+
+        .composer-actions {
+          align-items: flex-end;
+        }
+
+        .message-card {
+          width: min(100%, 86%);
+        }
+
+        .message-user {
+          max-width: 72%;
+          width: auto;
+        }
+
+        .message-assistant {
+          max-width: 82%;
+          width: auto;
+        }
+
+        .case-list {
+          min-height: 0;
+        }
+
+        @media (max-width: 1420px) {
+          .workspace-grid {
+            grid-template-columns: 272px minmax(0, 1fr) 352px;
+          }
+        }
+
         @media (max-width: 1280px) {
           .assistant-secondary-grid,
           .rebuild-review-grid,
           .copilot-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+
+        @media (max-width: 1120px) {
+          .workspace-grid {
+            grid-template-columns: 260px minmax(0, 1fr);
+          }
+
+          .insight-panel {
+            grid-column: 1 / -1;
+            max-height: 48vh;
           }
         }
 
@@ -2988,14 +3528,38 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
             overflow: visible;
           }
 
+          .workspace-grid {
+            grid-template-columns: 1fr;
+            height: auto;
+          }
+
+          .drawer-scrim {
+            display: block;
+          }
+
+          .mobile-only {
+            display: inline-flex;
+          }
+
+          .case-sidebar {
+            position: fixed;
+            top: 12px;
+            bottom: 12px;
+            left: 12px;
+            width: min(320px, calc(100vw - 52px));
+            transform: translateX(-120%);
+            transition: transform 180ms ease;
+            z-index: 30;
+            box-shadow: 0 20px 48px rgba(16, 24, 40, 0.22);
+          }
+
+          .case-sidebar.open {
+            transform: translateX(0);
+          }
+
           .main-panel {
             min-height: 100vh;
             width: 100%;
-          }
-
-          .workspace-context-main {
-            align-items: flex-start;
-            flex-direction: column;
           }
 
           .assistant-secondary-grid,
@@ -3012,6 +3576,12 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
             flex-direction: column;
           }
 
+          .composer {
+            min-height: 96px;
+            height: 96px;
+            max-height: 180px;
+          }
+
           .message-user,
           .message-assistant,
           .conversation-feed,
@@ -3023,23 +3593,15 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           }
 
           .conversation-feed {
-            padding-bottom: 196px;
+            padding-bottom: 10px;
           }
 
-          .case-drawer,
           .preview-drawer {
             left: 12px;
             right: 12px;
             width: auto;
             top: 12px;
             bottom: 12px;
-          }
-
-          .composer-dock {
-            left: max(12px, env(safe-area-inset-left));
-            right: max(12px, env(safe-area-inset-right));
-            bottom: max(12px, env(safe-area-inset-bottom));
-            padding-right: 0;
           }
         }
       `}</style>

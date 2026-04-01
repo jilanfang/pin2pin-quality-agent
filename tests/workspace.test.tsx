@@ -552,10 +552,10 @@ describe("Workspace", () => {
     });
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉案例" });
-    expect(screen.queryByLabelText("调查列表抽屉")).not.toBeInTheDocument();
+    expect(screen.getByTestId("case-sidebar")).toBeInTheDocument();
   });
 
-  it("creates a blank case from the drawer and switches the workspace context to the new case", async () => {
+  it("creates a blank case from the sidebar and switches the workspace context to the new case", async () => {
     const casesQueue = [
       [buildCaseSummary()],
       [
@@ -613,17 +613,12 @@ describe("Workspace", () => {
     render(<Workspace />);
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
-
-    act(() => {
-      window.dispatchEvent(new CustomEvent("fireline:toggle-case-drawer"));
-    });
-
-    const drawer = await screen.findByLabelText("调查列表抽屉");
-    fireEvent.click(within(drawer).getByRole("button", { name: "新建调查" }));
-    fireEvent.change(within(drawer).getByLabelText("调查标题"), {
+    const sidebar = screen.getByTestId("case-sidebar");
+    fireEvent.click(within(sidebar).getByRole("button", { name: "新建调查" }));
+    fireEvent.change(within(sidebar).getByLabelText("调查标题"), {
       target: { value: "新的空白调查" },
     });
-    fireEvent.click(within(drawer).getByRole("button", { name: "创建调查" }));
+    fireEvent.click(within(sidebar).getByRole("button", { name: "创建调查" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -643,7 +638,7 @@ describe("Workspace", () => {
     expect(screen.getByTestId("entry-composer-card")).toBeInTheDocument();
     expect(screen.queryByTestId("copilot-brief")).not.toBeInTheDocument();
     expect(screen.queryByTestId("composer-dock")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("调查列表抽屉")).not.toBeInTheDocument();
+    expect(screen.getByTestId("case-sidebar")).toBeInTheDocument();
   });
 
   it("uses a conversation-first chrome and removes the old summary strip and top report toolbar", async () => {
@@ -659,22 +654,17 @@ describe("Workspace", () => {
     expect(screen.getByText("当前建议")).toBeInTheDocument();
   });
 
-  it("keeps the case list in a drawer instead of a permanently expanded sidebar", async () => {
+  it("keeps the case list in a permanently visible sidebar on desktop", async () => {
     workspaceWithSingleCase();
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
-    expect(screen.queryByLabelText("调查列表抽屉")).not.toBeInTheDocument();
-    act(() => {
-      window.dispatchEvent(new CustomEvent("fireline:toggle-case-drawer"));
-    });
-    await screen.findByLabelText("调查列表抽屉");
-    expect(screen.getByText("新建调查")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "收起调查列表" }));
-    expect(screen.queryByLabelText("调查列表抽屉")).not.toBeInTheDocument();
+    const sidebar = screen.getByTestId("case-sidebar");
+    expect(within(sidebar).getByText("新建调查")).toBeInTheDocument();
+    expect(within(sidebar).getByLabelText("搜索调查")).toBeInTheDocument();
   });
 
-  it("filters visible cases in the drawer with a single search-first flow", async () => {
+  it("filters visible cases in the sidebar with a single search-first flow", async () => {
     stubFetch(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/api/cases") {
@@ -715,26 +705,21 @@ describe("Workspace", () => {
     render(<Workspace />);
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
-
-    act(() => {
-      window.dispatchEvent(new CustomEvent("fireline:toggle-case-drawer"));
-    });
-
-    const drawer = await screen.findByLabelText("调查列表抽屉");
-    const search = within(drawer).getByLabelText("搜索调查");
-    expect(within(drawer).getByText("连接器虚焊异常")).toBeInTheDocument();
+    const sidebar = screen.getByTestId("case-sidebar");
+    const search = within(sidebar).getByLabelText("搜索调查");
+    expect(within(sidebar).getByText("连接器虚焊异常")).toBeInTheDocument();
     expect(
-      within(drawer).getByRole("button", { name: /钽电容反向贴装客诉.*D3/i })
+      within(sidebar).getByRole("button", { name: /钽电容反向贴装客诉.*D3/i })
     ).toBeInTheDocument();
 
     fireEvent.change(search, { target: { value: "连接器" } });
-    expect(within(drawer).getByText("连接器虚焊异常")).toBeInTheDocument();
+    expect(within(sidebar).getByText("连接器虚焊异常")).toBeInTheDocument();
     expect(
-      within(drawer).queryByRole("button", { name: /钽电容反向贴装客诉.*D3/i })
+      within(sidebar).queryByRole("button", { name: /钽电容反向贴装客诉.*D3/i })
     ).not.toBeInTheDocument();
   });
 
-  it("closes the drawer after switching to another case from the list", async () => {
+  it("keeps the sidebar visible after switching to another case", async () => {
     stubFetch(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/api/cases") {
@@ -771,19 +756,14 @@ describe("Workspace", () => {
     render(<Workspace />);
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
-
-    act(() => {
-      window.dispatchEvent(new CustomEvent("fireline:toggle-case-drawer"));
-    });
-
-    const drawer = await screen.findByLabelText("调查列表抽屉");
-    fireEvent.click(within(drawer).getByRole("button", { name: /连接器虚焊异常.*D2/i }));
+    const sidebar = screen.getByTestId("case-sidebar");
+    fireEvent.click(within(sidebar).getByRole("button", { name: /连接器虚焊异常.*D2/i }));
 
     await screen.findByRole("heading", { name: "连接器虚焊异常" });
-    expect(screen.queryByLabelText("调查列表抽屉")).not.toBeInTheDocument();
+    expect(screen.getByTestId("case-sidebar")).toBeInTheDocument();
   });
 
-  it("clears an open preview drawer when creating a new case from the drawer", async () => {
+  it("clears an open preview drawer when creating a new case from the sidebar", async () => {
     const preview = buildPreview();
     const originalSummary = buildCaseSummary();
     const blankSummary = buildCaseSummary({
@@ -894,17 +874,12 @@ describe("Workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "发送证据" }));
     fireEvent.click(await screen.findByRole("button", { name: "整理分析结论" }));
     await screen.findByTestId("preview-drawer");
-
-    act(() => {
-      window.dispatchEvent(new CustomEvent("fireline:toggle-case-drawer"));
-    });
-
-    const drawer = await screen.findByLabelText("调查列表抽屉");
-    fireEvent.click(within(drawer).getByRole("button", { name: "新建调查" }));
-    fireEvent.change(within(drawer).getByLabelText("调查标题"), {
+    const sidebar = screen.getByTestId("case-sidebar");
+    fireEvent.click(within(sidebar).getByRole("button", { name: "新建调查" }));
+    fireEvent.change(within(sidebar).getByLabelText("调查标题"), {
       target: { value: "新的空白调查" },
     });
-    fireEvent.click(within(drawer).getByRole("button", { name: "创建调查" }));
+    fireEvent.click(within(sidebar).getByRole("button", { name: "创建调查" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -984,20 +959,13 @@ describe("Workspace", () => {
     expect(within(drawer).getByTitle("24h 初版 8D预览")).toBeInTheDocument();
   });
 
-  it("anchors the case drawer as a viewport overlay so it does not depend on workspace layout flow", async () => {
+  it("renders the desktop sidebar as part of the three-column workspace flow", async () => {
     workspaceWithSingleCase();
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
-    act(() => {
-      window.dispatchEvent(new CustomEvent("fireline:toggle-case-drawer"));
-    });
-
-    const drawer = await screen.findByLabelText("调查列表抽屉");
-    const scrim = screen.getByRole("button", { name: "关闭抽屉遮罩" });
-
-    expect(scrim).toHaveStyle({ position: "fixed" });
-    expect(drawer).toHaveStyle({ position: "fixed" });
+    expect(screen.getByTestId("case-sidebar")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "关闭抽屉遮罩" })).not.toBeInTheDocument();
   });
 
   it("shows AI result recommendation actions in the assistant area instead of topbar controls", async () => {
@@ -1529,23 +1497,24 @@ describe("Workspace", () => {
     expect(within(timeline).getAllByText("受影响").length).toBeGreaterThan(0);
   });
 
-  it("keeps the composer as a single-line dock by default and lets the user expand and collapse it", async () => {
+  it("keeps the composer in a column-bottom pane and lets the user expand and collapse it", async () => {
     workspaceWithSingleCase();
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
     const dock = screen.getByTestId("composer-dock");
     const input = within(dock).getByLabelText("证据输入框");
-    expect(dock).toHaveAttribute("data-dock-position", "viewport-fixed");
-    expect(input).toHaveAttribute("rows", "1");
+    expect(dock).toHaveAttribute("data-dock-position", "column-bottom");
+    expect(input).toHaveAttribute("rows", "3");
+    expect(dock.className).not.toContain("expanded");
     expect(within(dock).getByRole("button", { name: "展开输入框" })).toBeInTheDocument();
     expect(within(dock).getByRole("button", { name: "发送证据" })).toBeInTheDocument();
 
     fireEvent.click(within(dock).getByRole("button", { name: "展开输入框" }));
-    expect(input).toHaveAttribute("rows", "4");
+    expect(dock.className).toContain("expanded");
 
     fireEvent.click(within(dock).getByRole("button", { name: "收起输入框" }));
-    expect(input).toHaveAttribute("rows", "1");
+    expect(dock.className).not.toContain("expanded");
   });
 
   it("submits evidence through the docked composer", async () => {
@@ -1627,9 +1596,9 @@ describe("Workspace", () => {
     expect(
       await screen.findByText((content) => content.includes("当前情况总结"))
     ).toBeInTheDocument();
-    expect(screen.getByText((content) => content.includes("已确认事实"))).toBeInTheDocument();
-    expect(screen.getByText((content) => content.includes("当前判断"))).toBeInTheDocument();
-    expect(screen.getByText((content) => content.includes("还缺什么"))).toBeInTheDocument();
+    expect(await screen.findByText("已确认事实")).toBeInTheDocument();
+    expect(await screen.findByText("当前判断")).toBeInTheDocument();
+    expect(await screen.findByText("还缺什么")).toBeInTheDocument();
   });
 
   it("submits fragmented updates with a direct question through the single composer flow", async () => {
@@ -1694,7 +1663,8 @@ describe("Workspace", () => {
         expect.objectContaining({ method: "POST" })
       );
     });
-    expect(await screen.findByText("我先帮你接下这个案件。当前还缺失效位置、影响范围和围堵状态。")).toBeInTheDocument();
+    expect(await screen.findByText("我先帮你接下这个案件。")).toBeInTheDocument();
+    expect(await screen.findByText("当前还缺失效位置、影响范围和围堵状态。")).toBeInTheDocument();
     expect(screen.queryByTestId("new-case-confirmation-card")).not.toBeInTheDocument();
   });
 
@@ -1902,10 +1872,11 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
+    expect(screen.getByLabelText("调查列表侧栏")).toBeInTheDocument();
     expect(screen.getByLabelText("调查上下文")).toBeInTheDocument();
     expect(screen.getByLabelText("AI 主分析卡")).toBeInTheDocument();
     expect(screen.getByLabelText("证据输入停靠区")).toBeInTheDocument();
-    expect(screen.getByTestId("conversation-feed")).toHaveAttribute("data-has-floating-dock", "true");
+    expect(screen.getByTestId("conversation-feed")).toHaveAttribute("data-has-floating-dock", "false");
   });
 
   it("shows an inline error instead of crashing when the initial case list load fails", async () => {
