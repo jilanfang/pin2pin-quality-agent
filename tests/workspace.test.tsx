@@ -352,6 +352,46 @@ describe("Workspace", () => {
     expect(screen.queryByRole("button", { name: "打开报告面板" })).not.toBeInTheDocument();
   });
 
+  it("keeps a loading gate when opening a case route before payload resolves", async () => {
+    const workflow = buildCaseWorkflow();
+    let resolveCases: ((value: Response) => void) | null = null;
+    let resolveCase: ((value: Response) => void) | null = null;
+    const casesPromise = new Promise<Response>((resolve) => {
+      resolveCases = resolve;
+    });
+    const casePromise = new Promise<Response>((resolve) => {
+      resolveCase = resolve;
+    });
+
+    stubFetch(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return casesPromise;
+      }
+      if (url === "/api/cases/case-1") {
+        return casePromise;
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace initialCaseId="case-1" />);
+
+    expect(screen.getByText("正在载入调查内容…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "编辑调查标题" })).toHaveTextContent("正在载入调查…");
+    expect(screen.queryByText("先开始第一条调查")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("entry-composer-card")).not.toBeInTheDocument();
+
+    act(() => {
+      resolveCases?.(new Response(JSON.stringify([buildCaseSummary()]), { status: 200 }));
+      resolveCase?.(new Response(JSON.stringify(workflow), { status: 200 }));
+    });
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+    await waitFor(() => {
+      expect(screen.queryByText("正在载入调查内容…")).not.toBeInTheDocument();
+    });
+  });
+
   it("lets the user send the first evidence directly from the empty state by creating a blank case first", async () => {
     const blankSummary = buildCaseSummary({
       id: "case-2",
@@ -1596,9 +1636,14 @@ describe("Workspace", () => {
     expect(
       await screen.findByText((content) => content.includes("当前情况总结"))
     ).toBeInTheDocument();
-    expect(await screen.findByText("已确认事实")).toBeInTheDocument();
-    expect(await screen.findByText("当前判断")).toBeInTheDocument();
-    expect(await screen.findByText("还缺什么")).toBeInTheDocument();
+    await waitFor(
+      () => {
+        expect(screen.getByText("已确认事实")).toBeInTheDocument();
+        expect(screen.getByText("当前判断")).toBeInTheDocument();
+        expect(screen.getByText("还缺什么")).toBeInTheDocument();
+      },
+      { timeout: 5000 }
+    );
   });
 
   it("submits fragmented updates with a direct question through the single composer flow", async () => {

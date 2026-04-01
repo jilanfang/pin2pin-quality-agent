@@ -509,6 +509,7 @@ function WorkspaceContextHeader({
   currentCaseId,
   currentCase,
   impactedStageNames,
+  isCaseLoading,
   isEditingTitle,
   titleDraft,
   titleSaving,
@@ -521,6 +522,7 @@ function WorkspaceContextHeader({
   currentCaseId: string | null;
   currentCase: CaseWorkflow | null;
   impactedStageNames: string[];
+  isCaseLoading: boolean;
   isEditingTitle: boolean;
   titleDraft: string;
   titleSaving: boolean;
@@ -587,28 +589,45 @@ function WorkspaceContextHeader({
               onClick={onTitleStartEdit}
               disabled={!currentCaseId || titleSaving}
             >
-              {currentCase?.title ?? "先开始第一条调查"}
+              {!currentCaseId
+                ? "先开始第一条调查"
+                : isCaseLoading
+                  ? "正在载入调查…"
+                  : currentCase?.title ?? "调查暂时不可用"}
             </button>
           )}
         </h1>
       </div>
 
       <p className="workspace-title-helper">
-        {currentCaseId
-          ? currentCase?.guidedThinking?.thinkingGoal ?? "继续补证据，再让 AI 带着往前推。"
-          : "先开始一条调查，我再带着你把第一步跑通。"}
+        {!currentCaseId
+          ? "先开始一条调查，我再带着你把第一步跑通。"
+          : isCaseLoading
+            ? "正在同步调查详情，请稍候。"
+            : currentCase?.guidedThinking?.thinkingGoal ?? "继续补证据，再让 AI 带着往前推。"}
       </p>
 
       <div className="topbar-chips">
         {currentCaseId ? (
-          <>
-            <span className="status-chip">{stageLabel(currentCase?.currentStage ?? "D2")}</span>
-            <span className="status-chip">{caseStatusLabel(currentCase?.status)}</span>
-            <span className="status-chip">{`D1 ${d1StatusLabel(currentCase?.d1Status)}`}</span>
-            {impactedStageNames.length ? (
-              <span className="status-chip status-chip-warning">{`回看 ${impactedStageNames.map(stageLabel).join(" / ")}`}</span>
-            ) : null}
-          </>
+          isCaseLoading ? (
+            <>
+              <span className="status-chip">加载中</span>
+              <span className="status-chip">同步调查详情</span>
+            </>
+          ) : currentCase ? (
+            <>
+              <span className="status-chip">{stageLabel(currentCase.currentStage ?? "D2")}</span>
+              <span className="status-chip">{caseStatusLabel(currentCase.status)}</span>
+              <span className="status-chip">{`D1 ${d1StatusLabel(currentCase.d1Status)}`}</span>
+              {impactedStageNames.length ? (
+                <span className="status-chip status-chip-warning">{`回看 ${impactedStageNames.map(stageLabel).join(" / ")}`}</span>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <span className="status-chip status-chip-warning">调查暂时不可用</span>
+            </>
+          )
         ) : (
           <>
             <span className="status-chip">未开始</span>
@@ -1084,6 +1103,8 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [currentCaseId, setCurrentCaseId] = useState<string | null>(initialCaseId);
   const [currentCase, setCurrentCase] = useState<CaseWorkflow | null>(null);
+  const [hasHydratedCases, setHasHydratedCases] = useState(false);
+  const [isCurrentCaseLoading, setIsCurrentCaseLoading] = useState(Boolean(initialCaseId));
   const [composer, setComposer] = useState("");
   const [titleInput, setTitleInput] = useState("新的调查");
   const [seedCase, setSeedCase] = useState<(typeof seedCases)[number]["key"] | "">("");
@@ -1115,6 +1136,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
   const activeAnimatedCaseRef = useRef<string | null>(null);
   const seenAssistantMessageIdsRef = useRef<Record<string, Set<string>>>({});
   const animationTimersRef = useRef<Record<string, number>>({});
+  const caseLoadRequestRef = useRef(0);
 
   useEffect(() => {
     casesRef.current = cases;
@@ -1419,7 +1441,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
 
   async function refreshCurrentCase(caseId: string) {
     const payload = (await readJson(await fetch(`/api/cases/${caseId}`))) as CaseWorkflow;
-    setCurrentCase(payload);
+    return payload;
   }
 
   function shouldTrackClientTelemetry() {
@@ -1447,18 +1469,54 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
   }
 
   useEffect(() => {
+    let disposed = false;
     void (async () => {
       try {
         await refreshCases();
       } catch (nextError) {
-        setError(messageFromError(nextError, "调查加载失败"));
+        if (!disposed) {
+          setError(messageFromError(nextError, "调查加载失败"));
+        }
+      } finally {
+        if (!disposed) {
+          setHasHydratedCases(true);
+        }
       }
     })();
+    return () => {
+      disposed = true;
+    };
   }, []);
 
   useEffect(() => {
-    if (!currentCaseId) return;
-    void refreshCurrentCase(currentCaseId);
+    let disposed = false;
+    const requestId = ++caseLoadRequestRef.current;
+
+    if (!currentCaseId) {
+      setCurrentCase(null);
+      setIsCurrentCaseLoading(false);
+      return;
+    }
+
+    setCurrentCase((previous) => (previous?.caseId === currentCaseId ? previous : null));
+    setIsCurrentCaseLoading(true);
+    void (async () => {
+      try {
+        const payload = await refreshCurrentCase(currentCaseId);
+        if (disposed || requestId !== caseLoadRequestRef.current) return;
+        setCurrentCase(payload);
+      } catch (nextError) {
+        if (disposed || requestId !== caseLoadRequestRef.current) return;
+        setError(messageFromError(nextError, "调查详情加载失败"));
+      } finally {
+        if (disposed || requestId !== caseLoadRequestRef.current) return;
+        setIsCurrentCaseLoading(false);
+      }
+    })();
+
+    return () => {
+      disposed = true;
+    };
   }, [currentCaseId]);
 
   useEffect(() => {
@@ -1562,7 +1620,8 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
       casesRef.current = nextCases;
       return nextCases;
     });
-    await refreshCurrentCase(payload.id);
+    const workflow = await refreshCurrentCase(payload.id);
+    setCurrentCase(workflow);
     await refreshCases({ preferredCaseId: payload.id, fallbackSummary: payload });
     setSeedCase("");
     setTitleInput("新的调查");
@@ -1679,7 +1738,8 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         try {
           currentCaseIdRef.current = nextError.createdCaseId;
           setCurrentCaseId(nextError.createdCaseId);
-          await refreshCurrentCase(nextError.createdCaseId);
+          const workflow = await refreshCurrentCase(nextError.createdCaseId);
+          setCurrentCase(workflow);
           await refreshCases({ preferredCaseId: nextError.createdCaseId });
         } catch {
           // Best effort recovery only.
@@ -1756,8 +1816,13 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
 
   const currentSeedDescription = seedCases.find((item) => item.key === seedCase)?.description;
   const hasCases = cases.length > 0;
-  const isBlankCaseEntryState = Boolean(currentCaseId && currentCase && currentCase.messages.length === 0);
+  const showSidebarFirstRun = hasHydratedCases && !hasCases;
+  const isBlankCaseEntryState = Boolean(
+    currentCaseId && currentCase && !isCurrentCaseLoading && currentCase.messages.length === 0
+  );
   const isEntryState = !currentCaseId || isBlankCaseEntryState;
+  const showCaseLoadingState = Boolean(currentCaseId) && isCurrentCaseLoading;
+  const showCaseUnavailableState = Boolean(currentCaseId) && !isCurrentCaseLoading && !currentCase;
 
   useEffect(() => {
     writeHasCasesCookie(hasCases);
@@ -1790,7 +1855,8 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         casesRef.current = nextCases;
         return nextCases;
       });
-      await refreshCurrentCase(payload.id);
+      const workflow = await refreshCurrentCase(payload.id);
+      setCurrentCase(workflow);
       await refreshCases({ preferredCaseId: payload.id, fallbackSummary: payload });
       setComposer("");
       setSeedCase("");
@@ -1853,7 +1919,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
             </button>
           </div>
 
-          {!hasCases ? (
+          {showSidebarFirstRun ? (
             <div className="first-run-card">
               <span className="eyebrow">开始新调查</span>
               <h3>先把第一条调查跑通，再继续补证据和出稿。</h3>
@@ -1953,6 +2019,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
             currentCaseId={currentCaseId}
             currentCase={currentCase}
             impactedStageNames={impactedStageNames}
+            isCaseLoading={showCaseLoadingState}
             isEditingTitle={isEditingTitle}
             titleDraft={titleDraft}
             titleSaving={titleSaving}
@@ -1979,7 +2046,17 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
               </div>
 
               <div className="conversation-feed messages-scroll" data-testid="conversation-feed" data-has-floating-dock="false">
-                {isEntryState ? (
+                {showCaseLoadingState ? (
+                  <article className="message-card message-assistant message-empty" data-testid="case-loading-state">
+                    <h3>正在载入调查内容…</h3>
+                    <p>稍候片刻，我会恢复当前案件的消息和分析进度。</p>
+                  </article>
+                ) : showCaseUnavailableState ? (
+                  <article className="message-card message-assistant message-empty" data-testid="case-unavailable-state">
+                    <h3>调查暂时不可用</h3>
+                    <p>请刷新页面，或从左侧切换到其他调查后再试。</p>
+                  </article>
+                ) : isEntryState ? (
                   <>
                     {pendingThinking ? (
                       <ThinkingStatusCard thinking={pendingThinking.thinking} impactedStages={pendingThinking.impactedStages} />
@@ -2030,7 +2107,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
                 )}
               </div>
 
-              {!isEntryState ? (
+              {!isEntryState && !showCaseLoadingState && !showCaseUnavailableState ? (
                 <div className="composer-pane-wrap" ref={composerPaneRef}>
                   <ComposerDock
                     focusArea={currentCase?.guidedThinking?.focusArea}
@@ -2049,7 +2126,17 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         </main>
 
         <aside className="insight-panel panel" data-testid="insight-column">
-          {isEntryState ? (
+          {showCaseLoadingState ? (
+            <div className="insight-placeholder">
+              <strong>分析区正在载入</strong>
+              <p>正在同步当前调查阶段和建议动作，请稍候。</p>
+            </div>
+          ) : showCaseUnavailableState ? (
+            <div className="insight-placeholder">
+              <strong>当前调查未加载成功</strong>
+              <p>请刷新页面，或先切换到其他调查继续处理。</p>
+            </div>
+          ) : isEntryState ? (
             <div className="insight-placeholder">
               <strong>分析区将在首条证据后出现</strong>
               <p>先把客户投诉或异常描述贴到中栏，我会在这里持续更新阶段判断与建议动作。</p>
@@ -3548,13 +3635,19 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
             left: 12px;
             width: min(320px, calc(100vw - 52px));
             transform: translateX(-120%);
-            transition: transform 180ms ease;
+            transition: transform 180ms ease, opacity 160ms ease;
             z-index: 30;
             box-shadow: 0 20px 48px rgba(16, 24, 40, 0.22);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
           }
 
           .case-sidebar.open {
             transform: translateX(0);
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
           }
 
           .main-panel {
