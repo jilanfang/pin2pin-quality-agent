@@ -83,8 +83,9 @@ async function main() {
 
     currentStep = "investigation_loaded";
     console.log("STEP: investigation_created");
-    await page.getByText("AI 协作区").waitFor({ timeout: 30_000 });
+    await page.getByLabel("调查上下文").waitFor({ timeout: 30_000 });
     await page.getByText(/当前调查 #/).waitFor({ timeout: 30_000 });
+    await page.getByText("调查对话").waitFor({ timeout: 30_000 });
     await page.getByTestId("conversation-feed").waitFor({ timeout: 30_000 });
     await page.waitForFunction(() => {
       const feed = document.querySelector('[data-testid="conversation-feed"]');
