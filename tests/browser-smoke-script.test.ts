@@ -50,7 +50,7 @@ exit 1
         env: {
           ...process.env,
           PATH: `${binDir}:${process.env.PATH ?? ""}`,
-          SMOKE_BASE_URL: "http://127.0.0.1:3001",
+          SMOKE_BASE_URL: "http://localhost:3001",
         },
       })
     ).rejects.toMatchObject({
@@ -87,7 +87,7 @@ printf '{"ok":true}\\n'
         env: {
           ...process.env,
           PATH: `${binDir}:${process.env.PATH ?? ""}`,
-          SMOKE_BASE_URL: "http://127.0.0.1:3001",
+          SMOKE_BASE_URL: "http://localhost:3001",
           SMOKE_AUTH_USERNAME: "fireline-demo-01",
           SMOKE_AUTH_PASSWORD: "Pin2pin!2026",
         },
@@ -126,7 +126,7 @@ printf '{"ok":true,"runner":"native-playwright"}\\n'
         env: {
           ...process.env,
           PATH: `${binDir}:${process.env.PATH ?? ""}`,
-          SMOKE_BASE_URL: "http://127.0.0.1:3001",
+          SMOKE_BASE_URL: "http://localhost:3001",
           SMOKE_AUTH_USERNAME: "fireline-demo-01",
           SMOKE_AUTH_PASSWORD: "Pin2pin!2026",
         },

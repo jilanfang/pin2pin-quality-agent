@@ -146,6 +146,6 @@ describe("investigation routes", () => {
     render(page);
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
-    expect(screen.getByText("AI 协作区")).toBeInTheDocument();
+    expect(screen.getByText("调查对话")).toBeInTheDocument();
   });
 });

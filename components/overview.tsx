@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRef } from "react";
 
 import {
   createInvestigationFromInput,
@@ -36,6 +37,7 @@ export function Overview() {
   const [creating, setCreating] = useState(false);
   const [heroInput, setHeroInput] = useState("");
   const [resumeCaseId, setResumeCaseId] = useState<string | null>(null);
+  const createLockedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,9 +67,10 @@ export function Overview() {
   }, []);
 
   async function startInvestigationFromHero() {
-    if (!heroInput.trim()) return;
+    if (!heroInput.trim() || createLockedRef.current) return;
 
     try {
+      createLockedRef.current = true;
       setCreating(true);
       setError(null);
       setResumeCaseId(null);
@@ -79,6 +82,7 @@ export function Overview() {
         setResumeCaseId(nextError.createdCaseId);
       }
     } finally {
+      createLockedRef.current = false;
       setCreating(false);
     }
   }
@@ -92,7 +96,7 @@ export function Overview() {
         <div className="overview-hero-copy">
           <span className="overview-eyebrow">总览</span>
           <h1>把客户投诉或异常情况贴进来</h1>
-          <p>不用先学流程。先把投诉邮件、测试结论、现场观察或会议纪要贴进来，我先帮你起一条调查，再带着往前推。</p>
+          <p>直接贴原始材料，我先起调查。</p>
           <label className="overview-hero-input" htmlFor="overview-hero-input">
             <span>可直接粘贴原始材料</span>
             <textarea
@@ -164,8 +168,8 @@ export function Overview() {
             </div>
           ) : (
             <div className="overview-empty">
-              <strong>还没有异常响应，先开始快速响应。</strong>
-              <p>从一条真实客诉或现场异常开始，先把 24h 初版站稳。</p>
+              <strong>还没有调查，先贴第一段情况。</strong>
+              <p>从一条真实客诉或现场异常开始就够了。</p>
             </div>
           )}
         </section>
@@ -195,10 +199,10 @@ export function Overview() {
 
         <section className="overview-panel overview-copilot-card">
           <div className="overview-section-head">
-            <h2>补充方法问题</h2>
+            <h2>方法问题</h2>
             <a href="/copilot">进入</a>
           </div>
-          <p>需要脱离具体 case 补问 8D、CAPA、5Why、FMEA 等方法问题时，再进这里。</p>
+          <p>需要单独问 8D、CAPA、5Why 或 FMEA，再来这里。</p>
           <a className="overview-secondary" href="/copilot">
             打开方法助手
           </a>
@@ -208,52 +212,55 @@ export function Overview() {
       <style>{`
         .overview-page {
           display: grid;
-          gap: 16px;
-          width: min(1180px, 100%);
+          gap: 18px;
+          width: min(1160px, calc(100% - 32px));
           margin: 0 auto;
-          padding: 4px 0 24px;
+          padding: 16px 0 40px;
         }
 
         .overview-panel {
-          border: 1px solid rgba(255, 255, 255, 0.56);
-          border-radius: 20px;
-          background: rgba(255, 255, 255, 0.8);
+          border: 1px solid rgba(255, 255, 255, 0.72);
+          border-radius: 28px;
+          background: rgba(251, 252, 253, 0.82);
           box-shadow: var(--shadow);
-          padding: 20px;
+          padding: 24px;
+          backdrop-filter: blur(16px);
         }
 
         .overview-hero {
           display: grid;
-          grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
-          gap: 18px;
+          grid-template-columns: minmax(0, 1.55fr) minmax(240px, 0.7fr);
+          gap: 24px;
           align-items: stretch;
+          min-height: min(72vh, 760px);
         }
 
         .overview-eyebrow {
           color: var(--muted);
-          font-size: 11px;
+          font-size: 12px;
           font-weight: 700;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
+          letter-spacing: 0.04em;
         }
 
         .overview-hero-copy {
           display: grid;
-          gap: 10px;
+          align-content: center;
+          gap: 12px;
+          padding: 12px 0;
         }
 
         .overview-hero-copy h1 {
           margin: 0;
-          font-size: 36px;
+          font-size: clamp(32px, 5vw, 52px);
           line-height: 1.08;
           letter-spacing: -0.04em;
         }
 
         .overview-hero-copy p {
           margin: 0;
-          max-width: 620px;
+          max-width: 520px;
           color: var(--muted);
-          font-size: 15px;
+          font-size: 16px;
         }
 
         .overview-hero-input {
@@ -270,23 +277,22 @@ export function Overview() {
 
         .overview-hero-input textarea {
           width: 100%;
-          min-height: 164px;
-          padding: 18px 20px;
-          border-radius: 20px;
-          border: 1px solid rgba(182, 196, 220, 0.88);
+          min-height: 220px;
+          padding: 20px 22px;
+          border-radius: 24px;
+          border: 1px solid rgba(180, 191, 205, 0.58);
           background: rgba(255, 255, 255, 0.94);
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
           color: var(--text);
           font: inherit;
-          font-size: 15px;
+          font-size: 16px;
           line-height: 1.7;
           resize: vertical;
         }
 
         .overview-hero-input textarea:focus {
-          outline: 2px solid rgba(0, 99, 153, 0.16);
+          outline: 2px solid rgba(45, 91, 159, 0.12);
           outline-offset: 0;
-          border-color: rgba(0, 99, 153, 0.34);
+          border-color: rgba(45, 91, 159, 0.28);
         }
 
         .overview-hero-actions {
@@ -301,23 +307,23 @@ export function Overview() {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          min-height: 42px;
-          padding: 0 18px;
+          min-height: 46px;
+          padding: 0 20px;
           border-radius: 999px;
           font-size: 14px;
           font-weight: 700;
         }
 
         .overview-primary {
-          border: 1px solid rgba(0, 99, 153, 0.18);
-          background: rgba(0, 99, 153, 0.92);
+          border: 1px solid rgba(45, 91, 159, 0.16);
+          background: rgba(45, 91, 159, 0.94);
           color: #fff;
           cursor: pointer;
         }
 
         .overview-secondary {
-          border: 1px solid var(--line);
-          background: rgba(255, 255, 255, 0.76);
+          border: 1px solid rgba(180, 191, 205, 0.4);
+          background: rgba(255, 255, 255, 0.66);
           color: var(--text);
         }
 
@@ -328,18 +334,19 @@ export function Overview() {
 
         .overview-stats {
           display: grid;
-          gap: 12px;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          align-content: end;
+          gap: 10px;
+          grid-template-columns: 1fr;
         }
 
         .overview-stat-card {
           display: grid;
-          gap: 6px;
+          gap: 4px;
           align-content: start;
-          padding: 16px;
+          padding: 14px 16px;
           border-radius: 18px;
-          background: rgba(248, 249, 250, 0.88);
-          border: 1px solid var(--line);
+          background: rgba(246, 249, 252, 0.8);
+          border: 1px solid rgba(180, 191, 205, 0.34);
         }
 
         .overview-stat-card strong {
@@ -355,8 +362,8 @@ export function Overview() {
 
         .overview-grid {
           display: grid;
-          grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-          gap: 16px;
+          grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.95fr);
+          gap: 18px;
         }
 
         .overview-section-head {
@@ -369,7 +376,7 @@ export function Overview() {
 
         .overview-section-head h2 {
           margin: 0;
-          font-size: 20px;
+          font-size: 18px;
         }
 
         .overview-section-head a {
@@ -387,9 +394,9 @@ export function Overview() {
           display: grid;
           gap: 8px;
           padding: 14px 16px;
-          border-radius: 16px;
-          border: 1px solid var(--line);
-          background: rgba(248, 249, 250, 0.72);
+          border-radius: 18px;
+          border: 1px solid rgba(180, 191, 205, 0.26);
+          background: rgba(247, 249, 252, 0.7);
         }
 
         .overview-investigation-card strong {
@@ -409,8 +416,8 @@ export function Overview() {
           gap: 8px;
           padding: 22px 18px;
           border-radius: 16px;
-          border: 1px dashed var(--line-strong);
-          background: rgba(248, 249, 250, 0.68);
+          border: 1px dashed rgba(164, 176, 190, 0.5);
+          background: rgba(247, 249, 252, 0.62);
         }
 
         .overview-empty strong,

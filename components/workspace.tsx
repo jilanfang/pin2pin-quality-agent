@@ -726,9 +726,9 @@ function AssistantStageCard({
           <p>{`这条内容更接近“${pendingCaseConfirmation.suggestedTitle}”这一类新投诉。如果继续挂在当前调查里，前面的结论和时间线可能会被带偏。`}</p>
         </div>
       ) : null}
-      <div className="assistant-manuscript">
-        <div className="assistant-manuscript-head">
-          <span className="section-label">Assistant Brief</span>
+        <div className="assistant-manuscript">
+          <div className="assistant-manuscript-head">
+          <span className="section-label">AI 判断</span>
           <span className="assistant-manuscript-stage">
             {stageLabel(selectedStage?.stage ?? currentCase?.currentStage ?? "D2")}
           </span>
@@ -843,7 +843,7 @@ function AssistantStageCard({
 
         {resultRecommendation ? (
           <section className="copilot-panel">
-              <span className="copilot-label">当前建议整理</span>
+              <span className="copilot-label">AI 判断</span>
               <p className="copilot-next">
               {resultRecommendation.displayKindLabel ??
                 (resultRecommendation.kind === "analysis_summary"
@@ -1137,6 +1137,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
   const seenAssistantMessageIdsRef = useRef<Record<string, Set<string>>>({});
   const animationTimersRef = useRef<Record<string, number>>({});
   const caseLoadRequestRef = useRef(0);
+  const actionLockedRef = useRef(false);
 
   useEffect(() => {
     casesRef.current = cases;
@@ -1664,7 +1665,8 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
   }
 
   async function confirmPendingCaseAsNew() {
-    if (!pendingCaseConfirmation) return;
+    if (!pendingCaseConfirmation || actionLockedRef.current) return;
+    actionLockedRef.current = true;
     setLoading(true);
     setError(null);
     setPendingThinking({
@@ -1678,12 +1680,14 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
       setPendingThinking(null);
       setError(messageFromError(nextError, "创建新调查失败"));
     } finally {
+      actionLockedRef.current = false;
       setLoading(false);
     }
   }
 
   async function confirmPendingCaseAsCurrent() {
-    if (!pendingCaseConfirmation || !currentCaseId) return;
+    if (!pendingCaseConfirmation || !currentCaseId || actionLockedRef.current) return;
+    actionLockedRef.current = true;
     setLoading(true);
     setError(null);
     setPendingThinking({
@@ -1696,13 +1700,15 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
       setPendingThinking(null);
       setError(messageFromError(nextError, "提交证据失败"));
     } finally {
+      actionLockedRef.current = false;
       setLoading(false);
     }
   }
 
   async function sendEvidence() {
-    if (!composer.trim()) return;
+    if (!composer.trim() || actionLockedRef.current) return;
     const pendingContent = composer;
+    actionLockedRef.current = true;
     setLoading(true);
     setError(null);
     setPendingThinking({
@@ -1748,6 +1754,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
       setPendingThinking(null);
       setError(messageFromError(nextError, "提交证据失败"));
     } finally {
+      actionLockedRef.current = false;
       setLoading(false);
     }
   }
@@ -1912,7 +1919,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           <div className="drawer-head">
             <div className="drawer-copy">
               <strong>调查列表</strong>
-              <span>固定三栏模式下，左栏用于切换调查与新建。</span>
+              <span>最近调查、新建和搜索都在这里。</span>
             </div>
             <button className="ghost-button ghost-button-tight mobile-only" type="button" onClick={() => setIsCaseDrawerOpen(false)}>
               收起
@@ -2035,7 +2042,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           <section className="conversation-shell panel">
             <div className="conversation-layout" style={{ "--composer-height": `${composerHeight}px` } as React.CSSProperties}>
               <div className="conversation-head">
-                <strong>AI 协作区</strong>
+                <strong>调查对话</strong>
                 <span>
                   {loading
                     ? "处理中…"
@@ -2257,12 +2264,12 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         }
 
         .panel {
-          background: rgba(255, 255, 255, 0.76);
-          border: 1px solid rgba(255, 255, 255, 0.5);
+          background: rgba(251, 252, 253, 0.78);
+          border: 1px solid rgba(255, 255, 255, 0.68);
           backdrop-filter: blur(16px);
-          border-radius: 18px;
+          border-radius: 24px;
           box-shadow: var(--shadow);
-          padding: 12px;
+          padding: 14px;
         }
 
         .rail-brand,
@@ -2349,7 +2356,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
 
         .drawer-copy strong,
         .panel-head strong {
-          font-size: 13px;
+          font-size: 14px;
         }
 
         .drawer-copy span,
@@ -2360,7 +2367,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         .preview-meta,
         .message-meta {
           color: var(--muted);
-          font-size: 12px;
+          font-size: 13px;
           line-height: 1.55;
           margin: 0;
         }
@@ -2389,25 +2396,25 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         .report-action-card {
           display: grid;
           gap: 8px;
-          padding: 12px;
-          border-radius: 14px;
-          border: 1px solid rgba(215, 221, 234, 0.86);
+          padding: 14px;
+          border-radius: 18px;
+          border: 1px solid rgba(185, 196, 210, 0.28);
         }
 
         .first-run-card {
-          background: linear-gradient(180deg, rgba(248, 250, 255, 0.94), rgba(241, 245, 255, 0.92));
+          background: linear-gradient(180deg, rgba(247, 250, 253, 0.96), rgba(242, 246, 250, 0.92));
         }
 
         .entry-composer-card {
           max-width: 760px;
           margin: 20px auto 28px;
-          padding: 24px;
+          padding: 28px;
           gap: 12px;
-          border-radius: 24px;
+          border-radius: 28px;
           background:
-            radial-gradient(circle at top left, rgba(255, 249, 241, 0.96), transparent 38%),
-            linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.94));
-          box-shadow: 0 22px 48px rgba(17, 24, 39, 0.08);
+            radial-gradient(circle at top left, rgba(45, 91, 159, 0.06), transparent 38%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 251, 253, 0.94));
+          box-shadow: 0 22px 48px rgba(17, 24, 39, 0.06);
         }
 
         .entry-eyebrow {
@@ -2417,12 +2424,11 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           min-height: 24px;
           padding: 0 9px;
           border-radius: 999px;
-          background: rgba(193, 124, 46, 0.12);
-          color: #8a4b14;
+          background: rgba(45, 91, 159, 0.1);
+          color: var(--brand);
           font-size: 11px;
           font-weight: 800;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
+          letter-spacing: 0.05em;
         }
 
         .first-run-card h3,
@@ -2430,7 +2436,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         .message-empty h3,
         .report-action-copy h3 {
           margin: 0;
-          font-size: 18px;
+          font-size: 22px;
           line-height: 1.35;
           letter-spacing: -0.03em;
         }
@@ -2462,28 +2468,28 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
 
         .entry-composer-field span {
           color: var(--muted);
-          font-size: 12px;
+          font-size: 13px;
           font-weight: 700;
         }
 
         .entry-composer {
           width: 100%;
-          min-height: 184px;
-          border-radius: 18px;
-          border: 1px solid rgba(205, 214, 230, 0.9);
+          min-height: 200px;
+          border-radius: 22px;
+          border: 1px solid rgba(180, 191, 205, 0.48);
           background: rgba(255, 255, 255, 0.96);
-          padding: 16px 18px;
+          padding: 18px 20px;
           font: inherit;
-          font-size: 15px;
+          font-size: 16px;
           line-height: 1.68;
           color: var(--text);
           resize: vertical;
         }
 
         .entry-composer:focus {
-          outline: 2px solid rgba(25, 73, 203, 0.14);
+          outline: 2px solid rgba(45, 91, 159, 0.12);
           outline-offset: 0;
-          border-color: rgba(25, 73, 203, 0.34);
+          border-color: rgba(45, 91, 159, 0.28);
         }
 
         .entry-composer-actions {
@@ -2538,11 +2544,10 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         .workspace-context-meta,
         .workspace-track-label {
           color: var(--secondary);
-          font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
-          font-size: 10px;
+          font-family: var(--font-sans);
+          font-size: 11px;
           font-weight: 700;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
+          letter-spacing: 0.04em;
         }
 
         .workspace-track-block {
@@ -2595,9 +2600,9 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           min-height: 22px;
           padding: 0 8px;
           border-radius: 999px;
-          background: rgba(25, 73, 203, 0.06);
+          background: rgba(45, 91, 159, 0.07);
           color: var(--text);
-          font-size: 10px;
+          font-size: 11px;
           font-weight: 700;
         }
 
@@ -2637,13 +2642,13 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         .composer {
           width: 100%;
           border: 1px solid var(--line);
-          border-radius: 12px;
+          border-radius: 14px;
           background: var(--paper-strong);
           color: var(--text);
-          padding: 9px 11px;
+          padding: 11px 13px;
           outline: none;
           font: inherit;
-          font-size: 13px;
+          font-size: 14px;
         }
 
         .field textarea {
@@ -2669,28 +2674,28 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          min-height: 32px;
-          padding: 0 11px;
-          border-radius: 11px;
-          font-size: 11px;
+          min-height: 36px;
+          padding: 0 14px;
+          border-radius: 999px;
+          font-size: 13px;
           font-weight: 700;
         }
 
         .primary-button {
-          background: linear-gradient(135deg, #1844c7, #2c63ff);
+          background: linear-gradient(135deg, #2d5b9f, #466d9e);
           color: white;
           font-weight: 700;
         }
 
         .secondary-button,
         .secondary-link {
-          background: #f5f8ff;
+          background: rgba(247, 249, 252, 0.9);
           color: var(--brand);
-          border: 1px solid rgba(25, 73, 203, 0.14);
+          border: 1px solid rgba(180, 191, 205, 0.36);
         }
 
         .ghost-button {
-          background: rgba(24, 68, 199, 0.08);
+          background: rgba(45, 91, 159, 0.08);
           color: var(--brand);
         }
 
@@ -2810,15 +2815,15 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
 
         .case-card {
           text-align: left;
-          background: rgba(255, 255, 255, 0.72);
+          background: rgba(255, 255, 255, 0.58);
           border: 1px solid transparent;
-          border-radius: 14px;
-          padding: 10px 11px;
+          border-radius: 16px;
+          padding: 12px 13px;
         }
 
         .case-card.active {
-          border-color: rgba(25, 73, 203, 0.22);
-          background: #f7faff;
+          border-color: rgba(45, 91, 159, 0.22);
+          background: rgba(247, 250, 253, 0.92);
         }
 
         .case-title {
@@ -2839,20 +2844,20 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         }
 
         .message-card {
-          background: rgba(255, 255, 255, 0.95);
-          box-shadow: 0 10px 28px rgba(24, 32, 44, 0.035);
+          background: rgba(255, 255, 255, 0.72);
+          box-shadow: none;
         }
 
         .message-user {
-          background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(252, 248, 244, 0.94));
-          border-color: rgba(177, 95, 0, 0.22);
+          background: rgba(244, 247, 250, 0.9);
+          border-color: rgba(180, 191, 205, 0.4);
           justify-self: end;
           width: min(100%, 430px);
-          border-right: 2px solid rgba(177, 95, 0, 0.72);
+          border-right: 0;
         }
 
         .message-assistant {
-          background: rgba(255, 255, 255, 0.97);
+          background: rgba(255, 255, 255, 0.46);
           justify-self: start;
           width: min(100%, 640px);
         }
@@ -2869,15 +2874,14 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           align-items: center;
           justify-content: space-between;
           gap: 8px;
-          font-size: 11px;
+          font-size: 12px;
         }
 
         .message-role {
           font-weight: 700;
           color: var(--brand);
-          letter-spacing: 0.04em;
-          font-size: 10px;
-          text-transform: uppercase;
+          letter-spacing: 0.02em;
+          font-size: 12px;
         }
 
         .message-content {
@@ -2912,11 +2916,10 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
 
         .assistant-manuscript-stage {
           color: var(--secondary);
-          font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
-          font-size: 10px;
+          font-family: var(--font-sans);
+          font-size: 11px;
           font-weight: 700;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
+          letter-spacing: 0.03em;
         }
 
         .assistant-prose {
@@ -3027,10 +3030,10 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         }
 
         .copilot-label {
-          font-size: 11px;
+          font-size: 12px;
           line-height: 1.4;
           font-weight: 800;
-          letter-spacing: 0.04em;
+          letter-spacing: 0.02em;
           color: var(--brand);
         }
 
@@ -3048,11 +3051,10 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         }
 
         .section-label {
-          font-size: 11px;
+          font-size: 12px;
           font-weight: 800;
-          letter-spacing: 0.06em;
+          letter-spacing: 0.04em;
           color: var(--muted);
-          text-transform: uppercase;
         }
 
         .stage-timeline {
@@ -3162,7 +3164,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           flex-direction: column;
           gap: 10px;
           min-height: 0;
-          padding: 10px 12px 8px;
+          padding: 12px 14px 10px;
         }
 
         .conversation-head {
@@ -3171,11 +3173,17 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           justify-content: space-between;
           gap: 10px;
           color: var(--muted);
-          font-size: 11px;
-          padding: 2px 6px 0;
+          font-size: 13px;
+          padding: 2px 4px 0;
           max-width: 760px;
           width: min(100%, 760px);
           margin: 0 auto;
+        }
+
+        .conversation-head strong {
+          color: var(--text);
+          font-size: 15px;
+          letter-spacing: -0.02em;
         }
 
         .empty-actions {
@@ -3186,9 +3194,9 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
 
         .report-action-card {
           gap: 10px;
-          background: linear-gradient(180deg, rgba(248, 250, 255, 0.66), rgba(255, 255, 255, 0.9));
-          border-style: dashed;
-          border-color: rgba(219, 194, 176, 0.44);
+          background: rgba(247, 250, 253, 0.72);
+          border-style: solid;
+          border-color: rgba(180, 191, 205, 0.34);
         }
 
         .report-action-grid {
@@ -3381,10 +3389,10 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           margin: auto 0;
           display: grid;
           gap: 8px;
-          padding: 14px;
-          border-radius: 14px;
-          border: 1px dashed rgba(215, 221, 234, 0.9);
-          background: rgba(255, 255, 255, 0.74);
+          padding: 16px;
+          border-radius: 18px;
+          border: 1px dashed rgba(180, 191, 205, 0.44);
+          background: rgba(255, 255, 255, 0.62);
           color: var(--muted);
           line-height: 1.6;
         }
@@ -3433,7 +3441,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           width: 100%;
           border-radius: 12px;
           text-align: center;
-          font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+          font-family: var(--font-sans);
           font-size: clamp(20px, 1.8vw, 30px);
           letter-spacing: -0.03em;
           font-weight: 700;
@@ -3449,12 +3457,12 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         }
 
         .workspace-title-button:hover {
-          border-color: rgba(25, 73, 203, 0.14);
-          background: rgba(25, 73, 203, 0.04);
+          border-color: rgba(45, 91, 159, 0.14);
+          background: rgba(45, 91, 159, 0.04);
         }
 
         .workspace-title-input {
-          border: 1px solid rgba(25, 73, 203, 0.22);
+          border: 1px solid rgba(45, 91, 159, 0.22);
           background: rgba(255, 255, 255, 0.96);
           color: var(--text);
           padding: 6px 14px;
@@ -3509,9 +3517,9 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
 
         .composer-pane-wrap {
           flex-shrink: 0;
-          border-top: 1px solid rgba(215, 221, 234, 0.9);
-          background: rgba(251, 253, 255, 0.96);
-          border-radius: 14px;
+          border-top: 1px solid rgba(180, 191, 205, 0.3);
+          background: rgba(248, 250, 252, 0.94);
+          border-radius: 18px;
           padding-top: 10px;
         }
 
@@ -3538,11 +3546,11 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           max-width: none;
           margin: 0;
           align-items: flex-end;
-          border-radius: 14px;
+          border-radius: 18px;
           background: rgba(255, 255, 255, 0.98);
-          border: 1px solid rgba(215, 221, 234, 0.9);
-          box-shadow: 0 8px 20px rgba(24, 32, 44, 0.06);
-          padding: 10px;
+          border: 1px solid rgba(180, 191, 205, 0.34);
+          box-shadow: none;
+          padding: 12px;
         }
 
         .composer {
@@ -3550,11 +3558,11 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           height: 112px;
           max-height: 240px;
           resize: vertical;
-          border-radius: 12px;
-          border-color: rgba(197, 207, 223, 0.72);
-          line-height: 1.58;
-          padding-top: 10px;
-          padding-bottom: 10px;
+          border-radius: 16px;
+          border-color: rgba(180, 191, 205, 0.42);
+          line-height: 1.62;
+          padding-top: 12px;
+          padding-bottom: 12px;
         }
 
         .composer-dock.expanded .composer {

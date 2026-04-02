@@ -74,4 +74,35 @@ describe("server api case management", () => {
     expect(userBCases).toHaveLength(1);
     expect(userBCases[0]?.title).toBe("用户B案件");
   });
+
+  it("does not let another user read, update, or delete someone else's case", async () => {
+    const api = await import("@/lib/server/api");
+
+    const created = await api.createCaseHandler(
+      { title: "用户A私有案件" },
+      { userId: "user-a", isAuthenticated: true }
+    );
+
+    await expect(
+      api.getCaseHandler(created.id, { userId: "user-b", isAuthenticated: true })
+    ).rejects.toThrow("Case not found");
+
+    await expect(
+      api.updateCaseHandler(
+        created.id,
+        { title: "用户B试图改标题" },
+        { userId: "user-b", isAuthenticated: true }
+      )
+    ).rejects.toThrow("Case not found");
+
+    await expect(
+      api.deleteCaseHandler(created.id, { userId: "user-b", isAuthenticated: true })
+    ).rejects.toThrow("Case not found");
+
+    const ownerView = await api.getCaseHandler(created.id, { userId: "user-a", isAuthenticated: true });
+    expect(ownerView.title).toBe("用户A私有案件");
+
+    const ownerCases = await api.listCasesHandler({ userId: "user-a", isAuthenticated: true });
+    expect(ownerCases.map((item) => item.id)).toContain(created.id);
+  });
 });

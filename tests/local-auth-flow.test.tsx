@@ -21,7 +21,7 @@ describe("local auth flow", () => {
     const page = await LoginPage();
     const markup = renderToStaticMarkup(page);
 
-    expect(markup).toContain("登录后继续处理调查");
+    expect(markup).toContain("账号登录");
     expect(markup).toContain("用户名");
     expect(markup).toContain("密码");
     expect(markup).not.toContain("创建账号");

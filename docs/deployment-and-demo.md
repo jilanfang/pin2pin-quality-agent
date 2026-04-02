@@ -209,6 +209,8 @@ printf '%s' "$DATABASE_URL" | vercel env add DATABASE_URL development --force
 - 保持 `npm run dev` 使用 polling，不要随手改脚本
 - 不要在同一个工作目录里同时运行 `next dev` 和 `next start`
 - 两者会共用 `.next` 目录，开发产物可能覆盖生产产物，导致生产页静态资源 404
+- 当前仓库已把开发构建目录切到 `.next-dev`，避免本地 `dev` 把 `.next` 里的生产产物和静态资源索引踩坏
+- 如果你看到页面能打开但样式明显退回浏览器默认值，例如 `body` 出现默认 `8px` margin、登录页输入框变成系统默认样式，优先检查 `/_next/static/css/...` 是否 404，以及当前是不是误用了损坏的 `.next` 目录
 - 当前全局端口约定下，这个项目默认使用 `127.0.0.1:3001`
 - 正确做法是：
   - 开发调试时只运行 `npm run dev`

@@ -90,8 +90,9 @@ describe("HomePage", () => {
       "href",
       "/investigations/case-1"
     );
+    expect(screen.getByText("直接贴原始材料，我先起调查。")).toBeInTheDocument();
     expect(screen.getByText("最近调查")).toBeInTheDocument();
-    expect(screen.getByText("补充方法问题")).toBeInTheDocument();
+    expect(screen.getByText("方法问题")).toBeInTheDocument();
     expect(screen.getByText("24h 初版 8D / 快速响应版")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "开始快速响应" })).not.toBeInTheDocument();
     expect(screen.queryByText("Fireline Workspace")).not.toBeInTheDocument();
@@ -106,7 +107,7 @@ describe("HomePage", () => {
 
     await screen.findByRole("heading", { name: "把客户投诉或异常情况贴进来" });
 
-    expect(screen.getByText("还没有异常响应，先开始快速响应。")).toBeInTheDocument();
+    expect(screen.getByText("还没有调查，先贴第一段情况。")).toBeInTheDocument();
     expect(screen.queryByText("钽电容反向贴装客诉")).not.toBeInTheDocument();
     expect(screen.queryByText("24h 初版 8D / 快速响应版")).not.toBeInTheDocument();
   });
@@ -260,5 +261,122 @@ describe("HomePage", () => {
       "/investigations/case-hero-2"
     );
     expect(locationAssign).not.toHaveBeenCalled();
+  });
+
+  it("shows an inline error and keeps input when case creation fails before any case is created", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/overview") {
+          return new Response(
+            JSON.stringify({
+              stats: {
+                activeInvestigations: 0,
+                pendingEvidence: 0,
+                readyArtifacts: 0,
+              },
+              recentInvestigations: [],
+              artifactHighlights: [],
+            }),
+            { status: 200 }
+          );
+        }
+        if (url === "/api/cases" && init?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              error: "创建调查失败，请稍后重试。",
+            }),
+            { status: 503 }
+          );
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      })
+    );
+
+    const { default: Page } = await import("@/app/page");
+    const page = await Page();
+    render(page);
+
+    await screen.findByRole("heading", { name: "把客户投诉或异常情况贴进来" });
+
+    fireEvent.change(screen.getByLabelText("首页异常输入框"), {
+      target: {
+        value: "客户现场反馈异常，先帮我起一条调查。",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "开始分析" }));
+
+    expect(await screen.findByText("创建调查失败，请稍后重试。")).toBeInTheDocument();
+    expect(screen.getByLabelText("首页异常输入框")).toHaveValue("客户现场反馈异常，先帮我起一条调查。");
+    expect(screen.queryByRole("link", { name: "进入已建调查继续处理" })).not.toBeInTheDocument();
+    expect(locationAssign).not.toHaveBeenCalled();
+  });
+
+  it("submits the hero flow only once when the primary action is double-clicked", async () => {
+    let resolveCreate: ((value: { caseSummary: { id: string; title: string } }) => void) | null = null;
+    const createInvestigationFromInput = vi.fn(
+      () =>
+        new Promise<{ caseSummary: { id: string; title: string } }>((resolve) => {
+          resolveCreate = resolve;
+        })
+    );
+
+    vi.doMock("@/lib/client/investigation-entry", () => ({
+      InvestigationEntryError: class InvestigationEntryError extends Error {},
+      createInvestigationFromInput,
+    }));
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/overview") {
+          return new Response(
+            JSON.stringify({
+              stats: {
+                activeInvestigations: 0,
+                pendingEvidence: 0,
+                readyArtifacts: 0,
+              },
+              recentInvestigations: [],
+              artifactHighlights: [],
+            }),
+            { status: 200 }
+          );
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      })
+    );
+
+    const { default: Page } = await import("@/app/page");
+    const page = await Page();
+    render(page);
+
+    await screen.findByRole("heading", { name: "把客户投诉或异常情况贴进来" });
+
+    fireEvent.change(screen.getByLabelText("首页异常输入框"), {
+      target: {
+        value: "客户投诉双击提交并发保护验证。",
+      },
+    });
+
+    const button = screen.getByRole("button", { name: "开始分析" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    expect(createInvestigationFromInput).toHaveBeenCalledTimes(1);
+
+    expect(resolveCreate).toBeTypeOf("function");
+    resolveCreate!({
+      caseSummary: {
+        id: "case-hero-once",
+        title: "并发保护验证",
+      },
+    });
+
+    await waitFor(() => {
+      expect(locationAssign).toHaveBeenCalledWith("/investigations/case-hero-once");
+    });
   });
 });

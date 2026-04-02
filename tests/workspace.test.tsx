@@ -686,12 +686,12 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
-    expect(screen.getByText("AI 协作区")).toBeInTheDocument();
+    expect(screen.getByText("调查对话")).toBeInTheDocument();
     expect(screen.queryByTestId("summary-strip")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "打开报告工具" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "快速预览报告" })).not.toBeInTheDocument();
     expect(screen.queryByTestId("result-recommendation-card")).not.toBeInTheDocument();
-    expect(screen.getByText("当前建议")).toBeInTheDocument();
+    expect(screen.getAllByText("AI 判断").length).toBeGreaterThan(0);
   });
 
   it("keeps the case list in a permanently visible sidebar on desktop", async () => {
@@ -801,6 +801,72 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "连接器虚焊异常" });
     expect(screen.getByTestId("case-sidebar")).toBeInTheDocument();
+  });
+
+  it("does not let a slower previous case response overwrite the latest selected case", async () => {
+    let resolveCase1: ((value: Response) => void) | null = null;
+    let resolveCase2: ((value: Response) => void) | null = null;
+
+    stubFetch(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(
+          JSON.stringify([
+            buildCaseSummary(),
+            buildCaseSummary({
+              id: "case-2",
+              title: "连接器虚焊异常",
+              currentStage: "D2",
+              updatedAt: "2026-03-22T13:00:00.000Z",
+            }),
+          ]),
+          { status: 200 }
+        );
+      }
+      if (url === "/api/cases/case-1") {
+        return await new Promise<Response>((resolve) => {
+          resolveCase1 = resolve;
+        });
+      }
+      if (url === "/api/cases/case-2") {
+        return await new Promise<Response>((resolve) => {
+          resolveCase2 = resolve;
+        });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace initialCaseId="case-1" />);
+
+    await screen.findByText("正在载入调查内容…");
+    const sidebar = screen.getByTestId("case-sidebar");
+    fireEvent.click(within(sidebar).getByRole("button", { name: /连接器虚焊异常.*D2/i }));
+
+    act(() => {
+      resolveCase2?.(
+        new Response(
+          JSON.stringify({
+            ...buildCaseWorkflow(),
+            caseId: "case-2",
+            title: "连接器虚焊异常",
+            currentStage: "D2",
+          }),
+          { status: 200 }
+        )
+      );
+    });
+
+    await screen.findByRole("heading", { name: "连接器虚焊异常" });
+
+    act(() => {
+      resolveCase1?.(new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "连接器虚焊异常" })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("heading", { name: "钽电容反向贴装客诉" })).not.toBeInTheDocument();
+    expect(screen.getByText("当前调查 #CASE-2")).toBeInTheDocument();
   });
 
   it("clears an open preview drawer when creating a new case from the sidebar", async () => {
@@ -1015,7 +1081,7 @@ describe("Workspace", () => {
 
     expect(screen.queryByTestId("result-recommendation-card")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "整理分析结论" })).not.toBeInTheDocument();
-    expect(screen.getByText("当前建议整理")).toBeInTheDocument();
+    expect(screen.getAllByText("AI 判断").length).toBeGreaterThan(0);
     expect(screen.queryByLabelText("报告版本")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("文风")).not.toBeInTheDocument();
   });
@@ -1085,7 +1151,7 @@ describe("Workspace", () => {
 
     await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
 
-    expect(screen.getByText("当前建议整理")).toBeInTheDocument();
+    expect(screen.getAllByText("AI 判断").length).toBeGreaterThan(0);
     expect(screen.getAllByText("24h 初版 8D").length).toBeGreaterThan(0);
     expect(screen.getAllByText("当前先把已确认事实、围堵状态和风险窗口整理成 24h 初版 8D，再继续补验证。").length).toBeGreaterThan(0);
     expect(screen.getByText("已知事实")).toBeInTheDocument();
@@ -1593,6 +1659,52 @@ describe("Workspace", () => {
     });
   });
 
+  it("submits evidence only once when send is double-clicked before loading state settles", async () => {
+    let resolveEvidence: ((value: Response) => void) | null = null;
+    const fetchMock = stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([buildCaseSummary()]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 });
+      }
+      if (url === "/api/cases/case-1/evidence") {
+        return new Promise<Response>((resolve) => {
+          resolveEvidence = resolve;
+        });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+
+    fireEvent.change(screen.getByLabelText("证据输入框"), {
+      target: { value: "补充：客户端现场确认为低温偶发。" },
+    });
+
+    const button = screen.getByRole("button", { name: "发送证据" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.filter(
+          ([url, init]) => url === "/api/cases/case-1/evidence" && (init as RequestInit | undefined)?.method === "POST"
+        )
+      ).toHaveLength(1);
+    });
+
+    expect(resolveEvidence).toBeTypeOf("function");
+    resolveEvidence!(new Response(JSON.stringify(buildCaseWorkflow()), { status: 200 }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "发送证据" })).toBeInTheDocument();
+    });
+  });
+
   it("shows a current-state summary in the conversation when the user asks for a summary", async () => {
     const summaryWorkflow = {
       ...buildCaseWorkflow(),
@@ -1709,7 +1821,9 @@ describe("Workspace", () => {
       );
     });
     expect(await screen.findByText("我先帮你接下这个案件。")).toBeInTheDocument();
-    expect(await screen.findByText("当前还缺失效位置、影响范围和围堵状态。")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/当前还缺失效位置、影响范围和围堵状态/)).toBeInTheDocument();
+    });
     expect(screen.queryByTestId("new-case-confirmation-card")).not.toBeInTheDocument();
   });
 
@@ -1904,7 +2018,7 @@ describe("Workspace", () => {
 
     expect(screen.getByText("我现在怎么看")).toBeInTheDocument();
     expect(screen.getByText("这是客户停线级异常，当前先控住影响范围。")).toBeInTheDocument();
-    expect(screen.getByText("当前建议整理")).toBeInTheDocument();
+    expect(screen.getAllByText("AI 判断").length).toBeGreaterThan(0);
     expect(screen.getAllByText("24h 初版 8D").length).toBeGreaterThan(0);
     expect(screen.getAllByText("当前先把已确认事实、围堵状态和风险窗口整理成 24h 初版 8D，再继续补验证。").length).toBeGreaterThan(0);
     expect(screen.getByText("待验证假设")).toBeInTheDocument();

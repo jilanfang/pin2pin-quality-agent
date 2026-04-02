@@ -1,25 +1,45 @@
 :root {
   color-scheme: light;
-  --bg: #f8f9fa;
-  --paper: rgba(255, 255, 255, 0.86);
-  --paper-strong: #ffffff;
-  --text: #191c1d;
-  --muted: #6a6f76;
-  --line: rgba(219, 194, 176, 0.28);
-  --line-strong: rgba(136, 115, 100, 0.28);
-  --brand: #8d4b00;
-  --brand-strong: #b15f00;
-  --brand-soft: rgba(141, 75, 0, 0.08);
-  --secondary: #006399;
-  --secondary-soft: rgba(0, 99, 153, 0.08);
-  --success: #11745b;
-  --warning: #a5661b;
+  --bg: #f4f6f8;
+  --paper: rgba(255, 255, 255, 0.82);
+  --paper-strong: #fbfcfd;
+  --text: #1d2329;
+  --muted: #69727d;
+  --line: rgba(164, 176, 190, 0.22);
+  --line-strong: rgba(111, 125, 141, 0.26);
+  --brand: #2d5b9f;
+  --brand-strong: #21477d;
+  --brand-soft: rgba(45, 91, 159, 0.08);
+  --secondary: #5d7188;
+  --secondary-soft: rgba(93, 113, 136, 0.08);
+  --success: #1d7a62;
+  --warning: #a06b2a;
   --danger: #b04444;
-  --shadow: 0 18px 48px rgba(25, 28, 29, 0.06);
-  --radius-xl: 18px;
-  --radius-lg: 12px;
-  --radius-md: 8px;
-  --radius-sm: 4px;
+  --shadow: 0 18px 48px rgba(22, 28, 36, 0.05);
+  --radius-xl: 24px;
+  --radius-lg: 18px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+  --font-sans:
+    "PingFang SC",
+    "Hiragino Sans GB",
+    "Noto Sans SC",
+    "Microsoft YaHei",
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  --font-mono:
+    "SFMono-Regular",
+    "JetBrains Mono",
+    "Fira Code",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  --text-display: 32px;
+  --text-title: 22px;
+  --text-body: 15px;
+  --text-meta: 12px;
+  --text-label: 14px;
 }
 
 * {
@@ -31,12 +51,12 @@ body {
   margin: 0;
   min-height: 100%;
   background:
-    radial-gradient(circle at top left, rgba(177, 95, 0, 0.08), transparent 18%),
-    radial-gradient(circle at bottom right, rgba(0, 99, 153, 0.08), transparent 20%),
+    radial-gradient(circle at top left, rgba(45, 91, 159, 0.08), transparent 18%),
+    radial-gradient(circle at bottom right, rgba(134, 153, 172, 0.12), transparent 20%),
     var(--bg);
   color: var(--text);
-  font-family: "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  font-size: 13px;
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
   line-height: 1.6;
 }
 
@@ -54,70 +74,73 @@ a {
 
 .auth-panel {
   display: grid;
-  gap: 18px;
-  width: min(460px, calc(100vw - 32px));
-  margin: 72px auto;
-  padding: 28px;
-  border: 1px solid var(--line);
-  border-radius: 24px;
-  background: rgba(248, 249, 250, 0.9);
+  gap: 22px;
+  width: min(520px, calc(100vw - 32px));
+  margin: min(12vh, 120px) auto;
+  padding: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 28px;
+  background: rgba(252, 253, 255, 0.86);
   box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
 }
 
 .auth-copy {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .auth-kicker {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-meta);
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .auth-copy h1 {
   margin: 0;
-  font-size: 28px;
-  line-height: 1.1;
+  font-size: var(--text-display);
+  line-height: 1.15;
+  letter-spacing: -0.04em;
 }
 
 .auth-copy p {
   margin: 0;
   color: var(--muted);
-  font-size: 14px;
+  font-size: var(--text-body);
+  line-height: 1.55;
 }
 
 .auth-form {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .auth-form label {
   display: grid;
-  gap: 6px;
-  font-size: 13px;
+  gap: 8px;
+  font-size: var(--text-label);
   font-weight: 600;
 }
 
 .auth-form input {
   width: 100%;
-  min-height: 44px;
-  padding: 0 12px;
+  min-height: 52px;
+  padding: 0 16px;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.88);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
   color: var(--text);
+  font-size: var(--text-body);
 }
 
 .auth-form button {
-  min-height: 44px;
-  border: 1px solid rgba(0, 99, 153, 0.18);
+  min-height: 48px;
+  border: 1px solid rgba(45, 91, 159, 0.16);
   border-radius: 999px;
-  background: rgba(0, 99, 153, 0.9);
+  background: rgba(45, 91, 159, 0.92);
   color: #fff;
-  font-size: 14px;
+  font-size: var(--text-label);
   font-weight: 700;
   cursor: pointer;
 }
@@ -135,6 +158,6 @@ a {
 
 .auth-error {
   color: var(--danger);
-  font-size: 13px;
+  font-size: var(--text-label);
   font-weight: 600;
 }

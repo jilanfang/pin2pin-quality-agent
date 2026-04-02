@@ -1,6 +1,6 @@
 import { chromium } from "@playwright/test";
 
-const BASE_URL = process.env.SMOKE_BASE_URL || "http://127.0.0.1:3001";
+const BASE_URL = process.env.SMOKE_BASE_URL || "http://localhost:3001";
 const AUTH_USERNAME = process.env.SMOKE_AUTH_USERNAME || process.env.SMOKE_AUTH_EMAIL || "";
 const AUTH_PASSWORD = process.env.SMOKE_AUTH_PASSWORD || "";
 const EVIDENCE_TEXT = "客户现场发现 3 片上电冒烟，批次 B12，已暂停出货并隔离库存。";

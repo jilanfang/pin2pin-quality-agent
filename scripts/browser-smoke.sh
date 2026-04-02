@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_URL="${SMOKE_BASE_URL:-http://127.0.0.1:3001}"
+BASE_URL="${SMOKE_BASE_URL:-http://localhost:3001}"
 
 if ! curl -fsS "$BASE_URL/api/health" >/dev/null; then
   echo "Browser smoke requires a running app at $BASE_URL" >&2

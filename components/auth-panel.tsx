@@ -1,14 +1,18 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRef } from "react";
 
 export function AuthPanel() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const submitLockedRef = useRef(false);
 
   async function submit() {
+    if (submitLockedRef.current) return;
+    submitLockedRef.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -27,6 +31,7 @@ export function AuthPanel() {
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "认证失败");
     } finally {
+      submitLockedRef.current = false;
       setLoading(false);
     }
   }
@@ -35,8 +40,8 @@ export function AuthPanel() {
     <section className="auth-panel" aria-label="登录面板">
       <div className="auth-copy">
         <span className="auth-kicker">Pin2pin Fireline</span>
-        <h1>登录后继续处理调查</h1>
-        <p>输入后台分配的用户名和密码，进入总览与调查工作台。</p>
+        <h1>账号登录</h1>
+        <p>输入分配好的用户名和密码，直接进入调查工作区。</p>
       </div>
 
       <div className="auth-form">

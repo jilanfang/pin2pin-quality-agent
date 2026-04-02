@@ -21,8 +21,8 @@ const navItems: Array<{
 ];
 
 const railItems = [
-  { label: "总", sublabel: "总览", action: null, active: false },
-  { label: "调", sublabel: "调查", action: "fireline:toggle-case-drawer", active: true },
+  { label: "总", sublabel: "总览", action: null },
+  { label: "调", sublabel: "调查", action: "fireline:toggle-case-drawer" },
 ] as const;
 
 function dispatchShellEvent(name: string) {
@@ -36,6 +36,8 @@ export function SovereignShell({
   children,
 }: SovereignShellProps) {
   const pathname = usePathname();
+  const isLoginPage = pathname === "/login";
+  const isEntryPage = pathname === "/" || isLoginPage;
   const activeSection =
     pathname?.startsWith("/copilot")
       ? "方法问题"
@@ -44,11 +46,16 @@ export function SovereignShell({
         : "总览";
 
   return (
-    <div className="sovereign-shell" data-testid="sovereign-shell">
-      <header className="sovereign-topbar">
+    <div
+      className={`sovereign-shell${isEntryPage ? " sovereign-shell-entry" : ""}${
+        isLoginPage ? " sovereign-shell-login" : ""
+      }`}
+      data-testid="sovereign-shell"
+    >
+      <header className={`sovereign-topbar${isEntryPage ? " sovereign-topbar-entry" : ""}`}>
         <div className="sovereign-brand-block">
           <span className="sovereign-brand">Pin2pin Fireline</span>
-          <span className="sovereign-brand-subtitle">Sovereign</span>
+          <span className="sovereign-brand-subtitle">Investigation AI</span>
         </div>
 
         <nav className="sovereign-nav" aria-label="主导航">
@@ -57,11 +64,6 @@ export function SovereignShell({
               key={item.label}
               href={item.href}
               aria-current={item.label === activeSection ? "page" : undefined}
-              onClick={(event) => {
-                if (item.href === "#") {
-                  event.preventDefault();
-                }
-              }}
             >
               {item.label}
             </a>
@@ -85,47 +87,49 @@ export function SovereignShell({
         </div>
       </header>
 
-      <div className="sovereign-body">
-        <aside className="sovereign-rail" aria-label="工具侧栏">
-          <div className="rail-status">
-            <div className="rail-avatar">PF</div>
-            <span>ACTIVE</span>
-          </div>
+      <div className={`sovereign-body${isEntryPage ? " sovereign-body-entry" : ""}`}>
+        {!isEntryPage ? (
+          <aside className="sovereign-rail" aria-label="工具侧栏">
+            <div className="rail-status">
+              <div className="rail-avatar">PF</div>
+              <span>ACTIVE</span>
+            </div>
 
-          <nav className="rail-nav" aria-label="工具导航">
-            {railItems.map((item) => (
-              item.action ? (
-                <button
-                  key={item.label}
-                  className={`shell-rail-button${
-                    activeSection === "调查" && item.sublabel === "调查" ? " active" : ""
-                  }`}
-                  type="button"
-                  onClick={() => dispatchShellEvent(item.action)}
-                >
-                  <span className="shell-rail-icon" aria-hidden="true">
-                    {item.label.slice(0, 1)}
-                  </span>
-                  <span>{item.sublabel}</span>
-                </button>
-              ) : (
-                <div
-                  key={item.label}
-                  className={`shell-rail-label${activeSection === "总览" ? " active" : ""}`}
-                >
-                  <span className="shell-rail-icon" aria-hidden="true">
-                    {item.label.slice(0, 1)}
-                  </span>
-                  <span>{item.sublabel}</span>
-                </div>
-              )
-            ))}
-          </nav>
-        </aside>
+            <nav className="rail-nav" aria-label="工具导航">
+              {railItems.map((item) =>
+                item.action ? (
+                  <button
+                    key={item.label}
+                    className={`shell-rail-button${
+                      activeSection === "调查" && item.sublabel === "调查" ? " active" : ""
+                    }`}
+                    type="button"
+                    onClick={() => dispatchShellEvent(item.action)}
+                  >
+                    <span className="shell-rail-icon" aria-hidden="true">
+                      {item.label}
+                    </span>
+                    <span>{item.sublabel}</span>
+                  </button>
+                ) : (
+                  <div
+                    key={item.label}
+                    className={`shell-rail-label${activeSection === "总览" ? " active" : ""}`}
+                  >
+                    <span className="shell-rail-icon" aria-hidden="true">
+                      {item.label}
+                    </span>
+                    <span>{item.sublabel}</span>
+                  </div>
+                )
+              )}
+            </nav>
+          </aside>
+        ) : null}
 
         <section className="sovereign-stage">{children}</section>
 
-        <aside className="sovereign-report-rail shell-rail-empty" aria-hidden="true" />
+        {!isEntryPage ? <aside className="sovereign-report-rail" aria-hidden="true" /> : null}
       </div>
 
       <style>{`
@@ -134,8 +138,15 @@ export function SovereignShell({
           flex-direction: column;
           min-height: 100vh;
           background:
-            radial-gradient(circle at top left, rgba(177, 95, 0, 0.07), transparent 18%),
-            radial-gradient(circle at bottom right, rgba(0, 99, 153, 0.08), transparent 20%),
+            radial-gradient(circle at top left, rgba(45, 91, 159, 0.08), transparent 18%),
+            radial-gradient(circle at bottom right, rgba(134, 153, 172, 0.1), transparent 20%),
+            var(--bg);
+        }
+
+        .sovereign-shell-entry {
+          background:
+            radial-gradient(circle at top center, rgba(45, 91, 159, 0.08), transparent 18%),
+            radial-gradient(circle at bottom right, rgba(134, 153, 172, 0.1), transparent 22%),
             var(--bg);
         }
 
@@ -144,34 +155,45 @@ export function SovereignShell({
           grid-template-columns: auto minmax(0, 1fr) auto;
           align-items: center;
           gap: 22px;
-          min-height: 48px;
-          padding: 6px 16px 7px;
-          background: rgba(248, 249, 250, 0.82);
-          border-bottom: 1px solid var(--line);
-          backdrop-filter: blur(18px);
+          min-height: 56px;
+          padding: 10px 18px;
+          background: rgba(247, 249, 251, 0.72);
+          border-bottom: 1px solid rgba(164, 176, 190, 0.18);
+          backdrop-filter: blur(16px);
+        }
+
+        .sovereign-topbar-entry {
+          max-width: 1160px;
+          width: calc(100% - 32px);
+          margin: 0 auto;
+          padding-left: 0;
+          padding-right: 0;
+          background: transparent;
+          border-bottom: 0;
+          backdrop-filter: none;
         }
 
         .sovereign-brand-block {
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 10px;
         }
 
         .sovereign-brand {
-          font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
-          font-size: 16px;
+          font-family: var(--font-sans);
+          font-size: 18px;
           font-weight: 700;
-          letter-spacing: -0.04em;
+          letter-spacing: -0.03em;
           color: var(--text);
           white-space: nowrap;
         }
 
         .sovereign-brand-subtitle {
           color: var(--muted);
-          font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+          font-family: var(--font-sans);
           font-size: 12px;
           font-weight: 600;
-          letter-spacing: -0.01em;
+          letter-spacing: 0.02em;
         }
 
         .sovereign-nav {
@@ -183,26 +205,26 @@ export function SovereignShell({
 
         .sovereign-nav a {
           position: relative;
-          padding: 4px 0;
+          padding: 6px 0;
           color: var(--muted);
-          font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
-          font-size: 12px;
-          font-weight: 700;
-          letter-spacing: -0.02em;
+          font-family: var(--font-sans);
+          font-size: 14px;
+          font-weight: 600;
+          letter-spacing: -0.01em;
         }
 
         .sovereign-nav a[aria-current="page"] {
-          color: var(--brand);
+          color: var(--text);
         }
 
         .sovereign-nav a[aria-current="page"]::after {
           content: "";
           position: absolute;
           right: 0;
-          bottom: -9px;
+          bottom: -10px;
           left: 0;
           height: 2px;
-          background: linear-gradient(90deg, var(--brand), var(--brand-strong));
+          background: rgba(45, 91, 159, 0.82);
         }
 
         .sovereign-utilities {
@@ -212,40 +234,30 @@ export function SovereignShell({
           gap: 8px;
         }
 
-        .shell-status-chip {
-          display: inline-flex;
-          align-items: center;
-          padding: 5px 9px;
-          border-radius: 999px;
-          border: 1px solid rgba(219, 194, 176, 0.24);
-          background: rgba(255, 255, 255, 0.72);
-          color: var(--muted);
-          font-size: 10px;
-          font-weight: 700;
-          letter-spacing: 0.08em;
-        }
-
         .shell-auth-button,
         .shell-auth-link {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          min-height: 28px;
-          padding: 0 10px;
+          min-height: 34px;
+          padding: 0 12px;
           border-radius: 999px;
-          border: 1px solid rgba(0, 99, 153, 0.18);
-          background: rgba(255, 255, 255, 0.72);
+          border: 1px solid rgba(164, 176, 190, 0.28);
+          background: rgba(255, 255, 255, 0.62);
           color: var(--text);
-          font-size: 11px;
+          font-size: 13px;
           font-weight: 600;
-          letter-spacing: -0.01em;
         }
 
         .sovereign-body {
           display: grid;
-          grid-template-columns: 50px minmax(0, 1fr) 38px;
+          grid-template-columns: 60px minmax(0, 1fr) 42px;
           flex: 1;
           min-height: 0;
+        }
+
+        .sovereign-body-entry {
+          display: block;
         }
 
         .sovereign-rail,
@@ -254,17 +266,16 @@ export function SovereignShell({
           flex-direction: column;
           align-items: center;
           gap: 14px;
-          padding: 12px 6px;
-          background: rgba(243, 244, 245, 0.72);
+          padding: 14px 8px;
+          background: rgba(244, 247, 250, 0.62);
         }
 
         .sovereign-rail {
-          border-right: 1px solid var(--line);
+          border-right: 1px solid rgba(164, 176, 190, 0.18);
         }
 
         .sovereign-report-rail {
-          border-left: 1px solid var(--line);
-          justify-content: space-between;
+          border-left: 1px solid rgba(164, 176, 190, 0.18);
         }
 
         .rail-status {
@@ -276,101 +287,69 @@ export function SovereignShell({
         .rail-avatar {
           display: grid;
           place-items: center;
-          width: 28px;
-          height: 28px;
-          border-radius: 9px;
-          background: linear-gradient(135deg, rgba(0, 99, 153, 0.88), rgba(177, 95, 0, 0.82));
+          width: 30px;
+          height: 30px;
+          border-radius: 10px;
+          background: linear-gradient(135deg, rgba(45, 91, 159, 0.9), rgba(114, 139, 164, 0.9));
           color: white;
           font-size: 10px;
           font-weight: 800;
           letter-spacing: 0.08em;
         }
 
-        .rail-status span,
-        .report-rail-label {
+        .rail-status span {
           color: var(--muted);
-          font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
-          font-size: 9px;
+          font-family: var(--font-sans);
+          font-size: 10px;
           font-weight: 700;
-          letter-spacing: 0.16em;
+          letter-spacing: 0.12em;
         }
 
         .rail-nav {
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 6px;
+          gap: 8px;
           width: 100%;
         }
 
         .shell-rail-button,
-        .shell-rail-label,
-        .report-rail-trigger {
+        .shell-rail-label {
           display: grid;
           justify-items: center;
-          gap: 3px;
+          gap: 4px;
           width: 100%;
           border: 0;
-          border-radius: 8px;
-          padding: 7px 2px;
+          border-radius: 12px;
+          padding: 8px 4px;
           background: transparent;
           color: var(--muted);
         }
 
-        .shell-rail-button,
-        .report-rail-trigger {
+        .shell-rail-button {
           cursor: pointer;
         }
 
-        .shell-rail-button.active {
-          background: rgba(255, 255, 255, 0.82);
-          color: var(--brand);
-        }
-
-        .shell-rail-label {
-          cursor: default;
-          opacity: 0.72;
-        }
-
+        .shell-rail-button.active,
         .shell-rail-label.active {
-          background: rgba(255, 255, 255, 0.82);
-          color: var(--brand);
-          opacity: 1;
-        }
-
-        .shell-rail-button span:last-child {
-          font-size: 9px;
-          letter-spacing: 0.14em;
+          background: rgba(255, 255, 255, 0.76);
+          color: var(--text);
         }
 
         .shell-rail-icon {
           display: grid;
           place-items: center;
-          width: 24px;
-          height: 24px;
-          border-radius: 7px;
-          background: rgba(255, 255, 255, 0.6);
+          width: 28px;
+          height: 28px;
+          border-radius: 9px;
+          background: rgba(255, 255, 255, 0.84);
           font-size: 10px;
           font-weight: 700;
         }
 
-        .shell-rail-button.active .shell-rail-icon,
-        .report-rail-trigger {
-          background: rgba(255, 255, 255, 0.92);
-        }
-
-        .report-rail-trigger {
-          width: 28px;
-          height: 28px;
-          padding: 0;
-          color: var(--secondary);
-          font-size: 11px;
-          font-weight: 800;
-        }
-
-        .report-rail-label {
-          writing-mode: vertical-rl;
-          text-orientation: mixed;
+        .shell-rail-button span:last-child,
+        .shell-rail-label span:last-child {
+          font-size: 10px;
         }
 
         .sovereign-stage {
@@ -380,8 +359,13 @@ export function SovereignShell({
           padding: 14px 0 18px;
         }
 
+        .sovereign-shell-entry .sovereign-stage {
+          padding-top: 0;
+        }
+
         @media (max-width: 1100px) {
-          .sovereign-topbar {
+          .sovereign-topbar,
+          .sovereign-topbar-entry {
             grid-template-columns: 1fr;
             justify-items: start;
             gap: 12px;
@@ -408,12 +392,12 @@ export function SovereignShell({
 
           .sovereign-rail {
             border-right: 0;
-            border-bottom: 1px solid var(--line);
+            border-bottom: 1px solid rgba(164, 176, 190, 0.18);
           }
 
           .sovereign-report-rail {
             border-left: 0;
-            border-top: 1px solid var(--line);
+            border-top: 1px solid rgba(164, 176, 190, 0.18);
           }
 
           .rail-status {
@@ -424,16 +408,6 @@ export function SovereignShell({
           .rail-nav {
             flex-direction: row;
             justify-content: center;
-            overflow: auto;
-          }
-
-          .shell-rail-button {
-            width: auto;
-            min-width: 54px;
-          }
-
-          .report-rail-label {
-            writing-mode: initial;
           }
         }
 
