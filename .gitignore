@@ -11,6 +11,7 @@ node_modules/
 
 # build outputs
 .next/
+.next-dev/
 tsconfig.tsbuildinfo
 output/
 .playwright-cli/
