@@ -158,6 +158,97 @@ AI_QUALITY_LLM_EXTRACT_FALLBACK_MODEL=ark-code-latest
 
 当前默认只要求把 `extract` 能力配通；`copilot` / `report` 仍可继续走规则主链路。
 
+### 当前生产基线清单
+
+当前 `fireline.pin2pin.ai` 已验证跑通的正式环境变量基线如下。
+
+必需项：
+
+```env
+DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require
+AI_QUALITY_LLM_ENABLED=true
+AI_QUALITY_LLM_API_KEY=your_api_key
+AI_QUALITY_LLM_BASE_URL=https://your-llm-gateway-or-provider/v1
+AI_QUALITY_LLM_PROVIDER=your_provider
+AI_QUALITY_LLM_TIMEOUT_MS=30000
+```
+
+模型路由项：
+
+```env
+AI_QUALITY_LLM_CONVERSATION_PRIMARY_PROVIDER=
+AI_QUALITY_LLM_CONVERSATION_PRIMARY_MODEL=
+AI_QUALITY_LLM_CONVERSATION_FALLBACK_PROVIDER=
+AI_QUALITY_LLM_CONVERSATION_FALLBACK_MODEL=
+AI_QUALITY_LLM_CONVERSATION_TIMEOUT_MS=
+
+AI_QUALITY_LLM_COPILOT_PRIMARY_PROVIDER=
+AI_QUALITY_LLM_COPILOT_PRIMARY_MODEL=
+AI_QUALITY_LLM_COPILOT_FALLBACK_PROVIDER=
+AI_QUALITY_LLM_COPILOT_FALLBACK_MODEL=
+AI_QUALITY_LLM_COPILOT_TIMEOUT_MS=
+
+AI_QUALITY_LLM_EXTRACT_PRIMARY_PROVIDER=
+AI_QUALITY_LLM_EXTRACT_PRIMARY_MODEL=
+AI_QUALITY_LLM_EXTRACT_FALLBACK_PROVIDER=
+AI_QUALITY_LLM_EXTRACT_FALLBACK_MODEL=
+AI_QUALITY_LLM_EXTRACT_TIMEOUT_MS=
+
+AI_QUALITY_LLM_REPORT_PRIMARY_PROVIDER=
+AI_QUALITY_LLM_REPORT_PRIMARY_MODEL=
+AI_QUALITY_LLM_REPORT_FALLBACK_PROVIDER=
+AI_QUALITY_LLM_REPORT_FALLBACK_MODEL=
+AI_QUALITY_LLM_REPORT_TIMEOUT_MS=
+```
+
+说明：
+
+- 这套键需要同时存在于 `Production / Preview / Development`
+- 平台自动注入的 `VERCEL_*`、`TURBO_*`、`NX_DAEMON` 不属于业务配置，不要求和本地 `.env.local` 一致
+- `VERCEL_OIDC_TOKEN` 属于运行时签发值，不要求和本地一致
+- `vercel env pull` 不能单独作为敏感变量是否为空的证据；敏感值可能在拉下来的文件里显示为空字符串，但 `vercel env ls <env>` 仍会显示该键已存在
+
+### 本地与线上一致性检查
+
+推荐把“本地 `.env.local` 是否和 Vercel 三套环境对齐”做成固定检查动作。
+
+先确认当前项目绑定正确：
+
+```bash
+cat .vercel/project.json
+vercel whoami
+```
+
+再看线上三套环境是否都具备完整键集合：
+
+```bash
+vercel env ls production
+vercel env ls preview
+vercel env ls development
+```
+
+如果要把线上环境拉到临时文件做键名比对：
+
+```bash
+vercel env pull /tmp/ai-quality-prod-env --environment=production
+vercel env pull /tmp/ai-quality-preview-env --environment=preview
+vercel env pull /tmp/ai-quality-dev-env --environment=development
+```
+
+对账原则：
+
+- 先比“键是否存在”，再比“运行结果是否正常”
+- 对敏感值，不要求在命令行里看明文；优先确认：
+  - 键已存在
+  - 生产 smoke 跑通
+  - `GET /api/health` 正常
+  - 登录、建案、进入调查链路正常
+- 如果 `Production / Preview / Development` 的键集合不一致，先补齐再部署
+- 如果本地和线上都存在相同键，但线上运行异常，不要先怀疑 SQL 或前端，先怀疑：
+  - 数据库 host 写错
+  - 平台环境没有同步到目标环境
+  - 当前 Vercel 项目绑定错了
+
 ## 5. 推荐部署路径：Vercel
 
 当前目标是“单仓库、单体系、完整前后端 + API、可直接打开演示”，所以推荐 Vercel，而不是 GitHub Pages。
