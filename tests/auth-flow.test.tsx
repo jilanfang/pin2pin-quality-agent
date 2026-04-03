@@ -17,6 +17,14 @@ describe("auth flow", () => {
         isAuthenticated: false,
         username: null,
       }),
+      getRegisterConfig: () => ({
+        allowSelfRegister: true,
+        minPasswordLength: 8,
+        rateLimitMaxAttempts: 5,
+        rateLimitWindowMs: 600000,
+        inviteCodes: [],
+        usernameAllowlist: [],
+      }),
     }));
 
     const { default: LoginPage } = await import("@/app/login/page");
@@ -25,7 +33,8 @@ describe("auth flow", () => {
 
     expect(markup).toContain("账号登录");
     expect(markup).toContain("用户名");
-    expect(markup).not.toContain("没有账号？创建一个");
+    expect(markup).toContain("注册");
+    expect(markup).toContain("登录");
   });
 
   it("keeps dev builds isolated from production build artifacts", async () => {

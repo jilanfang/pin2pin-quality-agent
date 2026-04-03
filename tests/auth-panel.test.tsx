@@ -107,4 +107,134 @@ describe("AuthPanel", () => {
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it("switches to register mode and auto-logs in after a successful registration", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AuthPanel allowSelfRegister requiresInvite />);
+
+    fireEvent.click(screen.getByRole("tab", { name: "注册" }));
+
+    fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "new-user" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "Pin2pin!2026" } });
+    fireEvent.change(screen.getByLabelText("邀请码"), { target: { value: "FIRELINE-INVITE" } });
+    fireEvent.change(screen.getByLabelText("确认密码"), { target: { value: "Pin2pin!2026" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建账号" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/auth/register",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            username: "new-user",
+            password: "Pin2pin!2026",
+            inviteCode: "FIRELINE-INVITE",
+          }),
+        })
+      );
+      expect(window.location.href).toBe("/");
+    });
+  });
+
+  it("blocks registration when password confirmation does not match", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AuthPanel allowSelfRegister />);
+
+    fireEvent.click(screen.getByRole("tab", { name: "注册" }));
+
+    fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "new-user" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "Pin2pin!2026" } });
+    fireEvent.change(screen.getByLabelText("确认密码"), { target: { value: "Mismatch!2026" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建账号" }));
+
+    expect(await screen.findByText("两次输入的密码不一致")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(window.location.href).toBe("/login");
+  });
+
+  it("shows backend registration errors and lets the user retry", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: "用户名已被占用",
+          }),
+          { status: 409 }
+        )
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AuthPanel allowSelfRegister />);
+
+    fireEvent.click(screen.getByRole("tab", { name: "注册" }));
+    fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "existing-user" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "Pin2pin!2026" } });
+    fireEvent.change(screen.getByLabelText("确认密码"), { target: { value: "Pin2pin!2026" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建账号" }));
+
+    expect(await screen.findByText("用户名已被占用")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "new-user" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建账号" }));
+
+    await waitFor(() => {
+      expect(window.location.href).toBe("/");
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows a backend disabled-registration message", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: "当前未开放注册",
+        }),
+        { status: 403 }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AuthPanel />);
+
+    expect(screen.queryByRole("tab", { name: "注册" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "账号登录" })).toBeInTheDocument();
+    expect(window.location.href).toBe("/login");
+  });
+
+  it("blocks registration when invite code is required but missing", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AuthPanel allowSelfRegister requiresInvite />);
+
+    fireEvent.click(screen.getByRole("tab", { name: "注册" }));
+    fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "new-user" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "Pin2pin!2026" } });
+    fireEvent.change(screen.getByLabelText("确认密码"), { target: { value: "Pin2pin!2026" } });
+
+    expect(screen.getByRole("button", { name: "创建账号" })).toBeDisabled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("submits the login form when pressing Enter", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AuthPanel />);
+
+    fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "alice" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "Pin2pin!2026" } });
+    fireEvent.submit(screen.getByRole("button", { name: "登录" }).closest("form")!);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(window.location.href).toBe("/");
+    });
+  });
 });

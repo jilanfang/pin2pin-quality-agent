@@ -16,6 +16,8 @@
 
 ## Source Of Truth
 
+- Documentation index:
+  - `docs/README.md`
 - Main backlog:
   - `docs/mvp-hardening-checklist.md`
 - `index.html -> Next.js` differences and migration decisions:
@@ -24,6 +26,8 @@
   - `docs/deployment-and-demo.md`
 - Visual system baseline:
   - `DESIGN.md`
+- Temporary recovery snapshot only, not long-term truth:
+  - `docs/current-handoff.md`
 - Default localhost app port comes from the global registry:
   - `3001`
 

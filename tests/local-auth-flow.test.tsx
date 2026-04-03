@@ -7,13 +7,21 @@ describe("local auth flow", () => {
     vi.resetModules();
   });
 
-  it("renders username/password login without any sign-up entry", async () => {
+  it("renders login and registration entry when registration is available", async () => {
     vi.doMock("@/lib/server/auth", () => ({
       getServerAuthState: async () => ({
         authEnabled: true,
         userId: null,
         isAuthenticated: false,
         username: null,
+      }),
+      getRegisterConfig: () => ({
+        allowSelfRegister: true,
+        minPasswordLength: 8,
+        rateLimitMaxAttempts: 5,
+        rateLimitWindowMs: 600000,
+        inviteCodes: ["fl26-demo-0001"],
+        usernameAllowlist: [],
       }),
     }));
 
@@ -24,7 +32,7 @@ describe("local auth flow", () => {
     expect(markup).toContain("账号登录");
     expect(markup).toContain("用户名");
     expect(markup).toContain("密码");
-    expect(markup).not.toContain("创建账号");
-    expect(markup).not.toContain("没有账号");
+    expect(markup).toContain("注册");
+    expect(markup).not.toContain("需要邀请码");
   });
 });

@@ -109,6 +109,8 @@ const telemetryEventSchema = z.object({
     "evidence_sent",
     "report_preview_generated",
     "final_report_generated",
+    "register_success",
+    "register_failed",
     "app_error",
   ]),
   caseId: z.string().trim().nullable().optional(),

@@ -67,4 +67,33 @@ describe("server api telemetry handlers", () => {
       note: "首屏先想给一个总体反馈。",
     });
   });
+
+  it("accepts registration audit events", async () => {
+    await postTelemetryHandler({
+      name: "register_success",
+      caseId: null,
+      metadata: { username: "new-user", ip: "203.0.113.7" },
+    });
+    await postTelemetryHandler({
+      name: "register_failed",
+      caseId: null,
+      metadata: { username: "existing-user", reason: "duplicate_username" },
+    });
+
+    const content = await readFile(telemetryPath, "utf8");
+    const entries = content
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({
+      kind: "event",
+      name: "register_success",
+    });
+    expect(entries[1]).toMatchObject({
+      kind: "event",
+      name: "register_failed",
+    });
+  });
 });

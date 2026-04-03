@@ -1,118 +1,89 @@
 # Pin2pin Fireline 文档索引
 
-当前产品线定位先看：
+这份索引只做一件事，告诉你现在该看什么，不该把什么当成长期真相。
 
-1. [产品线定位](./product-line-positioning.md)
-   说明本仓库为什么对齐到 `Pin2pin Fireline`，以及它与历史 `8D Copilot` 命名的关系。
-2. [用户旅程资产](./journeys/README.md)
-   混合版用户旅程主账本与结构化场景 schema。后续 benchmark、regression、smoke、demo case 都从这里派生。
+当前项目主线已经明确：
 
-当前项目的文档必须按“**双线并存**”来理解：
+- 正式产品实现以 `Next.js App Router + TypeScript` 为准
+- `app/`、`components/`、`lib/` 是代码主线
+- 根目录 `index.html` 仍可作为离线参考或对照，但不是当前产品 source of truth
 
-- 一条是 `Next.js App Router + TypeScript` 主应用
-- 一条是根目录 `index.html` 的离线原型
-
-最近一轮产品化工作、产品加固和测试补强主要发生在 `Next.js` 主链路。
-同时，`index.html` 仍保留一条可运行的离线原型线。
-因此，**不要把它当成已废弃文件，但也不要再默认最新主线只在 `index.html`。**
-
-## 先看这些文件
-
-任务管理约定：
-
-- 当前待办只看 [MVP 加固清单](./mvp-hardening-checklist.md)
-- 离线原型 / 主线差异只看 [迁移账本](./index-html-to-nextjs-migration-ledger.md)
-- 部署、环境变量和运行边界只看 [运行与部署说明](./deployment-and-demo.md)
-- 不要再为同一批待办额外新建任务文档
-
-1. [产品线定位](./product-line-positioning.md)
-   当前正式命名、产品边界和历史名称映射。
-2. [gtm-fireline-execution-2026-03-28.md](./gtm-fireline-execution-2026-03-28.md)
-   当前 `Pin2pin Fireline` GTM 执行文档。明确 case 门诊、标准化试用、项目型支援与内容主线的关系。
-3. [journeys/README.md](./journeys/README.md)
-   用户旅程主账本入口。说明混合版用户群、case family 和结构化场景 schema 的权威位置。
-4. [当前交接说明](./current-handoff.md)
-   当前最重要的恢复文件。已明确说明：
-   - 哪些是当前真实实现
-   - 文档和代码哪里漂移了
-   - 哪些能力只在离线原型或只在 Next.js 存在
-   - 下一步建议怎么收敛
-5. [`../task_plan.md`](/Users/jilanfang/ai-quality/task_plan.md)
-   当前最新工作计划，记录的是 `Next.js` 主链路的产品加固，不再是旧的路由任务描述。
-6. [MVP 加固清单](./mvp-hardening-checklist.md)
-   当前最适合直接执行的工程清单。回答“这套架构对 MVP 还行不行”“现在必须补什么”“哪些先不要做”。
-7. [迁移账本](./index-html-to-nextjs-migration-ledger.md)
-   当前 `index.html -> Next.js` 差异账本。回答“离线原型里还有什么没回灌”“哪些该迁、哪些不该迁”。
-8. [运行与部署说明](./deployment-and-demo.md)
-   当前运行、部署、环境变量与外部试用边界。外部预览 / 试用必须使用 Postgres；本地文件存储只用于本机演示。
-9. [`../DESIGN.md`](/Users/jilanfang/ai-quality/DESIGN.md)
-   当前设计基线。做报告页、工作台、品牌、阶段语义前先读。
-10. [`../AGENTS.md`](/Users/jilanfang/ai-quality/AGENTS.md)
-   当前协作约束文件。包含 localhost 端口、运行态污染、LLM 接入和待办规则。
-
-## 按场景阅读
-
-### 如果你继续维护 `index.html` 离线原型
-
-优先看：
-
-1. [当前交接说明](./current-handoff.md)
-2. [`../index.html`](/Users/jilanfang/ai-quality/index.html)
-3. [`../deck.test.mjs`](/Users/jilanfang/ai-quality/deck.test.mjs)
-4. [`../DESIGN.md`](/Users/jilanfang/ai-quality/DESIGN.md)
-
-适合的任务：
-
-- 界面调整
-- 报告页样式
-- 离线阶段流
-- 本地导出
-- 品牌与演示文案改造
-
-### 如果你继续维护 `Next.js` 主应用
-
-优先看：
-
-1. [当前交接说明](./current-handoff.md)
-2. [gtm-fireline-execution-2026-03-28.md](./gtm-fireline-execution-2026-03-28.md)
-3. [`../components/workspace.tsx`](/Users/jilanfang/ai-quality/components/workspace.tsx)
-4. [`../app/page.tsx`](/Users/jilanfang/ai-quality/app/page.tsx)
-5. [`../lib/domain/workflow-engine.ts`](/Users/jilanfang/ai-quality/lib/domain/workflow-engine.ts)
-6. [`../lib/domain/report-builder.ts`](/Users/jilanfang/ai-quality/lib/domain/report-builder.ts)
-7. [`../lib/server/llm.ts`](/Users/jilanfang/ai-quality/lib/server/llm.ts)
-8. [`../lib/server/api.ts`](/Users/jilanfang/ai-quality/lib/server/api.ts)
-
-适合的任务：
-
-- API 主链路
-- LLM 路由与模型服务接入
-- 存储与部署
-- 正式产品化工作台
-- 把离线原型能力迁回正式主应用
-
-## 当前推荐阅读顺序
-
-1. [当前交接说明](./current-handoff.md)
-2. [gtm-fireline-execution-2026-03-28.md](./gtm-fireline-execution-2026-03-28.md)
-3. [journeys/README.md](./journeys/README.md)
-4. [MVP 加固清单](./mvp-hardening-checklist.md)
-5. [迁移账本](./index-html-to-nextjs-migration-ledger.md)
-6. [运行与部署说明](./deployment-and-demo.md)
-7. [`../DESIGN.md`](/Users/jilanfang/ai-quality/DESIGN.md)
-8. [`../AGENTS.md`](/Users/jilanfang/ai-quality/AGENTS.md)
-
-## 当前最重要的文档结论
-
-- 当前代码库不是单一文件单一路线
-- `Next.js` 是当前权威产品主线，`index.html` 是仍在维护的离线原型 / 演示线
-- 近期新增功能默认优先落在 `Next.js`，除非明确是在做离线演示试验
-- 外部预览 / 试用必须使用 Postgres；本地文件存储只用于本机演示
-- 在线模型接入边界在 `lib/server/llm.ts`，不要把接入逻辑散进 domain 层或工作台组件
-
-如果文档之间有冲突，以：
+如果文档和代码冲突，优先级固定为：
 
 1. 当前代码
 2. 最新验证结果
-3. [当前交接说明](./current-handoff.md)
+3. [`../AGENTS.md`](/Users/jilanfang/ai-quality/AGENTS.md)
+4. 本索引列出的权威文档
 
-为准。
+## 先看什么
+
+新线程接手、继续开发、排查部署或梳理边界时，先按这个顺序读：
+
+1. [产品线定位](./product-line-positioning.md)
+   先确认命名、边界和历史名称映射。
+2. [运行与部署说明](./deployment-and-demo.md)
+   先确认当前运行方式、环境变量、数据库和生产路径。
+3. [MVP 加固清单](./mvp-hardening-checklist.md)
+   这是长期待办和工程加固的唯一主清单。
+4. [用户旅程资产](./journeys/README.md)
+   所有 benchmark、regression、demo case 都从这里派生。
+5. [`../DESIGN.md`](/Users/jilanfang/ai-quality/DESIGN.md)
+   做首页、登录页、工作台和报告样式前先看。
+
+## 文档分层
+
+### 一层：权威文档
+
+这些文件是当前长期 source of truth。
+
+- [产品线定位](./product-line-positioning.md)
+  命名、产品边界、历史名称映射。
+- [运行与部署说明](./deployment-and-demo.md)
+  本地运行、数据库、Vercel、生产基线、环境变量一致性检查。
+- [MVP 加固清单](./mvp-hardening-checklist.md)
+  长期 backlog 和工程优先级唯一入口。
+- [迁移账本](./index-html-to-nextjs-migration-ledger.md)
+  只记录 `index.html` 参考线与正式主线的差异和迁移决策。
+- [用户旅程资产](./journeys/README.md)
+  用户旅程主账本与结构化场景入口。
+
+### 二层：支撑文档
+
+这些文件有用，但不是主 backlog 或架构真相。
+
+- [Fireline GTM 执行文档](./gtm-fireline-execution-2026-03-28.md)
+  当前 GTM 主线、case 门诊和试用承接方式。
+- [UAT 测试案例](./uat-case-mcu800-c25-reversed-polarity.md)
+  用于手工验收、演示和质量回测的真实案例脚本。
+
+### 三层：临时恢复与流程产物
+
+这些文件可以帮助恢复上下文，但不要把它们当长期规范。
+
+- [当前交接说明](./current-handoff.md)
+  只用于线程恢复和临时快照，不负责维护长期任务真相。
+- [`../task_plan.md`](/Users/jilanfang/ai-quality/task_plan.md)
+- [`../progress.md`](/Users/jilanfang/ai-quality/progress.md)
+- [`../findings.md`](/Users/jilanfang/ai-quality/findings.md)
+- [superpowers/README.md](./superpowers/README.md)
+  这里是 agent 生成的 plan 和 spec，保留过程记录，不作为正式产品文档。
+
+### 四层：历史归档
+
+- [archive/README.md](./archive/README.md)
+  已过时、已替代或只保留背景价值的历史文档都在这里。
+
+## 不要再这样用文档
+
+- 不要把 `current-handoff.md` 当 backlog。
+- 不要在 `task_plan.md`、`progress.md`、`findings.md` 里维护长期任务清单。
+- 不要在 `docs/superpowers/` 里找正式产品规则。
+- 不要再为同一批工程待办额外新建平行任务文档。
+
+## 维护规则
+
+- 新的长期任务，只更新 [MVP 加固清单](./mvp-hardening-checklist.md)。
+- 新的旅程、场景、benchmark 输入，先更新 [用户旅程资产](./journeys/README.md) 指向的主账本。
+- 新的部署、环境变量、生产问题处理经验，更新 [运行与部署说明](./deployment-and-demo.md)。
+- 新发现的 `index.html` 参考线差异，先更新 [迁移账本](./index-html-to-nextjs-migration-ledger.md)。
+- 已失效但仍有背景价值的内容，移入 `docs/archive/`，不要继续混在当前入口里。

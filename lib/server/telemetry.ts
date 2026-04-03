@@ -9,6 +9,8 @@ type TelemetryEventName =
   | "evidence_sent"
   | "report_preview_generated"
   | "final_report_generated"
+  | "register_success"
+  | "register_failed"
   | "app_error";
 
 type FeedbackCategory =

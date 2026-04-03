@@ -2,10 +2,11 @@ import React from "react";
 import { redirect } from "next/navigation";
 
 import { AuthPanel } from "@/components/auth-panel";
-import { getServerAuthState } from "@/lib/server/auth";
+import { getRegisterConfig, getServerAuthState } from "@/lib/server/auth";
 
 export default async function LoginPage() {
   const auth = await getServerAuthState();
+  const registerConfig = getRegisterConfig();
 
   if (!auth.authEnabled) {
     redirect("/");
@@ -15,5 +16,10 @@ export default async function LoginPage() {
     redirect("/");
   }
 
-  return <AuthPanel />;
+  return (
+    <AuthPanel
+      allowSelfRegister={registerConfig.allowSelfRegister}
+      requiresInvite={registerConfig.inviteCodes.length > 0}
+    />
+  );
 }

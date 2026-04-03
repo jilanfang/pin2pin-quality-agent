@@ -390,7 +390,9 @@ printf '%s' "$DATABASE_URL" | vercel env add DATABASE_URL development --force
 
 ## 10. 相关文档
 
+- [文档索引](./README.md)
 - [MVP 加固清单](./mvp-hardening-checklist.md)
 - [迁移账本](./index-html-to-nextjs-migration-ledger.md)
 - [当前交接说明](./current-handoff.md)
+  只用于线程恢复，不作为长期 source of truth
 - [`../AGENTS.md`](/Users/jilanfang/ai-quality/AGENTS.md)

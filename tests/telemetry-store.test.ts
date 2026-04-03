@@ -57,4 +57,34 @@ describe("telemetry store", () => {
       note: "不知道下一步该补什么。",
     });
   });
+
+  it("persists registration audit events", async () => {
+    const { recordEvent } = await import("@/lib/server/telemetry");
+
+    await recordEvent({
+      name: "register_success",
+      caseId: null,
+      metadata: { username: "new-user", ip: "203.0.113.7" },
+    });
+    await recordEvent({
+      name: "register_failed",
+      caseId: null,
+      metadata: { username: "blocked-user", reason: "rate_limited" },
+    });
+
+    const content = await readFile(telemetryPath, "utf8");
+    const entries = content
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+
+    expect(entries[0]).toMatchObject({
+      kind: "event",
+      name: "register_success",
+    });
+    expect(entries[1]).toMatchObject({
+      kind: "event",
+      name: "register_failed",
+    });
+  });
 });

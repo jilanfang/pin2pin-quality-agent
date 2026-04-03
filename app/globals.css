@@ -90,6 +90,36 @@ a {
   gap: 10px;
 }
 
+.auth-mode-tabs {
+  display: inline-grid;
+  grid-auto-flow: column;
+  justify-content: start;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid rgba(164, 176, 190, 0.18);
+  border-radius: 999px;
+  background: rgba(244, 247, 251, 0.92);
+  width: fit-content;
+}
+
+.auth-mode-tabs button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-mode-tabs button.active {
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--text);
+  box-shadow: 0 4px 14px rgba(22, 28, 36, 0.05);
+}
+
 .auth-kicker {
   color: var(--muted);
   font-size: var(--text-meta);
@@ -109,6 +139,19 @@ a {
   color: var(--muted);
   font-size: var(--text-body);
   line-height: 1.55;
+}
+
+.auth-note {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  width: fit-content;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+  font-size: var(--text-meta);
+  font-weight: 700;
 }
 
 .auth-form {
@@ -132,6 +175,10 @@ a {
   background: rgba(255, 255, 255, 0.96);
   color: var(--text);
   font-size: var(--text-body);
+}
+
+.auth-form input::placeholder {
+  color: rgba(105, 114, 125, 0.72);
 }
 
 .auth-form button {

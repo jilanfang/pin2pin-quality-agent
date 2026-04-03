@@ -100,6 +100,26 @@ async function createBlankCaseFromSidebar(page: Page, title: string) {
 }
 
 test.describe("investigation workflow", () => {
+  test("allows a brand-new user to self-register and land on the homepage", async ({ page }) => {
+    const username = uniqueLabel("selfreg");
+    const password = "Pin2pin!2026";
+
+    await page.goto("/login");
+    await page.getByRole("tab", { name: "注册" }).click();
+
+    await page.getByLabel("用户名").fill(username);
+    await page.getByRole("textbox", { name: "密码", exact: true }).fill(password);
+    await page.getByLabel("确认密码").fill(password);
+
+    await Promise.all([
+      page.waitForURL((url: URL) => !url.pathname.includes("/login"), { timeout: 30_000 }),
+      page.getByRole("button", { name: "创建账号" }).click(),
+    ]);
+
+    await waitForAuthCookie(page);
+    await expect(page.getByRole("heading", { name: "把客户投诉或异常情况贴进来" })).toBeVisible();
+  });
+
   test("shows a login error, then allows retrying with the issued username and password", async ({ page }) => {
     await page.goto("/login");
 
