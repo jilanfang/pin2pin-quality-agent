@@ -224,6 +224,21 @@ function buildConversationSummary(next: ReturnType<typeof applyEvidence>) {
   ].join("\n");
 }
 
+function appendAssistantConversationMessage(
+  aggregate: Awaited<ReturnType<typeof getCaseStore>> extends never ? never : ReturnType<typeof applyEvidence>,
+  content: string
+) {
+  const message = content.trim();
+  if (!message) return;
+  aggregate.messages.push({
+    id: `msg-${Math.random().toString(36).slice(2, 10)}`,
+    role: "assistant",
+    content: message,
+    messageType: "assistant_note",
+    createdAt: new Date().toISOString(),
+  });
+}
+
 export async function listCasesHandler(context?: RequestUserContext) {
   const store = getCaseStore();
   const cases = await store.listCases(context?.userId ?? undefined);
@@ -359,6 +374,29 @@ export async function postEvidenceHandler(caseId: string, payload: unknown, cont
     const conversationMeta = buildConversationMeta(primaryStage, aggregate, analysis);
     return serializeCaseWorkflow(aggregate, conversationMeta);
   }
+
+  const shouldPersistAsEvidence =
+    analysis.intents.includes("evidence") || analysis.intents.includes("correction");
+
+  if (!shouldPersistAsEvidence) {
+    const next = structuredClone(aggregate);
+
+    if (analysis.summaryRequested) {
+      appendAssistantConversationMessage(next, buildConversationSummary(next));
+    } else if (analysis.assistantReplyDraft) {
+      appendAssistantConversationMessage(next, analysis.assistantReplyDraft);
+    }
+
+    await store.saveCase(next);
+    await safeRecordEvent({
+      name: "evidence_sent",
+      caseId,
+      metadata: { contextStage: parsed.contextStage ?? "D2", persistedAsEvidence: false },
+    });
+    const conversationMeta = buildConversationMeta(primaryStage, next, analysis);
+    return serializeCaseWorkflow(next, conversationMeta);
+  }
+
   const next = applyEvidence(aggregate, parsed, {
     llmExtraction: {
       knownFacts: analysis.knownFacts,
@@ -393,7 +431,7 @@ export async function postEvidenceHandler(caseId: string, payload: unknown, cont
   await safeRecordEvent({
     name: "evidence_sent",
     caseId,
-    metadata: { contextStage: parsed.contextStage ?? "D2" },
+    metadata: { contextStage: parsed.contextStage ?? "D2", persistedAsEvidence: true },
   });
   const conversationMeta = buildConversationMeta(primaryStage, next, analysis);
   return serializeCaseWorkflow(next, conversationMeta);

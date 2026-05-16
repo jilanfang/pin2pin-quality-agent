@@ -1,31 +1,31 @@
 # Current Checkpoint
 
+<!-- Update this file whenever you save a new checkpoint -->
+
 ## Snapshot ID
-20260329-012229-fireline-journey-assets-minimal-closeout
+20260413-125823-fireline-marketing-and-llm-prompts
 
 ## Saved At
-2026-03-29 01:22 CST
+2026-04-13 12:58 CST
 
 ## Project Path
 /Users/jilanfang/ai-quality
 
 ## Snapshot File
-.task-archive/snapshots/20260329-012229-fireline-journey-assets-minimal-closeout.md
+.task-archive/snapshots/20260413-125823-fireline-marketing-and-llm-prompts.md
 
 ## Goal
-把 Fireline 用户旅程资产收口成可直接服务 benchmark、regression、smoke 的轻量资产，不再继续过度工程化。
+在现有 Next.js 应用里同时保留公开营销路径与工作台入口，并把当前在线 LLM 提示词统一收口到单独目录，方便后续调优。
 
 ## Current Phase
-旅程资产最小收口已完成，下一步应切回 release blocker。
+本地实现与验证已完成；当前存档已覆盖营销页拆分与提示词统一管理，待继续线上部署验证或进入下一轮 prompt 调优。
 
 ## Next Actions
-- 先处理登录与用户隔离
-- 再收口前端主链路 bug，重点看新建案件、抽屉按钮、输入框常驻可见
-- 做预览部署 smoke 和种子用户试用回归
+- 部署并验证线上公开页、工作台路径与登录跳转。
+- 如继续 LLM 方向，直接从 `lib/server/prompts/` 开始调 prompt。
 
 ## Blockers
-- 产品 blocker：None
-- 工程提醒：仓库存在大量其他未提交改动，后续继续开发时要避免误碰无关文件
+- None
 
 ## Restore Checklist
 1. Read the snapshot file listed above.

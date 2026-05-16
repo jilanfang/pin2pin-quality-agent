@@ -1,15 +1,7 @@
 import React from "react";
-import { redirect } from "next/navigation";
 
-import { Overview } from "@/components/overview";
-import { getServerAuthState } from "@/lib/server/auth";
+import { FirelineMarketingHome } from "@/components/fireline-marketing-home";
 
 export default async function HomePage() {
-  const auth = await getServerAuthState();
-
-  if (auth.authEnabled && !auth.isAuthenticated) {
-    redirect("/login");
-  }
-
-  return <Overview />;
+  return <FirelineMarketingHome />;
 }

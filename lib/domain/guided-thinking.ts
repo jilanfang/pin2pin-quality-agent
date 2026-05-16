@@ -56,6 +56,8 @@ export function buildGuidedThinking(
     const missingBatchTrace = missingSet.has("batch") || missingSet.has("discovery_time");
     const hasFailurePoint = !!factValue(knownFacts, "failure_location");
     const hasImpact = !!factValue(knownFacts, "impact");
+    const hasBatch = !!factValue(knownFacts, "batch");
+    const hasDiscoveryTime = !!factValue(knownFacts, "discovery_time");
 
     if (missingFailureLocation) {
       return {
@@ -90,29 +92,35 @@ export function buildGuidedThinking(
     if (hasFailurePoint && hasImpact && missingBatchTrace) {
       return {
         focusArea: "D2",
-        thinkingGoal: "先把追溯边界钉住，避免后面围堵和分析都漂。",
-        guidanceText: "失效点和影响范围已有基础，下一步优先补工单、批次、线别或生产时间。",
-        suggestedQuestions: ["先补工单、批次、线别或生产时间，把追溯边界钉住。"],
-        checkpoints: [
-          "是否具备最基本的工单或批次边界",
-          "是否能把异常拉回具体生产时段或线体",
-          "是否已具备进入围堵或进一步分析的基础",
+        thinkingGoal: "问题边界已经够用了，先补一条追溯线索，然后继续往围堵走。",
+        guidanceText: "现在不用停在 D2 等资料补齐。先补你手上最容易拿到的一条追溯信息，例如批次、发现时间、线别或工单，然后我继续往下推。",
+        suggestedQuestions: [
+          hasBatch && !hasDiscoveryTime
+            ? "先回一句：这次最早是什么时间发现的？如果时间还不准，先给白班 / 夜班或大概时段也行。"
+            : !hasBatch && hasDiscoveryTime
+              ? "先回一句：这次先锁到哪个批次、工单或线别？哪怕只有一个也行。"
+              : "先回一句你现在最确定的一条追溯信息：批次、发现时间、线别或工单，先给一个也能继续往下走。",
         ],
-        warnings: missingFields.length ? ["追溯边界还不稳，先别把围堵范围写死。"] : [],
+        checkpoints: [
+          "是否已经拿到至少一条可追溯线索",
+          "是否还能继续补围堵范围或现场动作",
+          "是否已经具备进入 D3 的最低基础",
+        ],
+        warnings: missingFields.length ? ["追溯边界还不完整，但不需要卡在这里等补齐。"] : [],
       };
     }
 
     return {
       focusArea: "D2",
-      thinkingGoal: "先把问题边界定义清楚，再进入分析。",
-      guidanceText: "请先不要急着解释原因，先把现象、时间、批次、影响范围和客户场景说清楚。",
-      suggestedQuestions: ["异常是客户现场发现，还是内部测试发现？"],
+      thinkingGoal: "先把问题边界拉到能推进的程度，不用一次补全。",
+      guidanceText: "不用先把 D2 填满。你只要再补一条最确定的现场事实，我就继续往下推。",
+      suggestedQuestions: ["先回一句：这次是谁先发现的，现场看到的现象是什么？"],
       checkpoints: [
-        "现象描述是否可复述给他人而不产生歧义",
+        "现象描述是否已经能让别人复述",
         "事实和猜测是否已经分开",
-        "是否具备最基本的时间、批次、影响信息",
+        "是否已有至少一条可继续追查的边界信息",
       ],
-      warnings: missingFields.length ? ["问题定义还不完整，先补事实再推进。"] : [],
+      warnings: missingFields.length ? ["问题定义还不完整，但不用停在这里等全部补齐。"] : [],
     };
   }
 

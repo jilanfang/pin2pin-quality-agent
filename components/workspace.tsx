@@ -141,6 +141,23 @@ type CaseWorkflow = {
   resultRecommendation: ResultRecommendation;
   conversationMeta: ConversationMeta;
   presentation?: CasePresentation;
+  workflowState?: {
+    focusArea: string;
+    d4ConfirmationState: "draft" | "ready" | "confirmed" | "stale";
+    nextAsk: string;
+  };
+  eightDPreview?: Array<{
+    stage: string;
+    title: string;
+    status: "empty" | "draft" | "ready" | "confirmed" | "stale";
+    summary: string;
+    content: string;
+    missingItems: string[];
+    primaryAction?: {
+      type: "confirm_d4" | "reconfirm_d4";
+      label: string;
+    } | null;
+  }>;
 };
 
 type ReportPreview = {
@@ -215,6 +232,42 @@ const seedCases = [
 const EVIDENCE_INPUT_PLACEHOLDER =
   "输入客户投诉、测试结论、批次、工单、现场观察，系统会按当前阶段推进。";
 
+const DISPLAY_TEXT_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/\bIncoming lot\b/giu, "来料批次"],
+  [/\bsupplier\b/giu, "供应商"],
+  [/\bvisual crack\b/giu, "外观裂纹"],
+  [/\bintermittent short\b/giu, "间歇性短路"],
+  [/\bshort\b/giu, "短路"],
+  [/\breflow\b/giu, "回流"],
+  [/\bbefore loading\b/giu, "上机前"],
+  [/\bon line\b/giu, "在线上"],
+  [/\bSame part\b/giu, "同料号"],
+  [/\bfound on\b/giu, "发现于"],
+  [/\bfrom\b/giu, "来自"],
+  [/\bpcs\b/giu, "颗"],
+  [/\breels\b/giu, "卷料"],
+  [/\blot\b/giu, "批次"],
+  [/\bmachine\b/giu, "机种"],
+];
+
+function translateDisplayText(value: string) {
+  return DISPLAY_TEXT_REPLACEMENTS.reduce(
+    (text, [pattern, replacement]) => text.replace(pattern, replacement),
+    value
+  );
+}
+
+function compactDisplayText(value: string, maxChars = 120) {
+  const translated = translateDisplayText(value)
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  if (!translated) return "待补充";
+  if (translated.length <= maxChars) return translated;
+  return `${translated.slice(0, maxChars).trim()}...`;
+}
+
 function formatTime(value: string) {
   return new Date(value).toLocaleString("zh-CN", {
     month: "2-digit",
@@ -275,6 +328,42 @@ function messageFromError(error: unknown, fallback: string) {
 function stageLabel(stage?: string) {
   if (!stage) return "未开始";
   return STAGE_LABELS[stage] ?? stage;
+}
+
+function shortStageLabel(stage?: string) {
+  if (!stage) return "未开始";
+  const labels: Record<string, string> = {
+    D1: "D1 团队",
+    D2: "D2 定义",
+    D3: "D3 遏制",
+    D4: "D4 根因",
+    D5: "D5 纠正",
+    D6: "D6 验证",
+    D7: "D7 预防",
+    D8: "D8 结案",
+  };
+  return labels[stage] ?? stageLabel(stage);
+}
+
+function stageTimelineLabel(stage?: string) {
+  if (stage === "D4") return "D4 根因";
+  return stageLabel(stage);
+}
+
+function eightDStatusLabel(status: "empty" | "draft" | "ready" | "confirmed" | "stale") {
+  if (status === "empty") return "空白";
+  if (status === "draft") return "草稿";
+  if (status === "ready") return "待确认";
+  if (status === "confirmed") return "已确认";
+  return "需复审";
+}
+
+function eightDPreviewSummary(section: NonNullable<CaseWorkflow["eightDPreview"]>[number]) {
+  if (section.summary !== "受 D4 变化影响，需复审。") {
+    return section.summary;
+  }
+
+  return section.stage === "D5" ? section.summary : "需复审";
 }
 
 function thinkingModeLabel(mode?: NonNullable<ConversationMeta>["thinking"]["mode"]) {
@@ -370,7 +459,7 @@ function stageCardCopy(record: StageRecord) {
 function stageCardPreview(record: StageRecord) {
   const source = stageCardCopy(record).trim();
   const withoutContext = source.replace(/\s*已确认上下文：[\s\S]*$/u, "").trim();
-  const normalized = withoutContext
+  const normalized = translateDisplayText(withoutContext)
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -378,10 +467,10 @@ function stageCardPreview(record: StageRecord) {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
-    .slice(0, 3);
+    .slice(0, 2);
 
   const preview = lines.join("\n") || normalized || "待补充";
-  return preview.length > 220 ? `${preview.slice(0, 220).trim()}...` : preview;
+  return preview.length > 120 ? `${preview.slice(0, 120).trim()}...` : preview;
 }
 
 function orderedFacts(items: { field: string; value: string }[]) {
@@ -411,7 +500,7 @@ function factLabel(field: string) {
 }
 
 function guidanceFacts(items: { field: string; value: string }[]) {
-  return orderedFacts(items).slice(0, 4);
+  return orderedFacts(items).slice(0, 2);
 }
 
 function factValue(items: { field: string; value: string }[], field: string) {
@@ -616,11 +705,11 @@ function WorkspaceContextHeader({
             </>
           ) : currentCase ? (
             <>
-              <span className="status-chip">{stageLabel(currentCase.currentStage ?? "D2")}</span>
+            <span className="status-chip">{shortStageLabel(currentCase.currentStage ?? "D2")}</span>
               <span className="status-chip">{caseStatusLabel(currentCase.status)}</span>
               <span className="status-chip">{`D1 ${d1StatusLabel(currentCase.d1Status)}`}</span>
               {impactedStageNames.length ? (
-                <span className="status-chip status-chip-warning">{`回看 ${impactedStageNames.map(stageLabel).join(" / ")}`}</span>
+                <span className="status-chip status-chip-warning">{`回看 ${impactedStageNames.map(shortStageLabel).join(" / ")}`}</span>
               ) : null}
             </>
           ) : (
@@ -661,6 +750,7 @@ function AssistantStageCard({
   onToggleStageRail,
   onSelectStage,
   onPrimaryRecommendation,
+  onEightDAction,
 }: {
   currentCase: CaseWorkflow | null;
   pendingCaseConfirmation: PendingCaseConfirmation | null;
@@ -683,17 +773,27 @@ function AssistantStageCard({
   onToggleStageRail: () => void;
   onSelectStage: (stage: string) => void;
   onPrimaryRecommendation: () => void;
+  onEightDAction: (action: "confirm_d4" | "reconfirm_d4") => void;
 }) {
   const showResultActionCard = shouldShowResultActionCard(
     resultRecommendation,
     currentCase?.conversationMeta ?? null
+  );
+  const workflowFocusArea = currentCase?.workflowState?.focusArea ?? currentCase?.currentStage ?? "D2";
+  const eightDPreview = currentCase?.eightDPreview ?? [];
+  const previewTargetStage = selectedStage?.stage ?? workflowFocusArea;
+  const visiblePreviewStages = eightDPreview.filter(
+    (section) =>
+      section.stage === previewTargetStage ||
+      section.status === "stale" ||
+      (section.stage === "D4" && section.primaryAction)
   );
 
   return (
     <article className="message-card message-assistant stage-focus-card" aria-label="AI 主分析卡">
       <div className="message-meta">
         <span className="message-role">当前阶段</span>
-        <span>{stageLabel(selectedStage?.stage ?? currentCase?.currentStage ?? "D2")}</span>
+        <span>{shortStageLabel(selectedStage?.stage ?? currentCase?.currentStage ?? "D2")}</span>
       </div>
       {summaryItems.length ? (
         <div className="inline-summary">
@@ -726,11 +826,45 @@ function AssistantStageCard({
           <p>{`这条内容更接近“${pendingCaseConfirmation.suggestedTitle}”这一类新投诉。如果继续挂在当前调查里，前面的结论和时间线可能会被带偏。`}</p>
         </div>
       ) : null}
+      {eightDPreview.length ? (
+        <section className="eight-d-preview-rail" data-testid="eight-d-preview">
+          <div className="eight-d-preview-head">
+            <strong>8D 预览</strong>
+            <span>{shortStageLabel(workflowFocusArea)}</span>
+          </div>
+          <div className="eight-d-preview-list">
+            {visiblePreviewStages.map((section, index) => (
+              <div
+                key={`${section.stage}-${index}`}
+                className={`eight-d-preview-card${section.stage === workflowFocusArea ? " active" : ""}${
+                  section.status === "stale" ? " stale" : ""
+                }`}
+              >
+                <div className="eight-d-preview-card-head">
+                  <strong>{section.title}</strong>
+                  <span>{eightDStatusLabel(section.status)}</span>
+                </div>
+                <p>{index === 0 ? section.summary : eightDPreviewSummary(section)}</p>
+                {section.primaryAction ? (
+                  <button
+                    className="ghost-button ghost-button-tight"
+                    type="button"
+                    onClick={() => onEightDAction(section.primaryAction?.type ?? "confirm_d4")}
+                    disabled={loading}
+                  >
+                    {section.primaryAction.label}
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
         <div className="assistant-manuscript">
           <div className="assistant-manuscript-head">
           <span className="section-label">AI 判断</span>
           <span className="assistant-manuscript-stage">
-            {stageLabel(selectedStage?.stage ?? currentCase?.currentStage ?? "D2")}
+            {shortStageLabel(selectedStage?.stage ?? currentCase?.currentStage ?? "D2")}
           </span>
         </div>
         {copilotBrief ? (
@@ -789,7 +923,9 @@ function AssistantStageCard({
           {guidanceFactsList.length ? (
             <ul className="list compact-list">
               {guidanceFactsList.map((item) => (
-                <li key={`${item.field}-${item.value}`}>{`${factLabel(item.field)}：${item.value}`}</li>
+                <li key={`${item.field}-${item.value}`}>
+                  {`${factLabel(item.field)}：${compactDisplayText(item.value, 72)}`}
+                </li>
               ))}
             </ul>
           ) : (
@@ -803,13 +939,13 @@ function AssistantStageCard({
           {currentCase?.missingFields.length ? (
             <ul className="list compact-list">
               {currentCase.missingFields.slice(0, 3).map((item) => (
-                <li key={`${item.field}-${item.reason}`}>{item.reason}</li>
+                <li key={`${item.field}-${item.reason}`}>{compactDisplayText(item.reason, 72)}</li>
               ))}
             </ul>
           ) : guidanceAssumptions.length ? (
             <ul className="list compact-list">
               {guidanceAssumptions.map((item) => (
-                <li key={item.statement}>{item.statement}</li>
+                <li key={item.statement}>{compactDisplayText(item.statement, 72)}</li>
               ))}
             </ul>
           ) : (
@@ -819,9 +955,13 @@ function AssistantStageCard({
 
         <section className="copilot-panel">
           <span className="copilot-label">下一步建议</span>
-          <p className="copilot-next">{nextQuestion ?? "继续补充当前阶段证据，或确认进入下一步。"}</p>
+          <p className="copilot-next">
+            {compactDisplayText(nextQuestion ?? "继续补充当前阶段证据，或确认进入下一步。", 72)}
+          </p>
           {currentCase?.riskFlags.length ? (
-            <div className="mini-note">{currentCase.riskFlags.slice(0, 1).join("；")}</div>
+            <div className="mini-note">
+              {compactDisplayText(currentCase.riskFlags.slice(0, 1).join("；"), 72)}
+            </div>
           ) : null}
         </section>
       </div>
@@ -833,18 +973,18 @@ function AssistantStageCard({
         {isUrgentComplaint && actionFacts.length ? (
           <section className="copilot-panel">
             <span className="copilot-label">客户侧 / 厂内侧当前动作</span>
-            <ul className="list compact-list">
-              {actionFacts.map(([label, value]) => (
-                <li key={`${label}-${value}`}>{`${label}：${value}`}</li>
-              ))}
-            </ul>
+              <ul className="list compact-list">
+                {actionFacts.map(([label, value]) => (
+                <li key={`${label}-${value}`}>{`${label}：${compactDisplayText(value ?? "", 72)}`}</li>
+                ))}
+              </ul>
           </section>
         ) : null}
 
         {resultRecommendation ? (
           <section className="copilot-panel">
-              <span className="copilot-label">AI 判断</span>
-              <p className="copilot-next">
+            <span className="copilot-label">AI 判断</span>
+            <p className="copilot-next">
               {resultRecommendation.displayKindLabel ??
                 (resultRecommendation.kind === "analysis_summary"
                   ? "分析结论"
@@ -852,7 +992,7 @@ function AssistantStageCard({
                     ? "行动方案"
                     : "8D")}
             </p>
-            <div className="mini-note">{resultRecommendation.rationale}</div>
+            <div className="mini-note">{compactDisplayText(resultRecommendation.rationale, 96)}</div>
           </section>
         ) : null}
 
@@ -887,7 +1027,7 @@ function AssistantStageCard({
                 }`}
                 onClick={() => onSelectStage(stage.stage)}
               >
-                <span>{stageLabel(stage.stage)}</span>
+                <span>{stageTimelineLabel(stage.stage)}</span>
                 <small>{stage.impacted ? "受影响" : stage.locked ? "已确认" : "工作稿"}</small>
               </button>
             ))}
@@ -898,7 +1038,7 @@ function AssistantStageCard({
           <div className={`stage-detail-card${selectedStage.impacted ? " stage-detail-impacted" : ""}`}>
             <div className="stage-head">
               <strong>
-                {stageLabel(selectedStage.stage)} {selectedStage.stage === currentCase?.currentStage ? "· 当前聚焦" : ""}
+                {selectedStage.stage} {selectedStage.stage === currentCase?.currentStage ? "· 当前聚焦" : ""}
               </strong>
               <span>{selectedStage.impacted ? "需要回看" : selectedStage.locked ? "已确认" : "工作稿"}</span>
             </div>
@@ -1376,8 +1516,10 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         ? [
             {
               key: "formal-gap",
-              label: "当前还缺",
-              value: currentCase.missingFields.slice(0, 2).map((item) => item.reason).join("；") || "继续补证据",
+              label: "继续补",
+              value:
+                currentCase.guidedThinking?.suggestedQuestions[0] ??
+                (currentCase.missingFields.slice(0, 2).map((item) => item.reason).join("；") || "继续补证据"),
               tone: "warning" as const,
             },
           ]
@@ -2010,7 +2152,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
               >
                 <div className="case-title">{item.title}</div>
                 <div className="case-meta">
-                  <span>{stageLabel(item.currentStage)}</span>
+                  <span>{shortStageLabel(item.currentStage)}</span>
                   <span>{formatTime(item.updatedAt)}</span>
                 </div>
               </button>
@@ -2152,7 +2294,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
             <>
               <div className="insight-head">
                 <strong>推进当前调查</strong>
-                <span>{stageLabel(selectedStage?.stage ?? currentCase?.currentStage ?? "D2")}</span>
+                <span>{shortStageLabel(selectedStage?.stage ?? currentCase?.currentStage ?? "D2")}</span>
               </div>
               <AssistantStageCard
                 currentCase={currentCase}
@@ -2181,6 +2323,11 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
                     return;
                   }
                   void openPreview(artifactForRecommendation(resultRecommendation?.kind));
+                }}
+                onEightDAction={(action) => {
+                  if (action === "confirm_d4" || action === "reconfirm_d4") {
+                    void stageAction("D4", "confirm");
+                  }
                 }}
               />
               {pendingCaseConfirmation ? (
@@ -2889,7 +3036,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         }
 
         .stage-focus-card {
-          gap: 12px;
+          gap: 10px;
           width: 100%;
           border-color: rgba(25, 73, 203, 0.1);
           box-shadow: inset 0 0 0 1px rgba(25, 73, 203, 0.04);
@@ -2924,18 +3071,18 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
 
         .assistant-prose {
           display: grid;
-          gap: 8px;
-          max-width: 620px;
+          gap: 6px;
+          max-width: none;
         }
 
         .assistant-prose p {
           margin: 0;
-          line-height: 1.68;
+          line-height: 1.58;
         }
 
         .assistant-lead {
-          font-size: 15px;
-          line-height: 1.55;
+          font-size: 14px;
+          line-height: 1.5;
           color: var(--text);
         }
 
@@ -2970,7 +3117,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
 
         .assistant-secondary-grid {
           display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-columns: 1fr;
           gap: 8px;
         }
 
@@ -3001,7 +3148,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
 
         .rebuild-review-grid {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: 1fr;
           gap: 8px;
         }
 
@@ -3012,7 +3159,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
 
         .copilot-grid {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: 1fr;
           gap: 8px;
         }
 
@@ -3020,8 +3167,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           background: rgba(248, 250, 254, 0.7);
           border-style: dashed;
           border-color: rgba(215, 221, 234, 0.72);
-          padding-top: 10px;
-          padding-bottom: 10px;
+          padding: 10px 11px;
         }
 
         .copilot-panel-primary {
@@ -3030,11 +3176,23 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
         }
 
         .copilot-label {
-          font-size: 12px;
+          font-size: 11px;
           line-height: 1.4;
           font-weight: 800;
           letter-spacing: 0.02em;
           color: var(--brand);
+        }
+
+        .copilot-next,
+        .copilot-empty,
+        .mini-note,
+        .list.compact-list {
+          font-size: 13px;
+          line-height: 1.58;
+        }
+
+        .list.compact-list li + li {
+          margin-top: 4px;
         }
 
         .timeline-wrap {
@@ -3345,7 +3503,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
 
         .workspace-grid {
           display: grid;
-          grid-template-columns: 292px minmax(0, 1fr) 392px;
+          grid-template-columns: 280px minmax(0, 1fr) 320px;
           gap: 12px;
           height: 100%;
           min-height: 0;
@@ -3370,9 +3528,9 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
           min-height: 0;
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap: 8px;
           overflow: auto;
-          padding: 12px;
+          padding: 10px;
         }
 
         .insight-head {
@@ -3593,15 +3751,13 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
 
         @media (max-width: 1420px) {
           .workspace-grid {
-            grid-template-columns: 272px minmax(0, 1fr) 352px;
+            grid-template-columns: 264px minmax(0, 1fr) 296px;
           }
         }
 
         @media (max-width: 1280px) {
-          .assistant-secondary-grid,
-          .rebuild-review-grid,
-          .copilot-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+          .workspace-grid {
+            grid-template-columns: 248px minmax(0, 1fr) 280px;
           }
         }
 
@@ -3612,7 +3768,7 @@ export function Workspace({ initialCaseId = null }: { initialCaseId?: string | n
 
           .insight-panel {
             grid-column: 1 / -1;
-            max-height: 48vh;
+            max-height: none;
           }
         }
 

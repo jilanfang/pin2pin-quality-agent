@@ -6,11 +6,13 @@ import type {
   AssumptionItem,
   CaseAggregate,
   ConversationInputContext,
+  EightDPreviewSection,
   EvidencePayload,
   FactItem,
   GapItem,
   StageActionPayload,
   StageRecord,
+  WorkflowState,
   WorkflowStage,
 } from "@/lib/domain/types";
 import {
@@ -71,6 +73,14 @@ function mergeText(existing: string, incoming?: string) {
   return `${left}\n${right}`.trim();
 }
 
+function normalizeWhitespace(value: string) {
+  return value.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function factMap(knownFacts: FactItem[]) {
   return Object.fromEntries(knownFacts.map((item) => [item.field, item.value]));
 }
@@ -87,14 +97,39 @@ function factLabel(field: string) {
   return labels[field] ?? field;
 }
 
-function buildImpactReason(
+function buildImpactAnalysis(
   previousFacts: FactItem[],
   nextFacts: FactItem[],
   targetStage: WorkflowStage
 ) {
   const previousMap = factMap(previousFacts);
   const nextMap = factMap(nextFacts);
-  const trackedFields = ["failure_location", "impact", "batch", "work_order", "line", "change_point"];
+  const trackedFields = [
+    "failure_location",
+    "impact",
+    "batch",
+    "work_order",
+    "line",
+    "containment_action",
+    "containment_customer_site",
+    "containment_shipped",
+    "containment_stock",
+    "containment_wip",
+    "change_point",
+  ] as const;
+  const impactAnchorByField: Record<(typeof trackedFields)[number], WorkflowStage> = {
+    failure_location: "D2",
+    impact: "D2",
+    batch: "D2",
+    work_order: "D2",
+    line: "D2",
+    containment_action: "D3",
+    containment_customer_site: "D3",
+    containment_shipped: "D3",
+    containment_stock: "D3",
+    containment_wip: "D3",
+    change_point: "D4",
+  };
 
   const changedField = trackedFields.find((field) => {
     const previousValue = previousMap[field];
@@ -103,24 +138,82 @@ function buildImpactReason(
   });
 
   if (changedField) {
+    const anchorStage = impactAnchorByField[changedField];
     const changedSummary = `${factLabel(changedField)}已从 ${previousMap[changedField]} 调整为 ${nextMap[changedField]}`;
     const rebuildReason =
-      targetStage === "D2" && (changedField === "failure_location" || changedField === "change_point")
+      anchorStage === "D2" && (changedField === "failure_location" || changedField === "change_point")
         ? "原先围堵边界和原因链判断需要重算"
         : "原先基于旧证据形成的阶段判断需要重算";
-    return `${changedSummary}，${rebuildReason}，建议回看 ${
-      targetStage === "D2" ? "D3 / D4" : `${targetStage} 之后阶段`
-    }。`;
+    return {
+      anchorStage,
+      reason: `${changedSummary}，${rebuildReason}，建议回看 ${
+        anchorStage === "D2" ? "D3 / D4" : `${anchorStage} 之后阶段`
+      }。`,
+    };
   }
 
   const filledField = trackedFields.find((field) => !previousMap[field] && nextMap[field]);
   if (filledField) {
-    return `${factLabel(filledField)}已补充为 ${nextMap[filledField]}，建议回看 ${
-      targetStage === "D2" ? "D3 / D4" : `${targetStage} 之后阶段`
-    }。`;
+    const anchorStage = impactAnchorByField[filledField];
+    return {
+      anchorStage,
+      reason: `${factLabel(filledField)}已补充为 ${nextMap[filledField]}，建议回看 ${
+        anchorStage === "D2" ? "D3 / D4" : `${anchorStage} 之后阶段`
+      }。`,
+    };
   }
 
-  return `新增证据可能影响 ${targetStage} 之后阶段的结论，请复审。`;
+  return {
+    anchorStage: targetStage,
+    reason: `新增证据可能影响 ${targetStage} 之后阶段的结论，请复审。`,
+  };
+}
+
+function previewText(value: string, maxChars = 90) {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) return "待补充";
+  if (normalized.length <= maxChars) return normalized;
+  return `${normalized.slice(0, maxChars).trim()}...`;
+}
+
+function appendUniqueLine(lines: string[], value?: string | null) {
+  const normalized = value?.trim();
+  if (!normalized) return;
+  if (!lines.includes(normalized)) {
+    lines.push(normalized);
+  }
+}
+
+function extractRolesFromFacts(knownFacts: FactItem[]) {
+  const facts = factMap(knownFacts);
+  const roles = new Set<string>();
+
+  if (facts.customer) roles.add("客户窗口");
+  if (facts.line || facts.work_order) roles.add("生产");
+  if (facts.change_point) {
+    roles.add("PE");
+    roles.add("ME");
+  }
+  if (facts.failure_location || facts.problem_symptom) roles.add("QE");
+  if (facts.lot || facts.supplier) roles.add("SQE");
+
+  return [...roles];
+}
+
+function ensureD1Draft(aggregate: CaseAggregate) {
+  const existing = (aggregate.stages.D1.confirmedContent || aggregate.stages.D1.workingContent).trim();
+  if (existing) return;
+
+  const roles = extractRolesFromFacts(aggregate.knownFacts);
+  const owner = aggregate.caseRecord.ownerUserId ?? "待补建案人";
+  const roleLine = roles.length ? roles.join("、") : "待补参与角色";
+
+  aggregate.stages.D1.workingContent = [
+    "D1 团队建立草稿",
+    `建案人：${owner}`,
+    `已识别角色：${roleLine}`,
+    `待补角色：${roles.includes("客户窗口") ? "责任人 / 验证接口" : "客户窗口 / 责任人 / 验证接口"}`,
+  ].join("\n");
 }
 
 export function buildD2ContentFromFacts(knownFacts: FactItem[]) {
@@ -131,6 +224,135 @@ export function buildD2ContentFromFacts(knownFacts: FactItem[]) {
     `异常批次：${facts.batch ?? "待补充"}`,
     `首次发现时间：${facts.discovery_time ?? "待补充"}`,
     `影响范围：${facts.impact ?? "待补充"}`,
+  ].join("\n");
+}
+
+function buildD3ContentFromFacts(knownFacts: FactItem[]) {
+  const facts = factMap(knownFacts);
+  return [
+    "D3 临时遏制措施工作稿",
+    "客户现场 / 已发货 / 成品库存 / 在制品 / 责任人 / 完成时点 / 关闭条件",
+    `客户现场：${facts.containment_customer_site ?? "待补充"}`,
+    `已发货：${facts.containment_shipped ?? "待补充"}`,
+    `成品库存：${facts.containment_stock ?? "待补充"}`,
+    `在制品：${facts.containment_wip ?? "待补充"}`,
+    "责任人：待补充",
+    "完成时点：待补充",
+    "关闭条件：待补充",
+  ].join("\n");
+}
+
+function inferOccurrenceChain(source: string, facts: Record<string, string>) {
+  const explicit = extractStructuredField(source, ["发生原因"]);
+  if (explicit) return explicit;
+  if (facts.change_point) return facts.change_point;
+  return source.match(/((?:替代料|换料|导入|卷带方向|贴片|装配|工艺|程序)[^。；;\n]*)/u)?.[1]?.trim() ?? "";
+}
+
+function inferEscapeChain(source: string) {
+  const explicit = extractStructuredField(source, ["流出原因", "逃逸原因"]);
+  if (explicit) return explicit;
+  return source.match(/((?:AOI|阈值|检出|放行|流出|逃逸|测试|筛选)[^。；;\n]*)/iu)?.[1]?.trim() ?? "";
+}
+
+function extractStructuredField(source: string, labels: string[]) {
+  const normalized = normalizeWhitespace(source);
+  if (!normalized) return "";
+
+  const allLabels = [
+    "change point",
+    "发生原因",
+    "发生原因链",
+    "流出原因",
+    "流出原因链",
+    "逃逸原因",
+    "当前证据",
+    "支持证据",
+    "高优先级假设",
+    "待验证假设",
+    "待验证项",
+  ];
+  const currentLabelPattern = labels.map((label) => escapeRegExp(label)).join("|");
+  const otherLabelPattern = allLabels.map((label) => escapeRegExp(label)).join("|");
+  const pattern = new RegExp(
+    `(?:${currentLabelPattern})(?:链)?(?:是|为|:|：)?\\s*([\\s\\S]*?)(?=(?:${otherLabelPattern})(?:链)?(?:是|为|:|：)|$)`,
+    "i"
+  );
+  const match = normalized.match(pattern);
+  return match?.[1]?.trim().replace(/[。；;，,\s]+$/u, "") ?? "";
+}
+
+function buildD4EvidenceContent(aggregate: CaseAggregate, incomingText = "") {
+  const facts = factMap(aggregate.knownFacts);
+  const combinedSource = [incomingText, aggregate.stages.D4.workingContent]
+    .filter(Boolean)
+    .join("\n");
+  const occurrenceChain = inferOccurrenceChain(combinedSource, facts);
+  const escapeChain = inferEscapeChain(combinedSource);
+  const evidence = extractStructuredField(combinedSource, ["当前证据", "支持证据"]);
+  const assumption = extractStructuredField(combinedSource, ["高优先级假设", "待验证假设"]);
+  const validation = extractStructuredField(combinedSource, ["待验证项"]);
+  const rawEvidence = incomingText.trim() || facts.problem_symptom || "待补充";
+
+  return [
+    "D4 根本原因分析工作稿",
+    "当前目标：先分开站稳发生原因链和流出原因链，再决定哪些内容可以写成结论。",
+    `change point：${
+      extractStructuredField(combinedSource, ["change point"]) || facts.change_point || "待补充"
+    }`,
+    `发生原因链：${occurrenceChain || "待补充"}`,
+    `流出原因链：${escapeChain || "待补充"}`,
+    `当前证据：${evidence || rawEvidence}`,
+    `高优先级假设：${
+      assumption ||
+      aggregate.assumptions.find((item) => item.needsValidation)?.statement ||
+      "待补充，未验证前不要写成结论。"
+    }`,
+    `待验证项：${validation || "待补充"}`,
+  ].join("\n");
+}
+
+function buildD5AutoDraft(aggregate: CaseAggregate) {
+  const facts = factMap(aggregate.knownFacts);
+  const d4Content = aggregate.stages.D4.confirmedContent || aggregate.stages.D4.workingContent;
+
+  return [
+    "D5 永久纠正措施工作稿",
+    `发生原因侧永久措施：围绕 ${facts.change_point ?? "已确认发生原因"} 制定长期纠正措施，待补具体动作。`,
+    "流出原因侧永久措施：围绕检出与放行缺口制定长期纠正措施，待补具体动作。",
+    "系统性纠正措施：更新 SOP / 程序 / 培训与异常升级机制。",
+    `适用边界：${facts.batch ?? facts.work_order ?? "待补适用批次和边界"}`,
+    "责任人/完成时点：待补充",
+    "验证要求：结合 D6 的验证方法、样本范围和通过标准确认。",
+    d4Content.includes("流出原因")
+      ? "来源：基于已确认的发生原因链和流出原因链自动起草。"
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildD6AutoDraft(aggregate: CaseAggregate) {
+  const facts = factMap(aggregate.knownFacts);
+  return [
+    "D6 实施与验证计划工作稿",
+    "实施动作：待补充",
+    "验证方法：待补充",
+    `样本范围：${facts.batch ?? facts.work_order ?? "待补样本批次或样本数量"}`,
+    "通过标准：待补充",
+    "风险与回退：待补充",
+  ].join("\n");
+}
+
+function buildD7AutoDraft(aggregate: CaseAggregate) {
+  const facts = factMap(aggregate.knownFacts);
+  return [
+    "D7 预防再发生工作稿",
+    `横向展开：对 ${facts.model ?? "相关机种"} 与相近工序评估是否同步存在风险。`,
+    "流程/文件更新：更新作业指导书、点检项和异常升级规则。",
+    "培训与审计：对相关班组、QE、PE 做专项培训与抽审。",
+    "防呆与管控点：增加方向防错、程序版本核对或检出阈值管控。",
+    "生效确认：待补充",
   ].join("\n");
 }
 
@@ -182,6 +404,31 @@ function buildStageFallback(
       `当前证据：${userInput.trim() || issue}`,
       "高优先级假设：待补充，未验证前不要直接写成结论。",
       "待验证项：请继续区分已确认事实、高优先级假设与未验证结论。",
+      contextTail.trim() ? `已确认上下文：\n${confirmedContext.trim()}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  if (stage === "D3") {
+    const customerSite =
+      facts.containment_customer_site ?? (facts.containment_action ? "已开始围堵，待补客户现场动作" : "待补充");
+    const shipped =
+      facts.containment_shipped ?? (facts.containment_action?.includes("出货") ? facts.containment_action : "待补充");
+    const stock =
+      facts.containment_stock ?? (facts.containment_action?.includes("库存") ? facts.containment_action : "待补充");
+    const wip =
+      facts.containment_wip ?? (facts.containment_action?.includes("在制") ? facts.containment_action : "待补充");
+
+    return [
+      "D3 临时遏制措施建议",
+      "请基于已确认的 D2，明确隔离范围、暂停出货、库存处置和客户端围堵。",
+      `客户现场：${customerSite}`,
+      `已发货：${shipped}`,
+      `成品库存：${stock}`,
+      `在制品：${wip}`,
+      containment ? `已有围堵动作：${facts.containment_action}` : "",
+      userTail.trim() ? `当前补充：${userInput.trim()}` : "",
       contextTail.trim() ? `已确认上下文：\n${confirmedContext.trim()}` : "",
     ]
       .filter(Boolean)
@@ -271,10 +518,16 @@ function shouldAutoAdvanceFromD2(aggregate: CaseAggregate) {
 
   const facts = factMap(aggregate.knownFacts);
   const isUrgentComplaint = facts.mode === "customer_complaint_urgent";
-  if (!isUrgentComplaint) return false;
-
   const missing = new Set(aggregate.missingFields.map((item) => item.field));
-  return !missing.has("failure_location") && !missing.has("containment_status");
+  if (isUrgentComplaint) {
+    return !missing.has("failure_location") && !missing.has("containment_status");
+  }
+
+  const hasImpact = !missing.has("impact");
+  const hasTraceAnchor =
+    Boolean(facts.batch || facts.discovery_time || facts.work_order || facts.line);
+
+  return hasImpact && hasTraceAnchor;
 }
 
 function shouldAutoAdvanceFromD3(aggregate: CaseAggregate) {
@@ -290,25 +543,6 @@ function shouldAutoAdvanceFromD3(aggregate: CaseAggregate) {
       facts.containment_stock &&
       facts.containment_wip
   );
-}
-
-function shouldAutoAdvanceFromD4(aggregate: CaseAggregate, userInput: string) {
-  if (aggregate.caseRecord.currentStage !== "D4") return false;
-
-  const facts = factMap(aggregate.knownFacts);
-  const isUrgentComplaint = facts.mode === "customer_complaint_urgent";
-  if (!isUrgentComplaint) return false;
-
-  const normalizedInput = userInput.replace(/\s+/g, "");
-  const mentionsDualCauseChain =
-    (normalizedInput.includes("发生原因") || normalizedInput.includes("occurrence")) &&
-    (
-      normalizedInput.includes("流出原因") ||
-      normalizedInput.includes("逃逸原因") ||
-      normalizedInput.includes("escape")
-    );
-
-  return Boolean(facts.change_point && mentionsDualCauseChain);
 }
 
 function shouldAutoAdvanceFromD5(aggregate: CaseAggregate, userInput: string) {
@@ -332,6 +566,61 @@ function shouldAutoAdvanceFromD5(aggregate: CaseAggregate, userInput: string) {
     (normalizedInput.includes("系统性") && normalizedInput.includes("纠正措施"));
 
   return hasOccurrenceAction && hasEscapeAction && hasSystemicAction;
+}
+
+function isD4ReadyToConfirm(aggregate: CaseAggregate) {
+  const facts = factMap(aggregate.knownFacts);
+  const content = normalizeWhitespace(aggregate.stages.D4.workingContent);
+  const hasOccurrenceChain = Boolean(extractStructuredField(content, ["发生原因"]));
+  const hasEscapeChain = Boolean(extractStructuredField(content, ["流出原因", "逃逸原因"]));
+  const hasEvidence = Boolean(extractStructuredField(content, ["当前证据", "支持证据"]));
+
+  return Boolean((facts.change_point || hasEvidence) && hasOccurrenceChain && hasEscapeChain);
+}
+
+function getD4ConfirmationState(aggregate: CaseAggregate): WorkflowState["d4ConfirmationState"] {
+  const downstreamStale =
+    aggregate.stages.D5.impacted || aggregate.stages.D6.impacted || aggregate.stages.D7.impacted;
+  if (aggregate.stages.D4.locked) {
+    return aggregate.stages.D4.impacted || downstreamStale ? "stale" : "confirmed";
+  }
+  if (downstreamStale) return "stale";
+  return isD4ReadyToConfirm(aggregate) ? "ready" : "draft";
+}
+
+function deriveFocusArea(aggregate: CaseAggregate): ActiveWorkflowStage {
+  const d4State = getD4ConfirmationState(aggregate);
+  if (d4State === "ready" || d4State === "stale") return "D4";
+  if (d4State === "confirmed") return "D6";
+
+  if (aggregate.caseRecord.currentStage !== "D2") return aggregate.caseRecord.currentStage;
+
+  const facts = factMap(aggregate.knownFacts);
+  const isUrgentComplaint = facts.mode === "customer_complaint_urgent";
+  const hasContainment =
+    Boolean(facts.containment_action) ||
+    Boolean(facts.containment_customer_site || facts.containment_shipped || facts.containment_stock || facts.containment_wip);
+  const hasTraceAnchor = Boolean(facts.batch || facts.discovery_time || facts.work_order || facts.line);
+  const hasProblemBoundary = Boolean(facts.impact || facts.problem_symptom || facts.customer);
+
+  if (hasContainment && (hasTraceAnchor || hasProblemBoundary)) return "D3";
+  if (!facts.failure_location || !facts.impact) return "D2";
+  if (!hasContainment) return "D3";
+  return aggregate.caseRecord.currentStage;
+}
+
+function ensureDownstreamDraftsAfterD4(aggregate: CaseAggregate) {
+  if (!aggregate.stages.D4.locked) return;
+
+  if (!aggregate.stages.D5.workingContent.trim()) {
+    aggregate.stages.D5.workingContent = buildD5AutoDraft(aggregate);
+  }
+  if (!aggregate.stages.D6.workingContent.trim()) {
+    aggregate.stages.D6.workingContent = buildD6AutoDraft(aggregate);
+  }
+  if (!aggregate.stages.D7.workingContent.trim()) {
+    aggregate.stages.D7.workingContent = buildD7AutoDraft(aggregate);
+  }
 }
 
 function advanceCaseStage(
@@ -365,7 +654,12 @@ function markImpactedStagesAfter(aggregate: CaseAggregate, stage: WorkflowStage,
   const index = ACTIVE_WORKFLOW_STAGES.indexOf(stage as ActiveWorkflowStage);
   if (index === -1) return;
   for (const laterStage of ACTIVE_WORKFLOW_STAGES.slice(index + 1)) {
-    if (aggregate.stages[laterStage].locked) {
+    const shouldStaleAutoDraft =
+      aggregate.stages.D4.locked &&
+      ["D5", "D6", "D7"].includes(laterStage) &&
+      Boolean(aggregate.stages[laterStage].workingContent.trim());
+
+    if (aggregate.stages[laterStage].locked || shouldStaleAutoDraft) {
       aggregate.stages[laterStage] = {
         ...aggregate.stages[laterStage],
         impacted: true,
@@ -392,6 +686,8 @@ function cloneAggregate(aggregate: CaseAggregate): CaseAggregate {
 }
 
 function syncCaseState(aggregate: CaseAggregate) {
+  ensureD1Draft(aggregate);
+  ensureDownstreamDraftsAfterD4(aggregate);
   aggregate.caseRecord.d1Status = computeD1Status(aggregate.stages.D1);
   aggregate.caseRecord.updatedAt = nowIso();
   const warnings: string[] = [];
@@ -402,9 +698,8 @@ function syncCaseState(aggregate: CaseAggregate) {
   if (impactedStages.length) {
     warnings.push(`以下阶段受新增证据影响，需复审：${impactedStages.join(", ")}。`);
   }
-  const unlockedStages = ACTIVE_WORKFLOW_STAGES.filter((stage) => !aggregate.stages[stage].locked);
-  if (unlockedStages.length) {
-    warnings.push(`以下阶段尚未确认：${unlockedStages.join(", ")}。`);
+  if (!aggregate.stages.D4.locked) {
+    warnings.push("D4 原因链尚未确认。");
   }
   const guided = getGuidedThinking(aggregate);
   if (guided?.warnings.length) {
@@ -478,8 +773,8 @@ function buildAssistantResponseForEvidence(
       opening,
       `我已提取到：${factSummary}。`,
       `当前主要推进：${activeStage === "D2" ? "D2 问题定义" : activeStage}${impactHint ? `；${impactHint}` : ""}`,
-      `当前还缺：${missingText}。`,
       `下一步请直接补：${nextNeedText}。`,
+      missing.length ? `还可继续补：${missingText}。` : "",
     ].join("\n");
   }
 
@@ -501,8 +796,8 @@ function buildAssistantResponseForEvidence(
     `已收到新证据，当前继续聚焦 ${activeStage}。`,
     guided?.thinkingGoal ? `目标：${guided.thinkingGoal}` : "",
     stageRecord.workingContent.trim() ? `工作稿已更新，可继续补证据或确认本阶段。` : "",
-    missing.length ? `关键缺口：${missing.join("；")}` : "",
     nextQuestion ? `下一步建议：${nextQuestion}` : "",
+    missing.length ? `补充项：${missing.join("；")}` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -514,6 +809,9 @@ function buildAssistantResponseForStageAction(
   action: "confirm" | "unlock" | "revalidate"
 ) {
   if (action === "confirm") {
+    if (stage === "D4") {
+      return `已确认 D4，系统已起草 D5 与 D7，并把下一步切到 ${aggregate.caseRecord.currentStage}。请继续补实施责任人、验证方法、样本范围和通过标准。`;
+    }
     if (stage === "D8") {
       return "当前阶段已确认。你可以继续检查待补项，或准备生成最终报告。";
     }
@@ -525,6 +823,104 @@ function buildAssistantResponseForStageAction(
   }
 
   return `已将 ${stage} 标记为复审中。请基于最新证据重新检查这一阶段的结论与行动。`;
+}
+
+function previewStatusForStage(
+  aggregate: CaseAggregate,
+  stage: WorkflowStage
+): EightDPreviewSection["status"] {
+  const record = aggregate.stages[stage];
+  if (stage === "D4") {
+    const d4State = getD4ConfirmationState(aggregate);
+    if (d4State === "draft") return record.workingContent.trim() ? "draft" : "empty";
+    return d4State;
+  }
+  if (record.impacted) return "stale";
+  if (record.locked) return "confirmed";
+  if (record.workingContent.trim()) return "draft";
+  return "empty";
+}
+
+function previewMissingItems(aggregate: CaseAggregate, stage: WorkflowStage) {
+  if (stage === "D2") {
+    return aggregate.missingFields
+      .filter((item) => ["batch", "discovery_time", "impact", "failure_location"].includes(item.field))
+      .map((item) => item.reason);
+  }
+  if (stage === "D3") {
+    return aggregate.missingFields
+      .filter((item) => item.field === "containment_status" || item.field === "batch_trace")
+      .map((item) => item.reason);
+  }
+  if (stage === "D4") {
+    const items: string[] = [];
+    const content = aggregate.stages.D4.workingContent;
+    if (!content.includes("发生原因") || content.includes("发生原因链：待补充")) {
+      items.push("缺少发生原因");
+    }
+    if (
+      (!content.includes("流出原因") && !content.includes("逃逸原因")) ||
+      content.includes("流出原因链：待补充")
+    ) {
+      items.push("缺少流出原因");
+    }
+    if (!factMap(aggregate.knownFacts).change_point) {
+      items.push("缺少 change point");
+    }
+    return items;
+  }
+  if (stage === "D6") {
+    const items: string[] = [];
+    const content = aggregate.stages.D6.workingContent;
+    if (!content.includes("验证方法：") || content.includes("验证方法：待补充")) items.push("缺少验证方法");
+    if (!content.includes("样本范围：") || content.includes("样本范围：待补充")) items.push("缺少样本范围");
+    if (!content.includes("通过标准：") || content.includes("通过标准：待补充")) items.push("缺少通过标准");
+    return items;
+  }
+  return [];
+}
+
+function buildWorkflowState(aggregate: CaseAggregate): WorkflowState {
+  const focusArea = deriveFocusArea(aggregate);
+  const guided = buildGuidedThinking(focusArea, aggregate.missingFields, aggregate.knownFacts);
+  const nextAsk =
+    focusArea === "D6"
+      ? "请补实施责任人、生效时间、验证方法、样本范围、通过标准和回退条件。"
+      : focusArea === "D3"
+        ? "请补客户端、在制品、库存和已出货当前分别怎么处理，谁负责、何时关窗。"
+      : guided?.suggestedQuestions[0] ?? "继续补一条最关键的现场事实。";
+  return {
+    focusArea,
+    d4ConfirmationState: getD4ConfirmationState(aggregate),
+    nextAsk,
+  };
+}
+
+function buildEightDPreview(aggregate: CaseAggregate): EightDPreviewSection[] {
+  const workflowState = buildWorkflowState(aggregate);
+
+  return WORKFLOW_STAGES.map((stage) => {
+    const record = aggregate.stages[stage];
+    const status = previewStatusForStage(aggregate, stage);
+    const content = normalizeWhitespace(record.confirmedContent || record.workingContent);
+    const missingItems = previewMissingItems(aggregate, stage);
+    const primaryAction =
+      stage === "D4" && workflowState.d4ConfirmationState === "ready"
+        ? { type: "confirm_d4" as const, label: "确认 D4" }
+        : stage === "D4" && workflowState.d4ConfirmationState === "stale"
+          ? { type: "reconfirm_d4" as const, label: "重新确认 D4" }
+          : null;
+
+    return {
+      stage,
+      title: `${stage} ${SECTION_TITLES[stage]}`,
+      status,
+      summary: previewText(content || (status === "empty" ? "暂未开始。" : "待补充")),
+      content,
+      missingItems,
+      primaryAction,
+    };
+  });
 }
 
 export function createCaseAggregate(title: string): CaseAggregate {
@@ -595,6 +991,7 @@ export function applyEvidence(
   );
   aggregate.missingFields = recomputed.missingFields;
   aggregate.assumptions = recomputed.assumptions;
+  ensureD1Draft(aggregate);
 
   if (targetStage === "D1") {
     aggregate.stages.D1.workingContent = mergeText(
@@ -606,22 +1003,37 @@ export function applyEvidence(
   }
 
   const stage = aggregate.stages[targetStage as ActiveWorkflowStage];
-  if (!stage.locked) {
+  stage.impacted = false;
+  stage.impactSummary = null;
+  if (!stage.locked || targetStage === "D4") {
     const confirmedContext = buildConfirmedContext(aggregate);
-    stage.workingContent = buildStageFallback(
-      targetStage as ActiveWorkflowStage,
-      aggregate.knownFacts,
-      payload.content,
-      confirmedContext
-    );
+    if (targetStage === "D2") {
+      aggregate.stages.D2.workingContent = buildD2ContentFromFacts(aggregate.knownFacts);
+      aggregate.stages.D3.workingContent = buildStageFallback(
+        "D3",
+        aggregate.knownFacts,
+        payload.content,
+        buildConfirmedContext(aggregate)
+      );
+    } else if (targetStage === "D3") {
+      aggregate.stages.D3.workingContent = buildD3ContentFromFacts(aggregate.knownFacts);
+      if (!aggregate.stages.D2.workingContent.trim()) {
+        aggregate.stages.D2.workingContent = buildD2ContentFromFacts(aggregate.knownFacts);
+      }
+    } else if (targetStage === "D4") {
+      aggregate.stages.D4.workingContent = buildD4EvidenceContent(aggregate, payload.content);
+    } else {
+      stage.workingContent = buildStageFallback(
+        targetStage as ActiveWorkflowStage,
+        aggregate.knownFacts,
+        payload.content,
+        confirmedContext
+      );
+    }
   }
 
-  const impactReason = buildImpactReason(previousFacts, aggregate.knownFacts, targetStage);
-  markImpactedStagesAfter(
-    aggregate,
-    targetStage,
-    impactReason
-  );
+  const impact = buildImpactAnalysis(previousFacts, aggregate.knownFacts, targetStage);
+  markImpactedStagesAfter(aggregate, impact.anchorStage, impact.reason);
 
   if (shouldAutoAdvanceFromD2(aggregate)) {
     advanceCaseStage(aggregate, "D3", {
@@ -630,11 +1042,6 @@ export function applyEvidence(
     });
   } else if (shouldAutoAdvanceFromD3(aggregate)) {
     advanceCaseStage(aggregate, "D4", {
-      userInput: payload.content,
-      confirmedContext: buildConfirmedContext(aggregate),
-    });
-  } else if (shouldAutoAdvanceFromD4(aggregate, payload.content)) {
-    advanceCaseStage(aggregate, "D5", {
       userInput: payload.content,
       confirmedContext: buildConfirmedContext(aggregate),
     });
@@ -662,8 +1069,22 @@ export function confirmStage(
 ): CaseAggregate {
   const aggregate = cloneAggregate(source);
   const impactedStages = ACTIVE_WORKFLOW_STAGES.filter((stage) => aggregate.stages[stage].impacted);
-  if (impactedStages.length) {
-    throw new Error("Impacted stages require revalidation before further confirmation.");
+  if (payload.stage === "D4") {
+    if (impactedStages.some((stage) => stage === "D2" || stage === "D3")) {
+      throw new Error("Impacted stages require revalidation before further confirmation.");
+    }
+    if (!isD4ReadyToConfirm(aggregate)) {
+      throw new Error("D4 is not ready for confirmation.");
+    }
+  } else if (payload.stage !== "D1") {
+    const targetIndex = ACTIVE_WORKFLOW_STAGES.indexOf(payload.stage as ActiveWorkflowStage);
+    if (
+      impactedStages.some(
+        (stage) => ACTIVE_WORKFLOW_STAGES.indexOf(stage) <= targetIndex
+      )
+    ) {
+      throw new Error("Impacted stages require revalidation before further confirmation.");
+    }
   }
 
   const record = aggregate.stages[payload.stage];
@@ -678,6 +1099,15 @@ export function confirmStage(
 
   if (payload.stage === "D1") {
     aggregate.caseRecord.d1Status = "complete";
+  } else if (payload.stage === "D4") {
+    aggregate.stages.D5.impacted = false;
+    aggregate.stages.D5.impactSummary = null;
+    aggregate.stages.D6.impacted = false;
+    aggregate.stages.D6.impactSummary = null;
+    aggregate.stages.D7.impacted = false;
+    aggregate.stages.D7.impactSummary = null;
+    aggregate.caseRecord.currentStage = "D6";
+    ensureDownstreamDraftsAfterD4(aggregate);
   } else if (payload.stage !== "D8") {
     const next = nextStage(payload.stage as ActiveWorkflowStage);
     advanceCaseStage(aggregate, next);
@@ -735,6 +1165,7 @@ export function revalidateStage(
 }
 
 export function buildCaseWorkflowView(aggregate: CaseAggregate) {
+  const workflowState = buildWorkflowState(aggregate);
   const view = {
     caseId: aggregate.caseRecord.id,
     title: aggregate.caseRecord.title,
@@ -751,6 +1182,8 @@ export function buildCaseWorkflowView(aggregate: CaseAggregate) {
     messages: aggregate.messages,
     assumptions: aggregate.assumptions,
     riskFlags: aggregate.riskFlags,
+    workflowState,
+    eightDPreview: buildEightDPreview(aggregate),
   };
 
   return view;

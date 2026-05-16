@@ -32,16 +32,72 @@ describe("journey scenario api regression", () => {
     expect(scenario).toBeDefined();
 
     const { createCaseAggregate, confirmStage } = await import("@/lib/domain/workflow-engine");
+    const { recomputeCaseState } = await import("@/lib/domain/extractor");
     const { getCaseStore } = await import("@/lib/server/case-store");
 
     let aggregate = createCaseAggregate(scenario!.currentCaseTitle);
     aggregate.knownFacts = [...scenario!.currentKnownFacts];
+    const recomputed = recomputeCaseState(aggregate.knownFacts, aggregate.assumptions, aggregate.riskFlags);
+    aggregate.missingFields = recomputed.missingFields;
+    aggregate.assumptions = recomputed.assumptions;
+    aggregate.riskFlags = recomputed.riskFlags;
+
+    const confirmationContent = (stage: (typeof ACTIVE_WORKFLOW_STAGES)[number]) => {
+      if (stage === "D4") {
+        return [
+          "D4 根本原因分析工作稿",
+          "change point：替代料卷带方向与原厂相反",
+          "发生原因：贴装角度未切换导致反向装配。",
+          "流出原因：AOI 阈值放宽，异常未被拦截。",
+          "当前证据：程序版本记录、来料方向记录与现场失效现象一致。",
+          "待验证假设：是否还有相邻批次受影响。",
+        ].join("\n");
+      }
+
+      if (stage === "D5") {
+        return [
+          "D5 永久纠正措施工作稿",
+          "发生原因侧永久措施：恢复正确贴装角度并锁定程序版本。",
+          "流出原因侧永久措施：回调 AOI 阈值并追加出货前筛选。",
+          "系统性纠正措施：更新 SOP、程序发布与培训机制。",
+          "适用边界：当前异常批次及相邻批次。",
+        ].join("\n");
+      }
+
+      if (stage === "D6") {
+        return [
+          "D6 实施与验证计划工作稿",
+          "实施动作：已切回正确贴装角度并完成程序锁版。",
+          "验证方法：复测上线与抽样复判。",
+          "样本范围：主批次与相邻批次抽样。",
+          "通过标准：无新增同类异常。",
+          "风险与回退：若复发则立即停线并回退旧程序。",
+        ].join("\n");
+      }
+
+      if (stage === "D7") {
+        return [
+          "D7 预防再发生工作稿",
+          "横向展开：检查同类机种与相近工序。",
+          "流程/文件更新：更新作业文件与点检项。",
+          "培训与审计：完成班组培训与抽审。",
+          "防呆与管控点：增加方向防错与程序版本校验。",
+          "生效确认：已纳入日常点检。",
+        ].join("\n");
+      }
+
+      return `${stage} 已确认`;
+    };
 
     if (options?.confirmThroughStage) {
       for (const stage of ACTIVE_WORKFLOW_STAGES) {
-        aggregate = confirmStage(aggregate, { stage, content: `${stage} 已确认` });
+        if (stage === "D4") {
+          aggregate.stages.D4.workingContent = confirmationContent("D4");
+        }
+        aggregate = confirmStage(aggregate, { stage, content: confirmationContent(stage) });
         if (stage === options.confirmThroughStage) break;
       }
+      aggregate.caseRecord.currentStage = options.confirmThroughStage;
     }
 
     const store = getCaseStore();

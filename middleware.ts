@@ -7,6 +7,8 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (
+    pathname === "/" ||
+    pathname === "/product" ||
     pathname === "/login" ||
     pathname === "/api/auth/login" ||
     pathname === "/api/auth/register" ||

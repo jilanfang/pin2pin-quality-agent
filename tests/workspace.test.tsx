@@ -175,6 +175,85 @@ function buildCaseWorkflow() {
       primaryArtifactLabel: "分析结论",
       primaryArtifactShortLabel: "分析结论",
     },
+    workflowState: {
+      focusArea: "D3",
+      d4ConfirmationState: "draft" as const,
+      nextAsk: "客户端和库存如何处理？",
+    },
+    eightDPreview: [
+      {
+        stage: "D1",
+        title: "D1 团队与分工",
+        status: "draft" as const,
+        summary: "QE、PE、SMT 已加入团队。",
+        content: "建案人：alice\n已识别角色：QE、PE、SMT\n待补角色：客户窗口",
+        missingItems: ["待补客户窗口"],
+        primaryAction: null,
+      },
+      {
+        stage: "D2",
+        title: "D2 问题定义",
+        status: "confirmed" as const,
+        summary: "批次 B12 上电冒烟，影响范围仍待补。",
+        content: "异常现象：客户反馈上电冒烟\n异常批次：B12\n首次发现时间：待补充\n影响范围：待补充",
+        missingItems: ["缺少首次发现时间", "缺少影响范围"],
+        primaryAction: null,
+      },
+      {
+        stage: "D3",
+        title: "D3 临时遏制",
+        status: "draft" as const,
+        summary: "已暂停出货，库存和客户端筛选待细化。",
+        content: "客户现场：待补充\n已发货：待补充\n成品库存：冻结库存\n在制品：待补充",
+        missingItems: ["缺少客户端动作"],
+        primaryAction: null,
+      },
+      {
+        stage: "D4",
+        title: "D4 原因分析",
+        status: "draft" as const,
+        summary: "原因链还没站稳。",
+        content: "发生原因：待补充\n流出原因：待补充\n支持证据：待补充\n待验证假设：当前先假设客户端库存也需要同步围堵。",
+        missingItems: ["缺少发生原因", "缺少流出原因"],
+        primaryAction: null,
+      },
+      {
+        stage: "D5",
+        title: "D5 纠正措施",
+        status: "empty" as const,
+        summary: "等待 D4 确认后自动起草。",
+        content: "",
+        missingItems: ["等待 D4 确认"],
+        primaryAction: null,
+      },
+      {
+        stage: "D6",
+        title: "D6 效果验证",
+        status: "empty" as const,
+        summary: "等待 D4 确认后引导补实施与验证。",
+        content: "",
+        missingItems: ["等待 D4 确认"],
+        primaryAction: null,
+      },
+      {
+        stage: "D7",
+        title: "D7 防再发",
+        status: "empty" as const,
+        summary: "等待 D4 确认后自动起草。",
+        content: "",
+        missingItems: ["等待 D4 确认"],
+        primaryAction: null,
+      },
+      {
+        stage: "D8",
+        title: "D8 结案沉淀",
+        status: "empty" as const,
+        summary: "暂未开始。",
+        content: "",
+        missingItems: [],
+        primaryAction: null,
+      },
+    ],
   };
 }
 
@@ -284,6 +363,32 @@ function buildImpactedWorkflow() {
             }
           : stage
     ),
+    workflowState: {
+      focusArea: "D4",
+      d4ConfirmationState: "stale" as const,
+      nextAsk: "请基于新证据重新确认发生原因和流出原因。",
+    },
+    eightDPreview: workflow.eightDPreview?.map((section) => {
+      if (section.stage === "D4") {
+        return {
+          ...section,
+          status: "stale" as const,
+          summary: "原因链已被新证据推翻，需要重新确认。",
+          primaryAction: {
+            type: "reconfirm_d4" as const,
+            label: "重新确认 D4",
+          },
+        };
+      }
+      if (section.stage === "D5" || section.stage === "D6" || section.stage === "D7") {
+        return {
+          ...section,
+          status: "stale" as const,
+          summary: "受 D4 变化影响，需复审。",
+        };
+      }
+      return section;
+    }),
   };
 }
 
@@ -1601,6 +1706,90 @@ describe("Workspace", () => {
     const timeline = screen.getByTestId("stage-timeline");
     expect(within(timeline).getByText("D3 临时遏制")).toBeInTheDocument();
     expect(within(timeline).getAllByText("受影响").length).toBeGreaterThan(0);
+  });
+
+  it("renders a compact 8D preview rail and exposes D4 confirm when the cause chain is ready", async () => {
+    const workflow = {
+      ...buildCaseWorkflow(),
+      currentStage: "D4",
+      workflowState: {
+        focusArea: "D4",
+        d4ConfirmationState: "ready" as const,
+        nextAsk: "请确认发生原因和流出原因是否可以锁定。",
+      },
+      eightDPreview: buildCaseWorkflow().eightDPreview?.map((section) =>
+        section.stage === "D4"
+          ? {
+              ...section,
+              status: "ready" as const,
+              summary: "发生原因和流出原因都已有证据支撑。",
+              primaryAction: {
+                type: "confirm_d4" as const,
+                label: "确认 D4",
+              },
+            }
+          : section
+      ),
+    };
+
+    stubFetch(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([buildCaseSummary({ currentStage: "D4" })]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(workflow), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+    expect(screen.getByText("8D 预览")).toBeInTheDocument();
+    expect(screen.getByText("D4 原因分析")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "确认 D4" })).toBeInTheDocument();
+    expect(screen.getByText("发生原因和流出原因都已有证据支撑。")).toBeInTheDocument();
+  });
+
+  it("reconfirms D4 through the stage api and keeps D5-D7 marked stale before that", async () => {
+    const fetchMock = stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/cases") {
+        return new Response(JSON.stringify([buildCaseSummary({ currentStage: "D4" })]), { status: 200 });
+      }
+      if (url === "/api/cases/case-1") {
+        return new Response(JSON.stringify(buildImpactedWorkflow()), { status: 200 });
+      }
+      if (url === "/api/cases/case-1/stages/D4/confirm") {
+        expect(init?.method).toBe("POST");
+        const payload = {
+          ...buildImpactedWorkflow(),
+          workflowState: {
+            focusArea: "D6",
+            d4ConfirmationState: "confirmed" as const,
+            nextAsk: "请补实施责任人、验证方法、样本范围和通过标准。",
+          },
+        };
+        return new Response(JSON.stringify(payload), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Workspace />);
+
+    await screen.findByRole("heading", { name: "钽电容反向贴装客诉" });
+    expect(screen.getByRole("button", { name: "重新确认 D4" })).toBeInTheDocument();
+    expect(screen.getByText("受 D4 变化影响，需复审。")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "重新确认 D4" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/cases/case-1/stages/D4/confirm",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
   });
 
   it("keeps the composer in a column-bottom pane and lets the user expand and collapse it", async () => {

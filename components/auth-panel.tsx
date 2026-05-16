@@ -51,7 +51,7 @@ export function AuthPanel({ allowSelfRegister = false, requiresInvite = false }:
       if (!response.ok) {
         throw new Error(payload.error ?? "认证失败");
       }
-      window.location.href = "/";
+      window.location.href = "/workspace";
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "认证失败");
     } finally {

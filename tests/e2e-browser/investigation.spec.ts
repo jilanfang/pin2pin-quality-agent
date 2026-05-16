@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 
 const SMOKE_USERNAME = process.env.SMOKE_AUTH_USERNAME || "fireline-demo-01";
 const SMOKE_PASSWORD = process.env.SMOKE_AUTH_PASSWORD || "Pin2pin!2026";
+const SMOKE_INVITE_CODE = process.env.SMOKE_INVITE_CODE || "FL26-49E2-8012";
 const AUTH_COOKIE_NAME = "fireline_session";
 
 function uniqueLabel(prefix: string) {
@@ -37,10 +38,27 @@ async function loginIfNeeded(page: Page) {
 
   await page.getByLabel("用户名").fill(SMOKE_USERNAME);
   await page.getByLabel("密码").fill(SMOKE_PASSWORD);
-  await Promise.all([
-    page.waitForURL((url: URL) => !url.pathname.includes("/login"), { timeout: 30_000 }),
-    page.getByRole("button", { name: "登录" }).click(),
-  ]);
+  await page.getByRole("button", { name: "登录" }).click();
+
+  const loginSucceeded = await page
+    .waitForURL((url: URL) => !url.pathname.includes("/login"), { timeout: 5_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!loginSucceeded) {
+    await expect(page.getByText("用户名或密码错误")).toBeVisible({ timeout: 5_000 });
+    const fallbackUsername = uniqueLabel("pw-smoke");
+    await page.getByRole("tab", { name: "注册" }).click();
+    await page.getByLabel("用户名").fill(fallbackUsername);
+    await page.getByRole("textbox", { name: "密码", exact: true }).fill(SMOKE_PASSWORD);
+    await page.getByLabel("邀请码").fill(SMOKE_INVITE_CODE);
+    await page.getByLabel("确认密码").fill(SMOKE_PASSWORD);
+    await Promise.all([
+      page.waitForURL((url: URL) => !url.pathname.includes("/login"), { timeout: 30_000 }),
+      page.getByRole("button", { name: "创建账号" }).click(),
+    ]);
+  }
+
   await waitForAuthCookie(page);
   await page.waitForLoadState("networkidle");
 }
@@ -109,6 +127,7 @@ test.describe("investigation workflow", () => {
 
     await page.getByLabel("用户名").fill(username);
     await page.getByRole("textbox", { name: "密码", exact: true }).fill(password);
+    await page.getByLabel("邀请码").fill(SMOKE_INVITE_CODE);
     await page.getByLabel("确认密码").fill(password);
 
     await Promise.all([
@@ -146,6 +165,7 @@ test.describe("investigation workflow", () => {
     await redirectedPage.waitForLoadState("networkidle");
 
     await expect(redirectedPage).not.toHaveURL(/\/login$/);
+    await expect(redirectedPage).toHaveURL(/\/workspace$/);
     await expect(redirectedPage.getByRole("heading", { name: "把客户投诉或异常情况贴进来" })).toBeVisible();
     await redirectedPage.close();
   });

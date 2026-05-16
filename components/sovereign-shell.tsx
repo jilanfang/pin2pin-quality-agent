@@ -37,13 +37,18 @@ export function SovereignShell({
 }: SovereignShellProps) {
   const pathname = usePathname();
   const isLoginPage = pathname === "/login";
-  const isEntryPage = pathname === "/" || isLoginPage;
+  const isMarketingPage = pathname === "/" || pathname === "/product";
+  const isWorkspaceEntryPage = pathname === "/workspace";
+  const isEntryPage = isMarketingPage || isWorkspaceEntryPage || isLoginPage;
+  const usesAppChrome = !isMarketingPage;
   const activeSection =
     pathname?.startsWith("/copilot")
       ? "方法问题"
       : pathname?.startsWith("/investigations")
         ? "调查"
-        : "总览";
+        : pathname === "/workspace"
+          ? "总览"
+          : "总览";
 
   return (
     <div
@@ -52,23 +57,40 @@ export function SovereignShell({
       }`}
       data-testid="sovereign-shell"
     >
-      <header className={`sovereign-topbar${isEntryPage ? " sovereign-topbar-entry" : ""}`}>
+      <header
+        className={`sovereign-topbar${isEntryPage ? " sovereign-topbar-entry" : ""}${
+          isMarketingPage ? " sovereign-topbar-marketing" : ""
+        }`}
+      >
         <div className="sovereign-brand-block">
           <span className="sovereign-brand">Pin2pin Fireline</span>
-          <span className="sovereign-brand-subtitle">Investigation AI</span>
+          <span className="sovereign-brand-subtitle">
+            {isMarketingPage ? "Quality Response Workbench" : "Investigation AI"}
+          </span>
         </div>
 
-        <nav className="sovereign-nav" aria-label="主导航">
-          {navItems.map((item) => (
-            <a
-              key={item.label}
-              href={item.href}
-              aria-current={item.label === activeSection ? "page" : undefined}
-            >
-              {item.label}
+        {usesAppChrome ? (
+          <nav className="sovereign-nav" aria-label="主导航">
+            {navItems.map((item) => (
+              <a
+                key={item.label}
+                href={item.href === "/" ? "/workspace" : item.href}
+                aria-current={item.label === activeSection ? "page" : undefined}
+              >
+                {item.label}
+              </a>
+            ))}
+          </nav>
+        ) : (
+          <nav className="sovereign-nav" aria-label="主导航">
+            <a href="/" aria-current={pathname === "/" ? "page" : undefined}>
+              首页
             </a>
-          ))}
-        </nav>
+            <a href="/product" aria-current={pathname === "/product" ? "page" : undefined}>
+              产品页
+            </a>
+          </nav>
+        )}
 
         <div className="sovereign-utilities">
           {authEnabled ? (
@@ -80,15 +102,19 @@ export function SovereignShell({
               </form>
             ) : (
               <a className="shell-auth-link" href="/login">
-                登录
+                {isMarketingPage ? "已有账号登录" : "登录"}
               </a>
             )
+          ) : isMarketingPage ? (
+            <a className="shell-auth-link" href="/login">
+              已有账号登录
+            </a>
           ) : null}
         </div>
       </header>
 
       <div className={`sovereign-body${isEntryPage ? " sovereign-body-entry" : ""}`}>
-        {!isEntryPage ? (
+        {usesAppChrome && !isEntryPage ? (
           <aside className="sovereign-rail" aria-label="工具侧栏">
             <div className="rail-status">
               <div className="rail-avatar">PF</div>
@@ -129,7 +155,7 @@ export function SovereignShell({
 
         <section className="sovereign-stage">{children}</section>
 
-        {!isEntryPage ? <aside className="sovereign-report-rail" aria-hidden="true" /> : null}
+        {usesAppChrome && !isEntryPage ? <aside className="sovereign-report-rail" aria-hidden="true" /> : null}
       </div>
 
       <style>{`
@@ -171,6 +197,10 @@ export function SovereignShell({
           background: transparent;
           border-bottom: 0;
           backdrop-filter: none;
+        }
+
+        .sovereign-topbar-marketing {
+          padding-top: 24px;
         }
 
         .sovereign-brand-block {

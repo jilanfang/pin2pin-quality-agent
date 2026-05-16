@@ -87,7 +87,7 @@ describe("workflowEngine", () => {
     expect(assistantMessage).toContain("客户现场、已发货、成品库存、在制品目前各自怎么处理");
   });
 
-  it("keeps only one highest-value next question in normal D2 guidance", () => {
+  it("moves normal cases forward once D2 has enough boundary information", () => {
     let aggregate = createCaseAggregate("普通异常");
 
     aggregate = applyEvidence(aggregate, {
@@ -97,7 +97,10 @@ describe("workflowEngine", () => {
 
     const guided = buildCaseWorkflowView(aggregate).guidedThinking;
 
-    expect(guided?.suggestedQuestions).toEqual(["异常是客户现场发现，还是内部测试发现？"]);
+    expect(aggregate.caseRecord.currentStage).toBe("D3");
+    expect(aggregate.stages.D3.workingContent).toContain("D3 临时遏制措施建议");
+    expect(guided?.focusArea).toBe("D3");
+    expect(guided?.suggestedQuestions).toEqual(["客户端、在制品、库存和已出货各自如何处理？"]);
   });
 
   it("prioritizes impact clarification over scenario classification when fragmented D2 evidence already exposes a failure point", () => {
@@ -123,7 +126,9 @@ describe("workflowEngine", () => {
 
     const guided = buildCaseWorkflowView(aggregate).guidedThinking;
 
-    expect(guided?.suggestedQuestions).toEqual(["先补工单、批次、线别或生产时间，把追溯边界钉住。"]);
+    expect(guided?.suggestedQuestions).toEqual([
+      "先回一句你现在最确定的一条追溯信息：批次、发现时间、线别或工单，先给一个也能继续往下走。",
+    ]);
   });
 
   it("keeps only one highest-value next question in normal D3 guidance", () => {
@@ -337,7 +342,7 @@ describe("workflowEngine", () => {
     expect(aggregate.messages.at(-1)?.content ?? "").toContain("change point");
   });
 
-  it("auto-advances urgent complaints from D4 to D5 once change point evidence is clarified", () => {
+  it("keeps urgent complaints focused on D4 until the cause chain is explicitly confirmed", () => {
     let aggregate = createCaseAggregate("紧急客诉");
 
     aggregate = applyEvidence(aggregate, {
@@ -358,14 +363,19 @@ describe("workflowEngine", () => {
       contextStage: "D4",
     });
 
-    const guided = buildCaseWorkflowView(aggregate).guidedThinking;
+    const view = buildCaseWorkflowView(aggregate);
+    const guided = view.guidedThinking;
     const assistantMessage = aggregate.messages.at(-1)?.content ?? "";
 
-    expect(aggregate.caseRecord.currentStage).toBe("D5");
-    expect(aggregate.stages.D5.workingContent).toContain("D5 永久纠正措施工作稿");
-    expect(guided?.focusArea).toBe("D5");
-    expect(guided?.suggestedQuestions).toEqual(["当前阶段还有哪些关键动作未完成？"]);
-    expect(assistantMessage).toContain("当前阶段还有哪些关键动作未完成");
+    expect(aggregate.caseRecord.currentStage).toBe("D4");
+    expect(aggregate.stages.D5.workingContent).toBe("");
+    expect(view.workflowState.d4ConfirmationState).toBe("ready");
+    expect(view.eightDPreview.find((item) => item.stage === "D4")?.primaryAction?.label).toBe("确认 D4");
+    expect(guided?.focusArea).toBe("D4");
+    expect(guided?.suggestedQuestions).toEqual([
+      "先确认这次异常的 change point 是什么，以及发生原因和流出原因各自被什么证据支持。",
+    ]);
+    expect(assistantMessage).toContain("change point");
   });
 
   it("auto-advances urgent complaints from D5 to D6 once corrective actions are stated explicitly", () => {
@@ -388,6 +398,7 @@ describe("workflowEngine", () => {
       content: "替代料导入后卷带方向与原厂相反，发生原因和流出原因都需要围绕这个 change point 继续确认。",
       contextStage: "D4",
     });
+    aggregate = confirmStage(aggregate, { stage: "D4" });
 
     aggregate = applyEvidence(aggregate, {
       content: "发生原因侧永久措施是恢复原厂卷带方向并锁定贴片角度，流出原因侧永久措施是收紧AOI阈值并加严放行，系统性纠正措施是更新程序、SOP和培训。",
@@ -524,5 +535,95 @@ describe("workflowEngine", () => {
     expect(aggregate.knownFacts.find((item) => item.field === "failure_location")?.value).toBe("C25");
     expect(aggregate.assumptions.map((item) => item.statement)).toContain("疑似与电源输入端器件相关，待验证。");
     expect(aggregate.riskFlags).toContain("客户停线级异常，需持续复审。");
+  });
+
+  it("auto-drafts D1 from the owner context and keeps D2-D3 moving from fragmented evidence", () => {
+    let aggregate = createCaseAggregate("客户客诉");
+    aggregate.caseRecord.ownerUserId = "user-alice";
+
+    aggregate = applyEvidence(aggregate, {
+      content: "客户华星科技反馈：B19 批次上线后 3 台上电冒烟，客户现场已暂停使用并要求今天先给围堵方案。",
+      contextStage: "D2",
+    });
+
+    const view = buildCaseWorkflowView(aggregate);
+
+    expect(aggregate.stages.D1.workingContent).toContain("建案人");
+    expect(aggregate.stages.D1.workingContent).toContain("user-alice");
+    expect(aggregate.stages.D1.workingContent).toContain("客户窗口");
+    expect(aggregate.stages.D2.workingContent).toContain("异常现象");
+    expect(aggregate.stages.D3.workingContent).toContain("客户现场");
+    expect(view.workflowState.focusArea).toBe("D3");
+    expect(view.workflowState.nextAsk).toContain("客户端");
+  });
+
+  it("treats D4 as the only hard confirmation gate and auto-drafts D5 D7 while steering next ask to D6", () => {
+    let aggregate = createCaseAggregate("根因确认");
+
+    aggregate = applyEvidence(aggregate, {
+      content:
+        "客户华星科技反馈 MCU-900 板卡上电冒烟，批次B19，2026-03-28发现，影响3台，客户现场已暂停使用。",
+      contextStage: "D2",
+    });
+    aggregate = applyEvidence(aggregate, {
+      content: "客户现场已封存待检，已发货冻结追查，成品库存扣留，在制品暂停投线。",
+      contextStage: "D3",
+    });
+    aggregate = applyEvidence(aggregate, {
+      content:
+        "确认 change point 是替代料卷带方向与原厂相反。发生原因：贴片角度未切换导致反向装配。流出原因：AOI 阈值放宽未拦截。当前证据：复盘程序版本与来料方向记录一致。待验证假设：是否还有其他批次受影响。",
+      contextStage: "D4",
+    });
+
+    let view = buildCaseWorkflowView(aggregate);
+    expect(view.workflowState.d4ConfirmationState).toBe("ready");
+    expect(view.eightDPreview.find((item) => item.stage === "D4")?.primaryAction?.label).toBe("确认 D4");
+
+    aggregate = confirmStage(aggregate, { stage: "D4" });
+    view = buildCaseWorkflowView(aggregate);
+
+    expect(aggregate.stages.D4.locked).toBe(true);
+    expect(aggregate.stages.D5.workingContent).toContain("发生原因侧永久措施");
+    expect(aggregate.stages.D7.workingContent).toContain("横向展开");
+    expect(view.workflowState.focusArea).toBe("D6");
+    expect(view.workflowState.nextAsk).toContain("验证方法");
+    expect(view.workflowState.d4ConfirmationState).toBe("confirmed");
+  });
+
+  it("marks D5-D7 stale when D4-confirmed judgement is overturned by later evidence", () => {
+    let aggregate = createCaseAggregate("回推复审");
+
+    aggregate = applyEvidence(aggregate, {
+      content:
+        "客户华星科技反馈 MCU-900 板卡上电冒烟，批次B19，2026-03-28发现，影响3台，客户现场已暂停使用。",
+      contextStage: "D2",
+    });
+    aggregate = applyEvidence(aggregate, {
+      content: "客户现场已封存待检，已发货冻结追查，成品库存扣留，在制品暂停投线。",
+      contextStage: "D3",
+    });
+    aggregate = applyEvidence(aggregate, {
+      content:
+        "确认 change point 是替代料卷带方向与原厂相反。发生原因：贴片角度未切换导致反向装配。流出原因：AOI 阈值放宽未拦截。当前证据：复盘程序版本与来料方向记录一致。待验证假设：是否还有其他批次受影响。",
+      contextStage: "D4",
+    });
+    aggregate = confirmStage(aggregate, { stage: "D4" });
+
+    aggregate = applyEvidence(aggregate, {
+      content: "补充证据：根本不是卷带方向问题，而是连接器端子浮高造成瞬时打火，前面 D4 判断要回看。",
+      contextStage: "D4",
+    });
+
+    const view = buildCaseWorkflowView(aggregate);
+    const d5Preview = view.eightDPreview.find((item) => item.stage === "D5");
+    const d7Preview = view.eightDPreview.find((item) => item.stage === "D7");
+
+    expect(view.workflowState.d4ConfirmationState).toBe("stale");
+    expect(aggregate.stages.D5.impacted).toBe(true);
+    expect(aggregate.stages.D6.impacted).toBe(true);
+    expect(aggregate.stages.D7.impacted).toBe(true);
+    expect(d5Preview?.status).toBe("stale");
+    expect(d7Preview?.status).toBe("stale");
+    expect(view.eightDPreview.find((item) => item.stage === "D4")?.primaryAction?.label).toBe("重新确认 D4");
   });
 });

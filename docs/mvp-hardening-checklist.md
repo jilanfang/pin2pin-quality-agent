@@ -323,6 +323,48 @@
   - `deepseek-v3.2`
   - `qwen3.5-122b-a10b`
   - `ark-code-latest`
+
+### 3.10 证据驱动 8D 工作流收口
+
+> 2026-04-03 `/plan-eng-review` 结论：方向成立，不推翻“用户持续贴证据，系统持续更新 8D 草稿”的主路径；但当前实现仍有几处旧状态机残留，必须在继续扩展前收口。
+
+- [ ] 把 `workflowState` 定为工作台唯一焦点真相源
+  - 中栏、右栏、顶部状态、composer 提示统一读 `workflowState.focusArea`
+  - `guidedThinking` 改为从 `focusArea` 派生，不再和 `currentStage` 双轨并存
+- [ ] 把“聊天消息持久化”和“证据写入 case 状态”解耦
+  - `question_only` / `summary_request` 也要保留用户消息
+  - 但这类输入默认不改事实层、阶段层
+  - 避免 IM 消息流里只看到 AI 回复、看不到用户刚刚问了什么
+- [ ] 把 `D4` 收口成结构化派生，不再靠展示文案反解析状态
+  - 内部统一产出：`changePoint / 发生原因 / 流出原因 / 支持证据 / 待验证项`
+  - `ready` 判断、缺口提示、右栏预览、确认按钮都读取同一结构
+- [ ] 修正 `D4 stale` 展示优先级
+  - 一旦新证据推翻旧判断，右栏优先展示最新待复审稿
+  - 不再优先显示旧 `confirmedContent`
+- [ ] 调整 final 8D readiness 规则，彻底切到“证据成熟度”而不是“逐阶段锁死”
+  - `final` 的主门槛是：
+    - `D4` 已确认
+    - `D5-D7` 有可用内容
+    - `D6` 有真实验证信息，不是模板占位
+    - 无 `stale/impacted`
+  - 不再默认要求 `D5-D8` 全部 `locked`
+- [ ] 修正 `D1` 自动草稿的展示源
+  - 优先显示用户名或稳定 display name，不显示内部 `ownerUserId`
+  - 统一角色推断字段，不再混用 `lot / batch`
+
+### 3.11 证据驱动 8D 回归测试补齐
+
+- [ ] API 回归
+  - `question_only` 输入后，消息流必须同时保存用户消息和 AI 回复
+  - `summary_request`、`question`、`evidence` 混合输入都要验证消息顺序完整
+- [ ] Workspace 回归
+  - 纯提问后消息流必须同时出现“你”和“AI 助手”
+  - `D4 stale` 后右栏必须显示最新待复审内容，而不是旧确认内容
+  - 中栏、右栏、顶部状态必须基于同一焦点，不允许出现 split-brain UI
+- [ ] Report builder 回归
+  - 增加正例：`D5-D8` 未全 locked，但证据成熟时仍允许 final 8D
+  - 增加反例：`D6` 仍是模板占位时，必须阻断 final 8D
+  - 逐步移除旧测试里“all stages are locked 才能 final”的基线
 ## 4. 可以随后再做
 
 这些是后续值得做，但不该阻塞 MVP。

@@ -554,4 +554,31 @@ describe("reportBuilder", () => {
     expect(d7Section?.content).toContain("培训与审计");
     expect(d7Section?.content).not.toContain("D7 预防再发生工作稿");
   });
+
+  it("treats D4 confirmation plus D5 D6 draft as enough for interim output", () => {
+    let aggregate = buildInitialReadyAggregate();
+
+    aggregate = confirmStage(aggregate, { stage: "D4" });
+
+    const capabilities = buildReportCapabilities(aggregate);
+
+    expect(capabilities.formalHtml.allowed).toBe(true);
+    expect(capabilities.finalReport.allowed).toBe(false);
+    expect(capabilities.finalReport.reasonCodes).not.toContain("stages_unconfirmed");
+  });
+
+  it("blocks final output when D4 downstream sections are impacted even if drafts exist", () => {
+    let aggregate = buildInitialReadyAggregate();
+
+    aggregate = confirmStage(aggregate, { stage: "D4" });
+    aggregate = applyEvidence(aggregate, {
+      content: "补充证据：不是贴装反向，而是连接器端子浮高导致瞬时打火，前面 D4 判断需要回看。",
+      contextStage: "D4",
+    });
+
+    const capabilities = buildReportCapabilities(aggregate);
+
+    expect(capabilities.finalReport.allowed).toBe(false);
+    expect(capabilities.finalReport.reasonCodes).toContain("impacted_stages");
+  });
 });

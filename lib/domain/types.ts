@@ -15,6 +15,8 @@ export type ReportStage = "initial_24h" | "interim" | "final";
 export type CaseStatus = "open" | "closed";
 export type ExportTarget = "text" | "formalHtml" | "finalReport" | "pdf";
 export type ResultArtifactKind = "analysis_summary" | "action_plan" | "eight_d";
+export type D4ConfirmationState = "draft" | "ready" | "confirmed" | "stale";
+export type EightDPreviewStatus = "empty" | "draft" | "ready" | "confirmed" | "stale";
 
 export interface FactItem {
   field: string;
@@ -41,6 +43,27 @@ export interface GuidedThinkingResult {
   suggestedQuestions: string[];
   checkpoints: string[];
   warnings: string[];
+}
+
+export interface WorkflowState {
+  focusArea: ActiveWorkflowStage;
+  d4ConfirmationState: D4ConfirmationState;
+  nextAsk: string;
+}
+
+export interface EightDPreviewAction {
+  type: "confirm_d4" | "reconfirm_d4";
+  label: string;
+}
+
+export interface EightDPreviewSection {
+  stage: WorkflowStage;
+  title: string;
+  status: EightDPreviewStatus;
+  summary: string;
+  content: string;
+  missingItems: string[];
+  primaryAction?: EightDPreviewAction | null;
 }
 
 export interface StageRecord {

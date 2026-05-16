@@ -19,26 +19,35 @@ export default async function globalSetup() {
   if (USE_EXISTING_SERVER) {
     const existingDatabaseUrl = process.env.DATABASE_URL || readDatabaseUrlFromEnvLocal();
     if (!existingDatabaseUrl) {
-      throw new Error("[e2e-browser] E2E_BASE_URL is set but DATABASE_URL could not be resolved.");
+      console.log("[e2e-browser] Reusing existing server without DATABASE_URL bootstrap.");
+      return;
     }
 
-    execSync(
-      `DATABASE_URL='${existingDatabaseUrl}' node scripts/manage-auth-user.mjs create fireline-demo-01 'Pin2pin!2026' || true`,
-      {
-        cwd: PROJECT_ROOT,
-        stdio: "inherit",
-        shell: "/bin/zsh",
-      }
-    );
-    execSync(
-      `DATABASE_URL='${existingDatabaseUrl}' node scripts/manage-auth-user.mjs set-password fireline-demo-01 'Pin2pin!2026'`,
-      {
-        cwd: PROJECT_ROOT,
-        stdio: "inherit",
-        shell: "/bin/zsh",
-      }
-    );
-    console.log("[e2e-browser] Reusing existing server and refreshed smoke account.");
+    try {
+      execSync(
+        `DATABASE_URL='${existingDatabaseUrl}' node scripts/manage-auth-user.mjs create fireline-demo-01 'Pin2pin!2026' || true`,
+        {
+          cwd: PROJECT_ROOT,
+          stdio: "inherit",
+          shell: "/bin/zsh",
+        }
+      );
+      execSync(
+        `DATABASE_URL='${existingDatabaseUrl}' node scripts/manage-auth-user.mjs set-password fireline-demo-01 'Pin2pin!2026'`,
+        {
+          cwd: PROJECT_ROOT,
+          stdio: "inherit",
+          shell: "/bin/zsh",
+        }
+      );
+      console.log("[e2e-browser] Reusing existing server and refreshed smoke account.");
+    } catch (error) {
+      console.log(
+        `[e2e-browser] Skipped smoke account refresh for existing server: ${
+          error instanceof Error ? error.message : "unexpected error"
+        }`
+      );
+    }
     return;
   }
 

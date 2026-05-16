@@ -18,6 +18,12 @@ import type {
   FactItem,
   ThinkingMode,
 } from "@/lib/domain/types";
+import {
+  buildConversationPrompt,
+  buildCopilotPrompt,
+  buildExtractionPrompt,
+} from "@/lib/server/prompts";
+import type { PromptMessage } from "@/lib/server/prompts";
 
 type SupportedProvider = "qwen" | "deepseek" | "ark";
 type LlmCapability = "extract" | "copilot" | "report" | "conversation";
@@ -62,18 +68,12 @@ const ALLOWED_RESPONSE_MODES = [
   "guide",
   "result_action",
 ] as const satisfies readonly ConversationResponseMode[];
-const MAX_CONTEXT_FACTS = 12;
 const ALLOWED_THINKING_MODES = [
   "processing_input",
   "reviewing_prior_judgement",
   "summarizing_case",
   "preparing_artifact",
 ] as const satisfies readonly ThinkingMode[];
-
-type ChatMessage = {
-  role: "system" | "user";
-  content: string;
-};
 
 type OpenAiCompatibleResponse = {
   choices?: Array<{
@@ -267,96 +267,6 @@ function getProviderRoutes(capability: LlmCapability): ProviderRoute[] {
       slot,
       ...getProviderConfig(capability, provider, slot),
     }));
-}
-
-function buildExtractionPrompt(payload: EvidencePayload) {
-  const schema = {
-    knownFacts: [{ field: "customer", value: "string", confidence: 0.95 }],
-    assumptions: [{ statement: "string", needsValidation: true }],
-    riskFlags: ["string"],
-  };
-
-  return [
-    {
-      role: "system" as const,
-      content:
-        "你是电子质量工程 8D 助手。请从用户证据中提取对案件推进最有用的结构化信息。输出必须是 JSON，不要输出 Markdown，不要解释。",
-    },
-    {
-      role: "user" as const,
-      content: [
-        `当前阶段：${payload.contextStage ?? "D2"}`,
-        "任务：提取 knownFacts / assumptions / riskFlags。",
-        "要求：",
-        "1. 只提取对 8D 推进有帮助的信息。",
-        "2. knownFacts 的 field 使用现有系统字段，例如 customer/model/batch/work_order/line/discovery_time/impact/failure_location/change_point/containment_customer_site/containment_shipped/containment_stock/containment_wip。",
-        "3. assumptions 只放仍待验证的推测。",
-        "4. riskFlags 只放业务风险提醒。",
-        `输出 JSON schema 示例：${JSON.stringify(schema)}`,
-        `用户输入：${payload.content}`,
-      ].join("\n"),
-    },
-  ] satisfies ChatMessage[];
-}
-
-function buildConversationPrompt(payload: EvidencePayload, options: {
-  currentCaseTitle?: string | null;
-  currentKnownFacts?: FactItem[];
-  hasCurrentCase: boolean;
-}) {
-  const currentFacts = (options.currentKnownFacts ?? [])
-    .slice(0, MAX_CONTEXT_FACTS)
-    .map((item) => `${item.field}: ${item.value}`)
-    .join("; ");
-
-  return [
-    {
-      role: "system" as const,
-      content: [
-        "你是 Pin2pin Fireline 的调查对话分析器。",
-        "任务是把用户本轮输入分析成结构化 JSON，供系统执行。",
-        "你不是直接产出 8D 成品，而是判断这轮输入属于什么意图、是否应该挂到当前调查、以及该如何回复。",
-        "输出必须是 JSON，不要输出 Markdown，不要解释。",
-        "硬性要求：",
-        "1. intents 只能用 evidence/question/summary_request/correction/decision_signal。",
-        "2. sourceShape 只能用 long_document/fragmented_update/meeting_notes/question_only/mixed_input。",
-        "3. caseOperation 只能用 create_new_case/attach_to_current_case/needs_case_confirmation。",
-        "4. responseMode 只能用 inform/guide/result_action。",
-        "5. thinking.mode 只能用 processing_input/reviewing_prior_judgement/summarizing_case/preparing_artifact。",
-        "6. knownFacts 仅放有把握的稳定事实；假设放 assumptions。",
-        "7. 如果内容明显属于另一个调查，caseOperation 必须是 needs_case_confirmation。",
-        "8. assistantReplyDraft 要用中文，简洁、专业、可执行。",
-      ].join("\n"),
-    },
-    {
-      role: "user" as const,
-      content: [
-        `当前阶段：${payload.contextStage ?? "D2"}`,
-        `是否已有当前调查：${options.hasCurrentCase ? "是" : "否"}`,
-        `当前调查标题：${options.currentCaseTitle ?? "无"}`,
-        `当前调查已知事实：${currentFacts || "无"}`,
-        "输出 JSON schema 示例：",
-        JSON.stringify({
-          intents: ["evidence"],
-          sourceShape: "fragmented_update",
-          caseOperation: "attach_to_current_case",
-          responseMode: "guide",
-          thinking: {
-            mode: "processing_input",
-            steps: ["识别新增事实", "检查是否影响前序判断", "更新当前分析与下一步"],
-          },
-          knownFacts: [{ field: "customer", value: "华星科技", confidence: 0.95 }],
-          assumptions: [{ statement: "可能与换料有关", needsValidation: true }],
-          riskFlags: ["客户停线级异常，需持续复审。"],
-          summaryRequested: false,
-          assistantReplyDraft: "我先帮你接下这个调查，先确认失效位置和围堵状态。",
-          suggestedCaseTitle: "华星科技上电冒烟客诉",
-          reasoningNotes: "仅用于内部日志",
-        }),
-        `用户输入：${payload.content}`,
-      ].join("\n"),
-    },
-  ] satisfies ChatMessage[];
 }
 
 function inferThinkingFromIntents(intents: ConversationIntent[]): ConversationThinkingPlan {
@@ -559,25 +469,11 @@ function parseConversationAnalysis(content: string): ConversationTurnAnalysis | 
   };
 }
 
-function buildCopilotPrompt(prompt: string) {
-  return [
-    {
-      role: "system" as const,
-      content:
-        "你是 Pin2pin Fireline 的 8D 与质量方法助手。回答要面向制造业质量工程师，强调 8D、CAPA、5Why、FMEA、控制计划、量测系统分析等方法的实际应用。回答用中文，简洁、专业、可执行，不要空泛。",
-    },
-    {
-      role: "user" as const,
-      content: prompt,
-    },
-  ] satisfies ChatMessage[];
-}
-
 async function callOpenAiCompatible(
   endpoint: string,
   apiKey: string,
   model: string,
-  messages: ChatMessage[],
+  messages: PromptMessage[],
   timeoutMs: number
 ) {
   const controller = new AbortController();

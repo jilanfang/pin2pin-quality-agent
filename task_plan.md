@@ -1,61 +1,91 @@
-# Task Plan: Fireline 用户旅程资产最小收口
+# Task Plan: Fireline Marketing Split and LLM Prompt Centralization
 
 ## Goal
-把 Fireline 用户旅程资产收口成可直接服务 benchmark、regression、smoke 的轻量资产，不再继续过度工程化。
+在现有 Next.js 应用里同时保留公开营销路径与工作台入口，并把当前在线 LLM 提示词统一收口到单独目录，方便后续调优。
 
 ## Success Criteria
-- `StructuredJourneyScenario` 带有 `priority` 和 `usageTags`
-- TS 样本包与 JSON 导出保持完全对齐
-- 至少一小组 P0 API 回归覆盖关键用户旅程
-- 三层测试和 typecheck 通过
+- `/` 与 `/product` 未登录可访问。
+- `/workspace` 为登录后的工作台入口，未登录跳转 `/login`。
+- 登录后默认进入 `/workspace`。
+- `extract`、`conversation`、`copilot` 提示词统一从 `lib/server/prompts/` 管理。
+- `lib/server/llm.ts` 不再内联当前在线提示词正文。
+- 相关测试、类型检查、构建通过。
 
 ## Scope
-- 只补旅程资产的可消费性，不新增 DSL、runner、生成系统
-- 只改 `docs/journeys/`、`lib/domain/journey-scenarios.ts`、相关类型和测试
-- 不在这轮继续扩 benchmark 平台
+- 新增营销首页与产品页组件与路由。
+- 调整中间件放行公开路径。
+- 调整壳层导航，区分营销页与工作台。
+- 同步 smoke / e2e / 单测路径。
+- 为当前在线提示词新建统一目录与导出入口。
+- 为提示词集中管理补最小设计说明与结构测试。
 
 ## Current Phase
-旅程资产最小收口已完成，下一步应切回 release blocker。
+本地实现与验证已完成；待继续线上部署验证或进入下一轮 prompt 调优。
 
 ## Completed Work
-- 给 `StructuredJourneyScenario` 增加 `priority` 和 `usageTags`
-- 用轻量映射给全部结构化场景打标
-- 同步更新机器导出 JSON 和文档说明
-- 扩充 API 回归到 8 条高价值场景
-- 三层测试和 typecheck 已通过
+- 新增营销首页与产品页组件并接入路由。
+- 新增 `/workspace` 路由作为工作台入口。
+- 登录与注册后跳转调整为 `/workspace`。
+- 中间件放行 `/` 与 `/product`。
+- 更新壳层导航为营销/工作台双态。
+- 更新相关测试与 smoke 脚本。
+- 将 `extract`、`conversation`、`copilot` 提示词从 `lib/server/llm.ts` 抽离到 `lib/server/prompts/`。
+- 新增提示词集中管理设计文档与结构保护测试。
+- 完成本地 `npm test`、`npm run typecheck`、`npm run build` 验证。
 
 ## Remaining Work
-- 处理登录与用户隔离
-- 收口前端主链路 bug
-- 做预览部署验证和种子用户试用回归
+- 部署到 `fireline.pin2pin.ai` 对应 Vercel 项目。
+- 线上验证登录与公开页路径。
+- 如需，执行需要凭据的浏览器 smoke 流程。
+- 如继续 LLM 方向，开始在 `lib/server/prompts/` 下调 prompt 文案。
+- 决定是否把 `report` 也纳入同一套提示词目录。
 
 ## Next Actions
-- 从 release blocker 开始，不再继续扩旅程资产系统
-- 优先排查主链路可用性：新建案件、对话输入、预览与案件推进
+- 部署并验证线上公开页、工作台路径与登录跳转。
+- 如继续 LLM 方向，直接从 `lib/server/prompts/` 开始调 prompt。
 
 ## Blockers
-- 产品 blocker：None
-- 工程提醒：仓库当前有大量并行未提交改动，后续改动要控制范围
+- None
 
 ## Decisions Made
 | Decision | Rationale |
 |----------|-----------|
-| 保持主账本 + TS 样本 + JSON 导出的三件套 | 已足够支撑当前消费需求 |
-| 元数据只加 `priority` 和 `usageTags` | 最小可用，不引入新系统 |
-| API 回归只补高价值 P0 场景 | 用最少测试卡住主链路语义 |
-| 8D 请求测试只断言“不直跳 final” | 保持测试卡业务语义而不是绑定实现文案 |
+| 保留 Vercel 应用作为 `fireline.pin2pin.ai` 主体 | 该域名已指向 Vercel 应用且健康可用，避免切 DNS 到静态站造成断档。 |
+| `/workspace` 作为原工作台入口 | 保持登录后路径清晰，避免营销与产品体验混在根路径。 |
+| 当前在线提示词按能力拆到 `lib/server/prompts/` | 后续调优时不需要再回 `llm.ts` 大文件里找提示词。 |
+| 提示词暂时仍保留在 TypeScript 常量里 | 先统一管理与测试保护，不提前引入模板加载系统。 |
 
 ## Touched Files
-- /Users/jilanfang/ai-quality/docs/journeys/README.md
-- /Users/jilanfang/ai-quality/docs/journeys/fireline-structured-scenarios.sample.json
-- /Users/jilanfang/ai-quality/lib/domain/journey-scenarios.ts
-- /Users/jilanfang/ai-quality/lib/domain/types.ts
-- /Users/jilanfang/ai-quality/tests/journey-scenario-api.test.ts
-- /Users/jilanfang/ai-quality/tests/journey-scenario-assets.test.ts
-- /Users/jilanfang/ai-quality/tests/journey-scenarios.test.ts
+- /Users/jilanfang/ai-quality/app/page.tsx
+- /Users/jilanfang/ai-quality/app/product/page.tsx
+- /Users/jilanfang/ai-quality/app/workspace/page.tsx
+- /Users/jilanfang/ai-quality/components/fireline-marketing-home.tsx
+- /Users/jilanfang/ai-quality/components/fireline-product-page.tsx
+- /Users/jilanfang/ai-quality/components/auth-panel.tsx
+- /Users/jilanfang/ai-quality/components/sovereign-shell.tsx
+- /Users/jilanfang/ai-quality/middleware.ts
+- /Users/jilanfang/ai-quality/app/globals.css
+- /Users/jilanfang/ai-quality/scripts/browser-smoke.mjs
+- /Users/jilanfang/ai-quality/scripts/check-login-redirect.mjs
+- /Users/jilanfang/ai-quality/tests/public-marketing.test.tsx
+- /Users/jilanfang/ai-quality/tests/home-page.test.tsx
+- /Users/jilanfang/ai-quality/tests/auth-panel.test.tsx
+- /Users/jilanfang/ai-quality/tests/middleware.test.ts
+- /Users/jilanfang/ai-quality/tests/e2e-browser/investigation.spec.ts
+- /Users/jilanfang/ai-quality/lib/server/llm.ts
+- /Users/jilanfang/ai-quality/lib/server/prompts/index.ts
+- /Users/jilanfang/ai-quality/lib/server/prompts/extract.ts
+- /Users/jilanfang/ai-quality/lib/server/prompts/conversation.ts
+- /Users/jilanfang/ai-quality/lib/server/prompts/copilot.ts
+- /Users/jilanfang/ai-quality/lib/server/prompts/types.ts
+- /Users/jilanfang/ai-quality/docs/superpowers/specs/2026-04-08-unify-llm-prompts-design.md
+- /Users/jilanfang/ai-quality/tests/llm-prompts.test.ts
 
 ## Verification
 | Check | Status | Details |
 |-------|--------|---------|
-| `npm test -- tests/journey-scenarios.test.ts tests/journey-scenario-assets.test.ts tests/journey-scenario-api.test.ts` | passed | 15 tests passed |
-| `npm run typecheck` | passed | `tsc --noEmit` passed |
+| `npm test -- tests/public-marketing.test.tsx tests/middleware.test.ts tests/auth-panel.test.tsx tests/home-page.test.tsx tests/layout.test.tsx` | passed | 营销页拆分相关本地通过 |
+| `npm test -- tests/llm-prompts.test.ts tests/llm-adapter.test.ts` | passed | 提示词集中管理结构测试与 LLM adapter 定向测试通过 |
+| `npm test` | passed | 35 个测试文件、235 个测试通过 |
+| `npm run typecheck` | passed | TypeScript 无报错 |
+| `npm run build` | passed | Next.js 生产构建通过 |

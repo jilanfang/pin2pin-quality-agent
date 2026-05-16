@@ -52,6 +52,10 @@ async function main() {
   try {
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
 
+    if (!page.url().includes("/login")) {
+      await page.goto(`${BASE_URL}/workspace`, { waitUntil: "networkidle" });
+    }
+
     if (page.url().includes("/login")) {
       if (!AUTH_USERNAME || !AUTH_PASSWORD) {
         throw new Error("Auth is enabled but SMOKE_AUTH_USERNAME/SMOKE_AUTH_PASSWORD are not set.");
@@ -66,6 +70,10 @@ async function main() {
       if (page.url().includes("/login")) {
         throw new Error(`Login did not leave /login. Body: ${await page.locator("body").innerText()}`);
       }
+    }
+
+    if (!page.url().includes("/workspace")) {
+      await page.goto(`${BASE_URL}/workspace`, { waitUntil: "networkidle" });
     }
 
     const smokeTitle = `browser-smoke-${Date.now()}`;

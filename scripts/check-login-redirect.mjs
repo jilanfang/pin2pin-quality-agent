@@ -44,8 +44,8 @@ async function main() {
     )
   );
 
-  if (redirectResponse.status !== 307 || redirectResponse.headers.get("location") !== "/") {
-    throw new Error("Expected /login to redirect authenticated users to /");
+  if (redirectResponse.status !== 307 || redirectResponse.headers.get("location") !== "/workspace") {
+    throw new Error("Expected /login to redirect authenticated users to /workspace");
   }
 }
 

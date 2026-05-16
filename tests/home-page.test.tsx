@@ -78,7 +78,7 @@ describe("HomePage", () => {
   it("renders the overview entrypoint instead of the investigation workspace", async () => {
     stubHomePageFetch(true);
 
-    const { default: Page } = await import("@/app/page");
+    const { default: Page } = await import("@/app/workspace/page");
     const page = await Page();
     render(page);
 
@@ -101,7 +101,7 @@ describe("HomePage", () => {
   it("renders an empty overview state when no investigations exist yet", async () => {
     stubHomePageFetch(false);
 
-    const { default: Page } = await import("@/app/page");
+    const { default: Page } = await import("@/app/workspace/page");
     const page = await Page();
     render(page);
 
@@ -167,7 +167,7 @@ describe("HomePage", () => {
       });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { default: Page } = await import("@/app/page");
+    const { default: Page } = await import("@/app/workspace/page");
     const page = await Page();
     render(page);
 
@@ -241,7 +241,7 @@ describe("HomePage", () => {
       })
     );
 
-    const { default: Page } = await import("@/app/page");
+    const { default: Page } = await import("@/app/workspace/page");
     const page = await Page();
     render(page);
 
@@ -294,7 +294,7 @@ describe("HomePage", () => {
       })
     );
 
-    const { default: Page } = await import("@/app/page");
+    const { default: Page } = await import("@/app/workspace/page");
     const page = await Page();
     render(page);
 
@@ -349,7 +349,7 @@ describe("HomePage", () => {
       })
     );
 
-    const { default: Page } = await import("@/app/page");
+    const { default: Page } = await import("@/app/workspace/page");
     const page = await Page();
     render(page);
 

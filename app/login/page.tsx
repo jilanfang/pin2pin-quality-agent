@@ -9,11 +9,11 @@ export default async function LoginPage() {
   const registerConfig = getRegisterConfig();
 
   if (!auth.authEnabled) {
-    redirect("/");
+    redirect("/workspace");
   }
 
   if (auth.isAuthenticated) {
-    redirect("/");
+    redirect("/workspace");
   }
 
   return (

@@ -89,12 +89,12 @@ function buildPendingItems(aggregate: CaseAggregate) {
   if (aggregate.caseRecord.d1Status !== "complete") {
     items.push("D1 团队与责任信息尚未确认");
   }
+  if (!aggregate.stages.D4.locked) items.push("D4 原因链尚未确认");
+  if (!aggregate.stages.D5.workingContent.trim()) items.push("D5 永久措施仍待形成");
+  if (!aggregate.stages.D6.workingContent.trim()) items.push("D6 实施与验证信息仍待补充");
+  if (!aggregate.stages.D7.workingContent.trim()) items.push("D7 防再发措施仍待形成");
   for (const stage of ACTIVE_WORKFLOW_STAGES) {
-    if (aggregate.stages[stage].impacted) {
-      items.push(`${stage} 受新证据影响，需重新复审`);
-    } else if (!aggregate.stages[stage].locked) {
-      items.push(`${stage} 尚未确认`);
-    }
+    if (aggregate.stages[stage].impacted) items.push(`${stage} 受新证据影响，需重新复审`);
   }
   return [...new Set(items)];
 }
@@ -120,30 +120,64 @@ function buildRebuildReview(aggregate: CaseAggregate) {
 
 export function buildReportCapabilities(aggregate: CaseAggregate): ExportCapabilities {
   const initialReasons: string[] = [];
-  const hasD2 = aggregate.stages.D2.locked;
-  const hasD3 = aggregate.stages.D3.locked || !!factValue(aggregate, "containment_action");
-  const hasAnalysisDirection =
-    !!aggregate.stages.D4.workingContent.trim() || aggregate.assumptions.length > 0;
+  const hasD2 = Boolean(
+    aggregate.stages.D2.confirmedContent.trim() || aggregate.stages.D2.workingContent.trim()
+  );
+  const hasD3 = Boolean(
+    aggregate.stages.D3.confirmedContent.trim() ||
+      aggregate.stages.D3.workingContent.trim() ||
+      factValue(aggregate, "containment_action")
+  );
+  const hasAnalysisDirection = Boolean(
+    aggregate.stages.D4.confirmedContent.trim() ||
+      aggregate.stages.D4.workingContent.trim() ||
+      aggregate.assumptions.length > 0
+  );
 
-  if (!hasD2) initialReasons.push("d2_unconfirmed");
+  if (!hasD2) initialReasons.push("d2_missing");
   if (!hasD3) initialReasons.push("containment_missing");
   if (!hasAnalysisDirection) initialReasons.push("analysis_direction_missing");
 
-  const finalReasons: string[] = [];
+  const finalReasons = new Set<string>();
   if (aggregate.caseRecord.d1Status !== "complete") {
-    finalReasons.push("d1_incomplete");
+    finalReasons.add("d1_incomplete");
+  }
+  if (!aggregate.stages.D4.locked) {
+    finalReasons.add("d4_unconfirmed");
+  }
+  const hasD5 = Boolean(aggregate.stages.D5.confirmedContent.trim() || aggregate.stages.D5.workingContent.trim());
+  const hasD6 = Boolean(aggregate.stages.D6.confirmedContent.trim() || aggregate.stages.D6.workingContent.trim());
+  const hasD7 = Boolean(aggregate.stages.D7.confirmedContent.trim() || aggregate.stages.D7.workingContent.trim());
+  const hasConfirmedDownstream =
+    aggregate.stages.D5.locked &&
+    aggregate.stages.D6.locked &&
+    aggregate.stages.D7.locked &&
+    aggregate.stages.D8.locked;
+  const d6Content = aggregate.stages.D6.confirmedContent || aggregate.stages.D6.workingContent;
+  const hasD6Validation = Boolean(
+    d6Content.trim() &&
+      (
+        aggregate.stages.D6.locked ||
+        !["验证方法：待补充", "通过标准：待补充", "实施动作：待补充"].some((marker) =>
+          d6Content.includes(marker)
+        )
+      )
+  );
+  const hasInterimReady = aggregate.stages.D4.locked && hasD5 && hasD6;
+
+  if (!hasInterimReady) {
+    finalReasons.add("stages_unconfirmed");
+  } else if (!hasD7 || !hasD6Validation || !hasConfirmedDownstream) {
+    finalReasons.add("final_evidence_missing");
   }
   if (ACTIVE_WORKFLOW_STAGES.some((stage) => aggregate.stages[stage].impacted)) {
-    finalReasons.push("impacted_stages");
-  }
-  if (ACTIVE_WORKFLOW_STAGES.some((stage) => !aggregate.stages[stage].locked)) {
-    finalReasons.push("stages_unconfirmed");
+    finalReasons.add("impacted_stages");
   }
 
   return {
     text: buildReasonedCapability(true, []),
     formalHtml: buildReasonedCapability(initialReasons.length === 0, initialReasons),
-    finalReport: buildReasonedCapability(finalReasons.length === 0, finalReasons),
+    finalReport: buildReasonedCapability(finalReasons.size === 0, [...finalReasons]),
     pdf: buildReasonedCapability(initialReasons.length === 0, initialReasons),
   };
 }
@@ -221,14 +255,14 @@ export function buildActionPlan(aggregate: CaseAggregate): ActionPlan | null {
 export function buildResultReadiness(aggregate: CaseAggregate): ResultReadiness {
   const capabilities = buildReportCapabilities(aggregate);
   const analysisSummary = aggregate.knownFacts.length > 0;
-  const hasCorrectiveLayer =
-    ["D5", "D6", "D7"].some((stage) => {
-      const record = aggregate.stages[stage as WorkflowStage];
-      return Boolean(record?.confirmedContent.trim() || record?.workingContent.trim());
-    }) || aggregate.stages.D4.locked;
+  const hasCorrectiveLayer = ["D5", "D6"].every((stage) => {
+    const record = aggregate.stages[stage as WorkflowStage];
+    return Boolean(record?.confirmedContent.trim() || record?.workingContent.trim());
+  });
   const actionPlan =
     Boolean(buildActionPlan(aggregate)?.immediateActions.length) &&
     (aggregate.stages.D3.locked || Boolean(factValue(aggregate, "containment_action"))) &&
+    aggregate.stages.D4.locked &&
     hasCorrectiveLayer;
 
   return {
@@ -480,6 +514,7 @@ function determineAudience(styleMode: ReportBuildOptions["styleMode"]) {
 
 function determineSectionStatus(aggregate: CaseAggregate, stage: WorkflowStage) {
   const record = aggregate.stages[stage];
+  if (record.impacted) return "needs_validation" as const;
   if (record.locked) return "confirmed" as const;
   if (record.workingContent.trim()) return "assumed" as const;
   return "needs_validation" as const;
@@ -487,6 +522,7 @@ function determineSectionStatus(aggregate: CaseAggregate, stage: WorkflowStage) 
 
 function determineSectionMaturity(aggregate: CaseAggregate, stage: WorkflowStage) {
   const record = aggregate.stages[stage];
+  if (record.impacted) return "draft" as const;
   if (record.locked && !record.impacted) return "verified" as const;
   if (record.workingContent.trim()) return "ready" as const;
   return "draft" as const;
@@ -495,7 +531,11 @@ function determineSectionMaturity(aggregate: CaseAggregate, stage: WorkflowStage
 function buildSectionPendingItems(aggregate: CaseAggregate, stage: WorkflowStage) {
   const items: string[] = [];
   const record = aggregate.stages[stage];
-  if (!record.locked && stage !== "D1") {
+  if (stage === "D4") {
+    if (!record.locked) items.push("待确认");
+  } else if (["D5", "D6", "D7"].includes(stage)) {
+    if (!record.workingContent.trim()) items.push("待补充");
+  } else if (!record.locked && stage !== "D1") {
     items.push("待确认");
   }
   if (record.impacted) {

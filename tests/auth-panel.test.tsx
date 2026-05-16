@@ -73,7 +73,7 @@ describe("AuthPanel", () => {
     resolveLogin!(new Response(JSON.stringify({ ok: true }), { status: 200 }));
 
     await waitFor(() => {
-      expect(window.location.href).toBe("/");
+      expect(window.location.href).toBe("/workspace");
     });
   });
 
@@ -103,7 +103,7 @@ describe("AuthPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "登录" }));
 
     await waitFor(() => {
-      expect(window.location.href).toBe("/");
+      expect(window.location.href).toBe("/workspace");
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -134,7 +134,7 @@ describe("AuthPanel", () => {
           }),
         })
       );
-      expect(window.location.href).toBe("/");
+      expect(window.location.href).toBe("/workspace");
     });
   });
 
@@ -184,7 +184,7 @@ describe("AuthPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "创建账号" }));
 
     await waitFor(() => {
-      expect(window.location.href).toBe("/");
+      expect(window.location.href).toBe("/workspace");
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -234,7 +234,7 @@ describe("AuthPanel", () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(window.location.href).toBe("/");
+      expect(window.location.href).toBe("/workspace");
     });
   });
 });
